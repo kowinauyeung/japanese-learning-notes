@@ -63,11 +63,16 @@ Pointing this at a fresh Firebase project takes a few more steps, in order:
 4. Point the tooling at your project: change the `dev` alias in `.firebaserc`,
    or pass `--project <your-project-id>` instead of using the `rules:dev`
    script, which is wired to `goitei-dev`.
-5. `firebase login`, then deploy the rules.
+5. `yarn firebase login`, then deploy the rules with `yarn rules:dev` (once the
+   alias points at your project) or
+   `yarn firebase deploy --only firestore:rules --project <your-project-id>`.
 
-Steps 3 and 4 are what stop you deploying rules into someone else's project or
-running against defaults that do not name you as the owner. Once they are in
-place, sign-in succeeds and every read and write is scoped to your account.
+`firebase-tools` is a local devDependency, so the CLI is reached through
+`yarn firebase …` unless you have installed it globally.
+
+Steps 3 and 4 only change local configuration; nothing is enforced until step 5
+deploys the rules successfully. After that deploy, sign-in works and every read
+and write is scoped to your account.
 
 `.env.development` and `.env.production` are gitignored. Their values ship inside
 the JS bundle and are not secrets — Firestore rules are what enforce access — but
@@ -95,7 +100,7 @@ key in this project, and there should not be one.
 ## Environments
 
 `.firebaserc` maps `default` and `dev` to `goitei-dev`, and `prod` to `goitei`,
-so a bare `firebase deploy` targets development. Branches follow the same split
+so a deploy with no `--project` targets development. Branches follow the same split
 by convention — `develop` for dev, `main` for production — but nothing enforces
 it; there is no CI yet and every deploy so far has been manual.
 
@@ -105,11 +110,11 @@ Which project a build talks to comes from the env file Vite picks, not from the
 ```bash
 # dev
 yarn vite build --mode development
-firebase deploy --only hosting,firestore:rules --project dev
+yarn firebase deploy --only hosting,firestore:rules --project dev
 
 # production
 yarn build
-firebase deploy --only hosting,firestore:rules --project prod
+yarn firebase deploy --only hosting,firestore:rules --project prod
 ```
 
 `firestore.rules` allows read and write on `entries`, `entryProgress`,
