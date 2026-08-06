@@ -13,6 +13,10 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Vite's dependency pre-bundling cache. Normally lands in node_modules/.vite,
+# but falls back to the project root in some invocations.
+.vite/
+
 # Firebase web config is public by design, but keep envs out of the repo so the
 # dev and prod projects stay decoupled from the source tree.
 .env*
