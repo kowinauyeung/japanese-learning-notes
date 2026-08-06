@@ -14,7 +14,7 @@ export function EntryRow({ entry }: { entry: Entry }) {
         className="font-display has-ruby text-base font-bold"
       />
       <span className="text-muted prose-cjk flex-1 truncate text-sm">
-        {entry.senses[0]?.description || entry.definitionJa}
+        {entry.senses[0]?.description || entry.definition}
       </span>
       <span className="text-muted shrink-0 text-xs tabular-nums">{entry.learnedOn}</span>
     </Link>

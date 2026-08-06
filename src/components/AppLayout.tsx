@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { EntriesProvider } from '../lib/entries';
+import { EntryFormModal } from './entry-form/EntryFormModal';
 import { useTheme } from '../lib/theme';
 import { useClickOutside } from '../lib/useClickOutside';
 
@@ -17,7 +18,9 @@ const NAV = [
 export function AppLayout() {
   const { user, loading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   if (loading) {
     return (
@@ -56,7 +59,13 @@ export function AppLayout() {
             >
               {menuOpen ? '✕' : '☰'}
             </button>
-            <AddButton />
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="rounded-pill bg-accent text-on-accent hidden px-4 py-2 text-sm font-semibold nav:block"
+            >
+              ＋追加
+            </button>
             <AvatarMenu />
           </div>
         </div>
@@ -68,7 +77,20 @@ export function AppLayout() {
         <Outlet />
       </main>
 
-      <AddFab />
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        aria-label="単語を追加"
+        className="rounded-pill bg-accent text-on-accent shadow-panel fixed right-5 bottom-5 z-20 grid h-14 w-14 place-items-center text-2xl nav:hidden"
+      >
+        ＋
+      </button>
+
+      <EntryFormModal
+        open={adding}
+        onClose={() => setAdding(false)}
+        onSaved={(id) => navigate(`/vocabulary/${id}`)}
+      />
     </div>
     </EntriesProvider>
   );
@@ -99,30 +121,6 @@ function MobileNav({ onNavigate }: { onNavigate: () => void }) {
         </NavLink>
       ))}
     </nav>
-  );
-}
-
-// TODO(add-vocab): opens the add modal — wired up with the add/edit task.
-function AddButton() {
-  return (
-    <button
-      type="button"
-      className="rounded-pill bg-accent text-on-accent hidden px-4 py-2 text-sm font-semibold nav:block"
-    >
-      ＋追加
-    </button>
-  );
-}
-
-function AddFab() {
-  return (
-    <button
-      type="button"
-      aria-label="単語を追加"
-      className="rounded-pill bg-accent text-on-accent shadow-panel fixed right-5 bottom-5 z-20 grid h-14 w-14 place-items-center text-2xl nav:hidden"
-    >
-      ＋
-    </button>
   );
 }
 

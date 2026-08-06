@@ -20,7 +20,7 @@ export function EntryCard({ entry }: { entry: Entry }) {
       </div>
 
       <p className="text-muted prose-cjk line-clamp-2 text-sm">
-        {entry.senses[0]?.description || entry.definitionJa}
+        {entry.senses[0]?.description || entry.definition}
       </p>
 
       <div className="mt-auto flex flex-wrap items-center gap-1.5">

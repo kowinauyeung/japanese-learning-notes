@@ -287,8 +287,8 @@ function parseFile(path, folder, filename) {
       ? { title: blocks[posInfoIndex].title, rows: posInfoRows }
       : null,
 
-    definitionJa: defJa ? defJa[1].trim() : '',
-    definitionTranslation: defTr ? defTr[1].trim() : '',
+    definition: defJa ? defJa[1].trim() : '',
+    definitionSub: defTr ? defTr[1].trim() : '',
     senses,
     examples,
     related,
@@ -316,7 +316,7 @@ function parseFile(path, folder, filename) {
   };
 
   if (!entry.headword) warn('見出し語が空');
-  if (!entry.definitionJa) warn('definitionJa が空 — 必須項目');
+  if (!entry.definition) warn('definition が空 — 必須項目');
   if (!entry.pos.length) warn(`品詞を正規化できず: 「${manifest['品詞'] ?? ''}」`);
   if (!entry.origin) warn(`語種を正規化できず: 「${manifest['語種'] ?? ''}」`);
   if (!entry.style) warn(`文体を正規化できず: 「${manifest['文体'] ?? ''}」`);
@@ -364,7 +364,7 @@ writeFileSync(join(HERE, 'review.json'), JSON.stringify(review, null, 2) + '\n')
 
 const empty = (fn) => entries.filter(fn).length;
 console.log(`解析: ${entries.length} 件 / 要確認: ${review.length} 件`);
-console.log(`  definitionJa（必須）: ${empty((e) => e.definitionJa)}`);
+console.log(`  definition（必須）: ${empty((e) => e.definition)}`);
 console.log(`  senses あり        : ${empty((e) => e.senses.length)}`);
 console.log(`  examples あり      : ${empty((e) => e.examples.length)}`);
 console.log(`  related あり       : ${empty((e) => e.related.length)}`);

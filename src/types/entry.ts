@@ -119,9 +119,17 @@ export interface Entry {
   citationForm: string;
   posInfo: PosInfo | null;
 
-  // --- meaning (definitionJa is the one piece of content every entry must have)
-  definitionJa: string;
-  definitionTranslation: string;
+  // --- meaning
+  /**
+   * The one piece of content every entry must have. Deliberately not tied to a
+   * language: write it in Japanese, in your own language, or both.
+   */
+  definition: string;
+  /**
+   * A remark on the definition — a translation, a caveat, a mnemonic. The
+   * migrated notes put their Cantonese rendering here.
+   */
+  definitionSub: string;
   senses: Sense[];
   examples: Example[];
   related: RelatedWord[];

@@ -1,6 +1,10 @@
-import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useEntries } from '../lib/entries';
+import { deleteEntry } from '../lib/entryWrite';
 import { Ruby } from '../components/Ruby';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { EntryFormModal } from '../components/entry-form/EntryFormModal';
 import { KeyValueTable, Section } from '../components/detail/Section';
 
 /** ①②③… for sense and example numbering, matching the notes. */
@@ -14,7 +18,11 @@ function stars(freq: number): string {
 
 export function Component() {
   const { id } = useParams();
-  const { entries, loading, error } = useEntries();
+  const navigate = useNavigate();
+  const { entries, loading, error, refresh } = useEntries();
+  const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (loading) return <p className="text-muted py-16 text-center text-sm">読み込み中…</p>;
   if (error) return <p className="text-danger py-16 text-center text-sm">{error}</p>;
@@ -87,16 +95,17 @@ export function Component() {
             )}
           </div>
 
-          {/* TODO(crud): wired up with the add/edit task. */}
           <div className="flex shrink-0 gap-2">
             <button
               type="button"
+              onClick={() => setEditing(true)}
               className="rounded-pill bg-bg-alt text-ink min-h-9 px-4 text-xs font-semibold"
             >
               編集
             </button>
             <button
               type="button"
+              onClick={() => setConfirmingDelete(true)}
               className="rounded-pill bg-danger-soft text-danger min-h-9 px-4 text-xs font-semibold"
             >
               削除
@@ -117,14 +126,14 @@ export function Component() {
 
       {/* The overall definition — present in every note, so it leads the meaning
           sections, in the same position it held in the markdown. */}
-      {(entry.definitionJa || entry.definitionTranslation) && (
+      {(entry.definition || entry.definitionSub) && (
         <Section emoji="📖" title="意味・説明">
-          {entry.definitionJa && (
-            <p className="prose-cjk text-sm whitespace-pre-line">{entry.definitionJa}</p>
+          {entry.definition && (
+            <p className="prose-cjk text-sm whitespace-pre-line">{entry.definition}</p>
           )}
-          {entry.definitionTranslation && (
+          {entry.definitionSub && (
             <p className="prose-cjk border-line mt-4 border-t pt-4 text-sm whitespace-pre-line">
-              {entry.definitionTranslation}
+              {entry.definitionSub}
             </p>
           )}
         </Section>
@@ -218,6 +227,24 @@ export function Component() {
       {entry.source && (
         <p className="text-muted px-1 text-xs">出處：{entry.source}</p>
       )}
+
+      <EntryFormModal open={editing} entry={entry} onClose={() => setEditing(false)} />
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title="単語を削除"
+        message={`「${entry.headword}」を削除しますか？\nこの操作は取り消せません。`}
+        confirmLabel="削除する"
+        busy={deleting}
+        onClose={() => setConfirmingDelete(false)}
+        onConfirm={() => {
+          setDeleting(true);
+          void deleteEntry(entry.id)
+            .then(refresh)
+            .then(() => navigate('/vocabulary', { replace: true }))
+            .finally(() => setDeleting(false));
+        }}
+      />
     </article>
   );
 }

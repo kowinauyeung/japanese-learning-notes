@@ -27,7 +27,7 @@ export function TodayWord({ entry }: { entry: Entry }) {
         className="font-display has-ruby mt-2 block text-3xl font-bold"
       />
       <p className="prose-cjk mt-2 text-sm">
-        {entry.senses[0]?.description || entry.definitionJa}
+        {entry.senses[0]?.description || entry.definition}
       </p>
     </Link>
   );
