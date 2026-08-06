@@ -1,0 +1,121 @@
+@import 'tailwindcss';
+
+/*
+ * Palette from the design handoff. Both themes are declared as plain custom
+ * properties and referenced from @theme, so every Tailwind colour utility
+ * follows the active theme without needing a `dark:` variant on each element.
+ */
+:root,
+:root[data-theme='light'] {
+  --c-bg: oklch(99% 0.002 25);
+  --c-bg-alt: oklch(96.5% 0.012 25);
+  --c-card: oklch(100% 0 0);
+  --c-border: oklch(92% 0.01 25);
+  --c-text: oklch(18% 0.01 25);
+  --c-text-muted: oklch(50% 0.015 25);
+  --c-accent: oklch(50% 0.2 25);
+  --c-accent-soft: oklch(94% 0.045 25);
+  --c-on-accent: oklch(99% 0.005 25);
+  --c-danger: oklch(50% 0.16 45);
+  --c-danger-soft: oklch(94% 0.05 45);
+  --shadow-card: 0 1px 2px rgb(50 10 10 / 0.04), 0 8px 24px rgb(50 10 10 / 0.07);
+
+  /* Heatmap: sequential magnitude, so one hue stepped light -> dark. Level 0 is
+     near-neutral and levels jump ~0.07 in chroma at the first step, so "nothing
+     added" reads as clearly different from "one word added". */
+  --heat-0: oklch(94% 0.004 25);
+  --heat-1: oklch(84% 0.075 25);
+  --heat-2: oklch(72% 0.13 25);
+  --heat-3: oklch(61% 0.17 25);
+  --heat-4: oklch(50% 0.2 25);
+}
+
+:root[data-theme='dark'] {
+  --c-bg: oklch(15% 0.01 25);
+  --c-bg-alt: oklch(20% 0.02 25);
+  --c-card: oklch(22% 0.016 25);
+  --c-border: oklch(32% 0.02 25);
+  --c-text: oklch(94% 0.006 25);
+  --c-text-muted: oklch(68% 0.012 25);
+  --c-accent: oklch(66% 0.19 25);
+  --c-accent-soft: oklch(28% 0.08 25);
+  --c-on-accent: oklch(15% 0.01 25);
+  --c-danger: oklch(62% 0.15 45);
+  --c-danger-soft: oklch(28% 0.06 45);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35);
+
+  /* Stepped independently against the dark surface rather than inverted. */
+  --heat-0: oklch(27% 0.008 25);
+  --heat-1: oklch(38% 0.07 25);
+  --heat-2: oklch(48% 0.12 25);
+  --heat-3: oklch(57% 0.16 25);
+  --heat-4: oklch(66% 0.19 25);
+}
+
+@theme inline {
+  --color-bg: var(--c-bg);
+  --color-bg-alt: var(--c-bg-alt);
+  --color-card: var(--c-card);
+  --color-line: var(--c-border);
+  --color-ink: var(--c-text);
+  --color-muted: var(--c-text-muted);
+  --color-accent: var(--c-accent);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-on-accent: var(--c-on-accent);
+  --color-danger: var(--c-danger);
+  --color-danger-soft: var(--c-danger-soft);
+
+  /* Inter for UI, Zen Maru Gothic for headwords, Noto Sans TC for CJK prose. */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif;
+  --font-cjk: 'Noto Sans TC', 'Hiragino Sans', sans-serif;
+
+  /* The handoff collapses the nav to a hamburger below 700px, which sits
+     between Tailwind's sm and md defaults, so it gets its own breakpoint. */
+  --breakpoint-nav: 700px;
+
+  /* Generously rounded: panels 18–24px, pills fully round. */
+  --radius-panel: 18px;
+  --radius-card: 22px;
+  --radius-pill: 999px;
+
+  --shadow-panel: var(--shadow-card);
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Japanese and Cantonese prose needs the extra leading for furigana and wrapping. */
+.prose-cjk {
+  font-family: var(--font-cjk);
+  line-height: 1.85;
+}
+
+ruby {
+  ruby-position: over;
+  ruby-align: center;
+}
+
+rt {
+  font-size: 0.45em;
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--c-text-muted);
+}
+
+/*
+ * The annotation is drawn inside the line box, so a tight line-height clips it
+ * or lets it collide with the line above. Anything showing furigana opts into
+ * the extra leading with this class.
+ */
+.has-ruby {
+  line-height: 1.75;
+}
