@@ -101,10 +101,21 @@ body {
 
 ruby {
   ruby-position: over;
+  ruby-align: center;
 }
 
 rt {
   font-size: 0.45em;
   font-weight: 500;
+  line-height: 1.15;
   color: var(--c-text-muted);
+}
+
+/*
+ * The annotation is drawn inside the line box, so a tight line-height clips it
+ * or lets it collide with the line above. Anything showing furigana opts into
+ * the extra leading with this class.
+ */
+.has-ruby {
+  line-height: 1.75;
 }

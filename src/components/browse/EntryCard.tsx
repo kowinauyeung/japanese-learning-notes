@@ -12,7 +12,7 @@ export function EntryCard({ entry }: { entry: Entry }) {
         <Ruby
           headword={entry.headword}
           reading={entry.reading}
-          className="font-display text-xl font-bold"
+          className="font-display has-ruby text-xl font-bold"
         />
         <span className="rounded-pill bg-accent-soft text-accent shrink-0 px-2 py-0.5 text-[11px] font-semibold">
           {entry.jlpt}

@@ -11,7 +11,7 @@ export function EntryRow({ entry }: { entry: Entry }) {
       <Ruby
         headword={entry.headword}
         reading={entry.reading}
-        className="font-display text-base font-bold"
+        className="font-display has-ruby text-base font-bold"
       />
       <span className="text-muted prose-cjk flex-1 truncate text-sm">
         {entry.senses[0]?.description || entry.definitionJa}
