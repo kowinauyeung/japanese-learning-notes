@@ -1,9 +1,9 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { AppLayout } from './components/AppLayout';
+import { Dictation, Flashcards, History, WordSets } from './routes/Placeholder';
 
-// Routes from the handoff. Practice, word sets and history are Phase 2 — their
-// entries are listed here so navigation and deep links settle now rather than
-// after the screens land.
+// Routes follow the handoff. AppLayout gates everything below it on auth;
+// /login sits outside so it stays reachable when signed out.
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -12,6 +12,11 @@ export const router = createBrowserRouter([
       { index: true, lazy: () => import('./routes/Dashboard') },
       { path: 'vocabulary', lazy: () => import('./routes/Browse') },
       { path: 'vocabulary/:id', lazy: () => import('./routes/EntryDetail') },
+      { path: 'account', lazy: () => import('./routes/Account') },
+      { path: 'practice/flashcards', element: <Flashcards /> },
+      { path: 'practice/dictation', element: <Dictation /> },
+      { path: 'wordsets', element: <WordSets /> },
+      { path: 'history', element: <History /> },
     ],
   },
   { path: '/login', lazy: () => import('./routes/Login') },

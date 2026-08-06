@@ -11,6 +11,7 @@ migration/review.json
 
 node_modules/
 dist/
+*.tsbuildinfo
 
 # Firebase web config is public by design, but keep envs out of the repo so the
 # dev and prod projects stay decoupled from the source tree.
@@ -20,6 +21,10 @@ dist/
 # Service-account private keys used by the upload script — never commit these.
 migration/service-account-*.json
 .firebase/
+
+# Repo-local gcloud config, so this project's Google identity never touches the
+# machine-wide ~/.config/gcloud. Holds the ADC credential.
+.gcloud/
 
 .DS_Store
 *.log

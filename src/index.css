@@ -54,6 +54,10 @@
   --font-display: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif;
   --font-cjk: 'Noto Sans TC', 'Hiragino Sans', sans-serif;
 
+  /* The handoff collapses the nav to a hamburger below 700px, which sits
+     between Tailwind's sm and md defaults, so it gets its own breakpoint. */
+  --breakpoint-nav: 700px;
+
   /* Generously rounded: panels 18–24px, pills fully round. */
   --radius-panel: 18px;
   --radius-card: 22px;

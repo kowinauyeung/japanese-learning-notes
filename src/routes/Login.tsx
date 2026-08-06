@@ -1,9 +1,58 @@
+import { useState } from 'react';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
+import { projectId } from '../lib/firebase';
+
 export function Component() {
+  const { user, loading, signIn } = useAuth();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (loading) {
+    return (
+      <main className="grid min-h-dvh place-items-center bg-bg">
+        <p className="text-muted text-sm">読み込み中…</p>
+      </main>
+    );
+  }
+  if (user) return <Navigate to="/" replace />;
+
+  const onSignIn = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await signIn();
+    } catch (cause) {
+      // A closed popup is the user changing their mind, not a failure worth showing.
+      const code = (cause as { code?: string }).code;
+      if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+        setError('ログインできませんでした。もう一度お試しください。');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <main className="grid min-h-dvh place-items-center bg-bg px-4">
-      <div className="rounded-card w-full max-w-[360px] bg-card p-8 shadow-panel">
-        <h1 className="font-display text-center text-2xl font-bold text-accent">単語帳</h1>
+      <div className="rounded-card bg-card shadow-panel w-full max-w-[360px] p-8">
+        <h1 className="font-display text-center text-3xl font-bold text-accent">単語帳</h1>
         <p className="text-muted mt-1 text-center text-sm">ログインして続ける</p>
+
+        <button
+          type="button"
+          onClick={() => void onSignIn()}
+          disabled={busy}
+          className="rounded-pill bg-accent text-on-accent mt-8 min-h-12 w-full text-sm font-semibold disabled:opacity-60"
+        >
+          {busy ? 'ログイン中…' : 'Google でログイン'}
+        </button>
+
+        {error && <p className="text-danger mt-3 text-center text-sm">{error}</p>}
+
+        {/* Two projects share this build; knowing which one is live avoids
+            editing production while thinking it is the dev copy. */}
+        <p className="text-muted mt-6 text-center text-xs">{projectId}</p>
       </div>
     </main>
   );
