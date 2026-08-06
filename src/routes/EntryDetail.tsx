@@ -23,6 +23,28 @@ export function Component() {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  /**
+   * Navigate only once both the delete and the refresh have succeeded. If the
+   * refresh fails the entry is gone from Firestore but still in the cached
+   * list, so leaving the user on a stale detail page with an error beats
+   * sending them to a Browse list that still shows the deleted word.
+   */
+  const confirmDelete = async (entryId: string) => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteEntry(entryId);
+      await refresh();
+      navigate('/vocabulary', { replace: true });
+    } catch (cause) {
+      console.error(cause);
+      setDeleteError('削除できませんでした。もう一度お試しください。');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (loading) return <p className="text-muted py-16 text-center text-sm">読み込み中…</p>;
   if (error) return <p className="text-danger py-16 text-center text-sm">{error}</p>;
@@ -124,21 +146,10 @@ export function Component() {
         </Section>
       )}
 
-      {/* The overall definition — present in every note, so it leads the meaning
-          sections, in the same position it held in the markdown. */}
-      {(entry.definition || entry.definitionSub) && (
-        <Section emoji="📖" title="意味・説明">
-          {entry.definition && (
-            <p className="prose-cjk text-sm whitespace-pre-line">{entry.definition}</p>
-          )}
-          {entry.definitionSub && (
-            <p className="prose-cjk border-line mt-4 border-t pt-4 text-sm whitespace-pre-line">
-              {entry.definitionSub}
-            </p>
-          )}
-        </Section>
-      )}
-
+      {/* The sentence the word was met in comes before the dictionary meaning,
+          matching the markdown notes: 23 of the 24 that record a context put it
+          first. Reading the encounter before the definition is also the order
+          the word was actually learned in. */}
       {entry.context.original && (
         <Section emoji="📌" title="この文での使われ方">
           <blockquote className="border-accent prose-cjk bg-bg-alt rounded-panel border-l-4 px-4 py-3 text-sm">
@@ -150,6 +161,19 @@ export function Component() {
           {entry.context.translation && (
             <p className="prose-cjk text-muted mt-3 text-sm whitespace-pre-line">
               {entry.context.translation}
+            </p>
+          )}
+        </Section>
+      )}
+
+      {(entry.definition || entry.definitionSub) && (
+        <Section emoji="📖" title="意味・説明">
+          {entry.definition && (
+            <p className="prose-cjk text-sm whitespace-pre-line">{entry.definition}</p>
+          )}
+          {entry.definitionSub && (
+            <p className="prose-cjk border-line mt-4 border-t pt-4 text-sm whitespace-pre-line">
+              {entry.definitionSub}
             </p>
           )}
         </Section>
@@ -236,14 +260,12 @@ export function Component() {
         message={`「${entry.headword}」を削除しますか？\nこの操作は取り消せません。`}
         confirmLabel="削除する"
         busy={deleting}
-        onClose={() => setConfirmingDelete(false)}
-        onConfirm={() => {
-          setDeleting(true);
-          void deleteEntry(entry.id)
-            .then(refresh)
-            .then(() => navigate('/vocabulary', { replace: true }))
-            .finally(() => setDeleting(false));
+        error={deleteError}
+        onClose={() => {
+          setConfirmingDelete(false);
+          setDeleteError(null);
         }}
+        onConfirm={() => void confirmDelete(entry.id)}
       />
     </article>
   );

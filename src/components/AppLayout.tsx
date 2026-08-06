@@ -29,7 +29,12 @@ export function AppLayout() {
       </div>
     );
   }
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  // The search string carries the entire Browse filter state, so dropping it
+  // would silently return a bookmarked filtered view to the unfiltered one.
+  if (!user) {
+    const from = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to="/login" replace state={{ from }} />;
+  }
 
   return (
     <EntriesProvider>

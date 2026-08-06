@@ -6,6 +6,7 @@ export function ConfirmDialog({
   message,
   confirmLabel,
   busy,
+  error,
   onConfirm,
   onClose,
 }: {
@@ -14,6 +15,8 @@ export function ConfirmDialog({
   message: string;
   confirmLabel: string;
   busy?: boolean;
+  /** Shown in place of a silent failure when the confirmed action rejects. */
+  error?: string | null;
   onConfirm: () => void;
   onClose: () => void;
 }) {
@@ -23,7 +26,8 @@ export function ConfirmDialog({
       title={title}
       onClose={onClose}
       footer={
-        <div className="flex justify-end gap-3">
+        <div className="flex items-center justify-end gap-3">
+          {error && <p className="text-danger flex-1 text-xs">{error}</p>}
           <button
             type="button"
             onClick={onClose}

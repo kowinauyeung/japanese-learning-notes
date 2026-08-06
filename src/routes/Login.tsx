@@ -1,10 +1,24 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { projectId } from '../lib/firebase';
 
+/**
+ * Where to land after signing in. `state.from` is set by `AppLayout` when it
+ * bounces an unauthenticated visitor, but it arrives through history state,
+ * which any page can write — so only a same-origin relative path is honoured.
+ * `//evil.com` and `https://…` are both rejected, since the browser would read
+ * the first as a protocol-relative URL.
+ */
+function safeRedirect(state: unknown): string {
+  const from = (state as { from?: unknown } | null)?.from;
+  if (typeof from !== 'string') return '/';
+  return from.startsWith('/') && !from.startsWith('//') ? from : '/';
+}
+
 export function Component() {
   const { user, loading, signIn } = useAuth();
+  const location = useLocation();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -15,7 +29,7 @@ export function Component() {
       </main>
     );
   }
-  if (user) return <Navigate to="/" replace />;
+  if (user) return <Navigate to={safeRedirect(location.state)} replace />;
 
   const onSignIn = async () => {
     setBusy(true);
