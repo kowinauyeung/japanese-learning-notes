@@ -19,6 +19,15 @@
   --c-danger: oklch(50% 0.16 45);
   --c-danger-soft: oklch(94% 0.05 45);
   --shadow-card: 0 1px 2px rgb(50 10 10 / 0.04), 0 8px 24px rgb(50 10 10 / 0.07);
+
+  /* Heatmap: sequential magnitude, so one hue stepped light -> dark. Level 0 is
+     near-neutral and levels jump ~0.07 in chroma at the first step, so "nothing
+     added" reads as clearly different from "one word added". */
+  --heat-0: oklch(94% 0.004 25);
+  --heat-1: oklch(84% 0.075 25);
+  --heat-2: oklch(72% 0.13 25);
+  --heat-3: oklch(61% 0.17 25);
+  --heat-4: oklch(50% 0.2 25);
 }
 
 :root[data-theme='dark'] {
@@ -34,6 +43,13 @@
   --c-danger: oklch(62% 0.15 45);
   --c-danger-soft: oklch(28% 0.06 45);
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35);
+
+  /* Stepped independently against the dark surface rather than inverted. */
+  --heat-0: oklch(27% 0.008 25);
+  --heat-1: oklch(38% 0.07 25);
+  --heat-2: oklch(48% 0.12 25);
+  --heat-3: oklch(57% 0.16 25);
+  --heat-4: oklch(66% 0.19 25);
 }
 
 @theme inline {

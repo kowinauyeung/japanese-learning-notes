@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { EntriesProvider } from '../lib/entries';
 import { useTheme } from '../lib/theme';
 import { useClickOutside } from '../lib/useClickOutside';
 
@@ -28,6 +29,7 @@ export function AppLayout() {
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
 
   return (
+    <EntriesProvider>
     <div className="min-h-dvh bg-bg text-ink">
       <header className="border-line bg-card/85 sticky top-0 z-30 border-b backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
@@ -68,6 +70,7 @@ export function AppLayout() {
 
       <AddFab />
     </div>
+    </EntriesProvider>
   );
 }
 
