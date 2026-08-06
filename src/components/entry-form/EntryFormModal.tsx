@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Entry, EntryDraft } from '../../types/entry';
 import { createEntry, updateEntry } from '../../lib/entryWrite';
 import { emptyDraft, invalidTags, parseTags, toDraft } from '../../lib/draft';
+import { isValidIsoDate } from '../../lib/sanitize';
 import { useEntries } from '../../lib/entries';
 import { Modal } from '../Modal';
 import { EntryForm } from './EntryForm';
@@ -50,6 +51,10 @@ export function EntryFormModal({
     if (!draft.definition.trim()) return setError('意味・説明は必須です。');
     const bad = invalidTags(draft.tags);
     if (bad.length) return setError(`タグに使えない文字があります: ${bad.join(', ')}`);
+    // A cleared or impossible date must not reach Firestore. Read-side coercion
+    // would silently rewrite it to today, which is indistinguishable from having
+    // learned the word today and quietly wrong in every dashboard statistic.
+    if (!isValidIsoDate(draft.learnedOn)) return setError('学習日を正しく入力してください。');
 
     setSaving(true);
     setError(null);

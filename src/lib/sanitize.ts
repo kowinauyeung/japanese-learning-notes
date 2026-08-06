@@ -52,13 +52,34 @@ const frequency = (value: unknown, fallback: Frequency): Frequency => {
   return Number.isInteger(n) && n >= 1 && n <= 5 ? (n as Frequency) : fallback;
 };
 
-/** Stored and compared as a plain string, so a malformed one silently breaks
- *  every date filter and the dashboard heatmap. */
+/**
+ * A real calendar day in `YYYY-MM-DD`.
+ *
+ * Shape and non-`NaN` are both insufficient. `Date` rejects an out-of-range
+ * month or a day above 31, but rolls a day that is merely wrong for its month
+ * forward instead: `2026-02-31` parses happily as `2026-03-03`. Only comparing
+ * the parsed components back against the input catches that.
+ *
+ * The value is stored and compared as a plain string, so an impossible date
+ * would sort and filter as if it were real, and `parseLocalDate` would hand the
+ * dashboard an Invalid Date.
+ */
+export const isValidIsoDate = (value: unknown): boolean => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof value === 'string' ? value.trim() : '');
+  if (!match) return false;
+  const [, year, month, day] = match;
+  const parsed = new Date(`${match[0]}T00:00:00Z`);
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.getUTCFullYear() === Number(year) &&
+    parsed.getUTCMonth() + 1 === Number(month) &&
+    parsed.getUTCDate() === Number(day)
+  );
+};
+
 const isoDate = (value: unknown, fallback: string): string => {
   const raw = str(value).trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return fallback;
-  const parsed = new Date(`${raw}T00:00:00Z`);
-  return Number.isNaN(parsed.getTime()) ? fallback : raw;
+  return isValidIsoDate(raw) ? raw : fallback;
 };
 
 /** Drops non-objects (the `[null]` case) before the mapper can touch them. */
