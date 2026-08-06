@@ -1,0 +1,25 @@
+# Original markdown notes, kept locally until the Firestore migration is verified.
+# Every file remains recoverable from git history.
+bak/
+
+# Migration script output (verification artefacts, not source)
+migration/output.json
+migration/review.json
+
+# Private AI-agent workspace
+.kowin/
+
+node_modules/
+dist/
+
+# Firebase web config is public by design, but keep envs out of the repo so the
+# dev and prod projects stay decoupled from the source tree.
+.env*
+!.env.example
+
+# Service-account private keys used by the upload script — never commit these.
+migration/service-account-*.json
+.firebase/
+
+.DS_Store
+*.log
