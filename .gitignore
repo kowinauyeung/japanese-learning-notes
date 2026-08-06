@@ -2,9 +2,11 @@
 # Every file remains recoverable from git history.
 bak/
 
-# Migration script output (verification artefacts, not source)
-migration/output.json
-migration/review.json
+# migration/output.json and review.json are deliberately NOT ignored. The
+# markdown notes they were parsed from are gone, and the corrections made during
+# migration were never committed, so this artefact is the only complete record
+# of what was loaded into Firestore — and the only way to roll production out
+# from the repo alone.
 
 # Private AI-agent workspace
 .kowin/

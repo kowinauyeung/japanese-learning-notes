@@ -10,7 +10,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   normalizePos, normalizeJlpt, normalizeOrigin, normalizeStyle,
-  normalizePoliteness, normalizeFreq, FOLDER_TAGS,
+  normalizePoliteness, normalizeFreq, FOLDER_TAGS, stripDeep,
 } from './normalize.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -269,6 +269,8 @@ function parseFile(path, folder, filename) {
   // the repo already holds is not collapsed into the migration timestamp.
   const createdAt = new Date(`${learnedOn}T00:00:00+09:00`).toISOString();
 
+  // Every string below is run through stripDeep once the entry is assembled;
+  // the fields carry prose written with Markdown emphasis the app cannot render.
   const entry = {
     id: romaji,
 
@@ -322,7 +324,7 @@ function parseFile(path, folder, filename) {
   if (!entry.style) warn(`文体を正規化できず: 「${manifest['文体'] ?? ''}」`);
   if (!entry.politeness) warn(`丁寧さを正規化できず: 「${manifest['丁寧さ'] ?? ''}」`);
 
-  return { entry, warnings, source: `${folder}/${filename}` };
+  return { entry: stripDeep(entry), warnings, source: `${folder}/${filename}` };
 }
 
 // ---------------------------------------------------------------------- main

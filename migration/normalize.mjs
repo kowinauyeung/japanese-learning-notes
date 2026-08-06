@@ -59,13 +59,20 @@ export function normalizeJlpt(raw) {
   return m ? m[0] : 'レベル外';
 }
 
-/** 語種 -> 和語 / 漢語 / 外来語 / 混種語 */
+/**
+ * 語種 -> 和語 / 漢語 / 外来語 / 混種語.
+ *
+ * A note may spell out a compound rather than name it: 「外来語（polling）＋
+ * 和語（方式）」 is 混種語, but says so only by listing its parts. Taking the
+ * first token found would file it under 外来語, so count the distinct kinds
+ * instead — two or more is by definition 混種語.
+ */
 export function normalizeOrigin(raw) {
   if (!raw) return '';
-  for (const kind of ['混種語', '外来語', '漢語', '和語']) {
-    if (raw.includes(kind)) return kind;
-  }
-  return '';
+  if (raw.includes('混種語')) return '混種語';
+  const kinds = ['外来語', '漢語', '和語'].filter((kind) => raw.includes(kind));
+  if (kinds.length > 1) return '混種語';
+  return kinds[0] ?? '';
 }
 
 /** 文体 -> 話し言葉 / 書き言葉 / 両方 */
@@ -104,6 +111,36 @@ export function normalizeFreq(raw) {
   if (!run) return 3;
   const stars = run[0].split('').filter((c) => c === '★').length;
   return stars >= 1 && stars <= 5 ? stars : 3;
+}
+
+/**
+ * Remove inline Markdown emphasis, keeping the text it wrapped.
+ *
+ * The notes lean on `**…**` for emphasis inside prose fields, but the app
+ * renders every one of those fields as plain text, so the asterisks would show
+ * up literally. Stripping loses the emphasis; the alternative — shipping a
+ * Markdown renderer for a handful of bold runs — costs a dependency and an
+ * HTML-injection surface for content that is otherwise inert.
+ *
+ * Only the unambiguous delimiters are touched. A lone `*` or `_` is left alone:
+ * it appears in the notes as literal punctuation more often than as emphasis.
+ */
+export function stripInlineMarkdown(raw) {
+  if (!raw) return raw;
+  return raw
+    .replace(/\*\*(.+?)\*\*/gs, '$1')
+    .replace(/__(.+?)__/gs, '$1')
+    .replace(/`([^`\n]+)`/g, '$1');
+}
+
+/** Apply `stripInlineMarkdown` to every string in a nested value. */
+export function stripDeep(value) {
+  if (typeof value === 'string') return stripInlineMarkdown(value);
+  if (Array.isArray(value)) return value.map(stripDeep);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, stripDeep(v)]));
+  }
+  return value;
 }
 
 /** Folder name -> Japanese tag, matching the app's Japanese UI. */
