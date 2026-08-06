@@ -53,10 +53,21 @@ cp .env.example .env.development   # fill in your Firebase web config
 yarn dev
 ```
 
-Pointing this at a fresh Firebase project takes three more steps: register a web
-app and enable Google sign-in, replace the hard-coded owner email in
-`firestore.rules`, then `yarn rules:dev`. Skip the last two and sign-in will
-succeed while every read and write is denied.
+Pointing this at a fresh Firebase project takes a few more steps, in order:
+
+1. Register a web app and enable Google sign-in.
+2. [Create a Cloud Firestore database](https://firebase.google.com/docs/firestore/quickstart#create_a_cloud_firestore_database)
+   — a new project has none — choosing a location and **Production mode**. Test
+   mode leaves the data open to any client for its first 30 days.
+3. Replace the hard-coded owner email in `firestore.rules` with your own.
+4. Point the tooling at your project: change the `dev` alias in `.firebaserc`,
+   or pass `--project <your-project-id>` instead of using the `rules:dev`
+   script, which is wired to `goitei-dev`.
+5. `firebase login`, then deploy the rules.
+
+Steps 3 and 4 are what stop you deploying rules into someone else's project or
+running against defaults that do not name you as the owner. Once they are in
+place, sign-in succeeds and every read and write is scoped to your account.
 
 `.env.development` and `.env.production` are gitignored. Their values ship inside
 the JS bundle and are not secrets — Firestore rules are what enforce access — but
@@ -122,8 +133,11 @@ Defined in [`src/types/entry.ts`](src/types/entry.ts). Points worth knowing:
   every save.
 
 [`src/lib/sanitize.ts`](src/lib/sanitize.ts) coerces pasted JSON and Firestore
-documents into a valid draft rather than casting them, with unusable values
-falling back to that field's default; URL parameters are parsed separately in
+documents rather than casting them: it is best-effort over the fields it knows
+about, so enums, `freq` and `learnedOn` fall back to a default when the incoming
+value is unusable, while `pitchAccent` accepts any number, tags are split but not
+checked against `TAG_PATTERN`, and `wordSets` takes arbitrary strings. URL
+parameters are parsed separately in
 `src/lib/filters.ts`. Writes are validated on their own — the form rejects a
 missing headword or definition, bad tags and an impossible `learnedOn` before
 anything reaches Firestore. Coercing on read is not a substitute for that, and
