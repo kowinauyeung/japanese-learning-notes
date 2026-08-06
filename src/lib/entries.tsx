@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import type { Entry } from '../types/entry';
 import { db } from './firebase';
+import { sanitizeEntry } from './sanitize';
 
 interface EntriesValue {
   entries: Entry[];
@@ -31,7 +32,10 @@ export function EntriesProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const snapshot = await getDocs(collection(db, 'entries'));
-      setEntries(snapshot.docs.map((doc) => ({ ...(doc.data() as Omit<Entry, 'id'>), id: doc.id })));
+      // Documents are coerced rather than cast: the collection has already
+      // outlived one field rename, and a single document from an older schema
+      // would otherwise crash whichever view first reads the missing field.
+      setEntries(snapshot.docs.map((doc) => sanitizeEntry(doc.id, doc.data())));
     } catch (cause) {
       console.error(cause);
       setError('単語を読み込めませんでした。');

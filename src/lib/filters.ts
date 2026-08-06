@@ -1,6 +1,12 @@
+import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '../types/entry';
 import type { Entry } from '../types/entry';
 
 export type SortKey = 'new' | 'old' | 'headword';
+
+const SORT_KEYS: readonly SortKey[] = ['new', 'old', 'headword'];
+
+/** Highest 頻度 a filter can ask for; also the width of the ★ display. */
+export const MAX_FREQ = 5;
 
 export interface Filters {
   q: string;
@@ -110,20 +116,28 @@ export function isDefault(filters: Filters): boolean {
 
 // ------------------------------------------------------------- URL round-trip
 
+/** The query string is user-editable, so nothing coming out of it may be
+ *  trusted. Anything unrecognised degrades to "no filter" rather than reaching
+ *  a consumer: `minFreq` in particular feeds `'★'.repeat()`, where a negative
+ *  or non-integer value throws and takes the whole route down. */
+const oneOf = <T extends string>(raw: string | null, allowed: readonly T[]): T | '' =>
+  raw && (allowed as readonly string[]).includes(raw) ? (raw as T) : '';
+
 /** Filters live in the query string so a filtered view can be linked and the
  *  back button steps through refinements. */
 export function fromSearchParams(params: URLSearchParams): Filters {
+  const freq = Number.parseInt(params.get('freq') ?? '', 10);
   return {
     q: params.get('q') ?? '',
     tags: params.getAll('tag'),
-    jlpt: params.getAll('jlpt'),
-    pos: params.get('pos') ?? '',
-    origin: params.get('origin') ?? '',
-    style: params.get('style') ?? '',
-    minFreq: Number(params.get('freq') ?? 0) || 0,
+    jlpt: params.getAll('jlpt').filter((level) => (JLPT_LEVELS as readonly string[]).includes(level)),
+    pos: oneOf(params.get('pos'), POS),
+    origin: oneOf(params.get('origin'), WORD_ORIGINS),
+    style: oneOf(params.get('style'), STYLES),
+    minFreq: Number.isInteger(freq) && freq > 0 ? Math.min(freq, MAX_FREQ) : 0,
     from: params.get('from') ?? '',
     to: params.get('to') ?? '',
-    sort: (params.get('sort') as SortKey) || 'new',
+    sort: oneOf(params.get('sort'), SORT_KEYS) || 'new',
   };
 }
 

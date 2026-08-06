@@ -1,5 +1,5 @@
 import type { EntryDraft } from '../types/entry';
-import { emptyDraft, parseTags } from './draft';
+import { sanitizeDraft } from './sanitize';
 
 /** The shape shown in the app and asked of the assistant. */
 export const SCHEMA = `{
@@ -96,32 +96,11 @@ export function jsonToDraft(
     return { error: 'JSON オブジェクトではありません。' };
   }
 
-  const base = emptyDraft();
-  const pick = <T,>(key: string, fallback: T): T =>
-    parsed[key] === undefined || parsed[key] === null ? fallback : (parsed[key] as T);
-
-  const draft: EntryDraft = {
-    ...base,
-    headword: String(pick('headword', '')).trim(),
-    reading: String(pick('reading', '')),
-    tags: Array.isArray(parsed.tags) ? parseTags((parsed.tags as string[]).join(' ')) : [],
-    learnedOn: String(pick('learnedOn', base.learnedOn)) || base.learnedOn,
-    pos: Array.isArray(parsed.pos) ? (parsed.pos as EntryDraft['pos']) : [],
-    jlpt: pick('jlpt', base.jlpt),
-    origin: pick('origin', base.origin),
-    style: pick('style', base.style),
-    politeness: pick('politeness', base.politeness),
-    freq: pick('freq', base.freq),
-    citationForm: String(pick('citationForm', '')),
-    definition: String(pick('definition', '')).trim(),
-    definitionSub: String(pick('definitionSub', '')),
-    source: String(pick('source', '')),
-    context: { ...base.context, ...(pick('context', {}) as object) },
-    senses: Array.isArray(parsed.senses) ? (parsed.senses as EntryDraft['senses']) : [],
-    examples: Array.isArray(parsed.examples) ? (parsed.examples as EntryDraft['examples']) : [],
-    usage: { ...base.usage, ...(pick('usage', {}) as object) },
-    related: Array.isArray(parsed.related) ? (parsed.related as EntryDraft['related']) : [],
-  };
+  // Every field is coerced to its declared type here rather than cast. The JSON
+  // is assistant-written and pasted by hand, so it routinely carries invalid
+  // enum values, wrong types, or nulls inside arrays — all of which would
+  // otherwise reach the form and Firestore intact.
+  const draft: EntryDraft = sanitizeDraft(parsed);
 
   if (context.original?.trim()) draft.context.original = context.original.trim();
   if (context.source?.trim()) draft.source = context.source.trim();
