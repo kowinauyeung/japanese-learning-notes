@@ -5,8 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>語彙庭</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#f7fbf9" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0d1a16" media="(prefers-color-scheme: dark)" />
+    <!--
+      One tag rather than a prefers-color-scheme pair: a saved theme overrides
+      the OS preference, so the media query would leave the browser chrome on
+      the opposite colour from the page. Both values live here so the script
+      below and useTheme read one source instead of duplicating the hexes.
+    -->
+    <meta name="theme-color" content="#f7fbf9" data-light="#f7fbf9" data-dark="#0d1a16" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -18,7 +23,10 @@
       (() => {
         const saved = localStorage.getItem('theme');
         const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        const theme = dark ? 'dark' : 'light';
+        document.documentElement.dataset.theme = theme;
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.content = meta.dataset[theme];
       })();
     </script>
   </head>
