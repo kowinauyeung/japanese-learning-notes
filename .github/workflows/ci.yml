@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # Every pull request, whatever it targets. Filtering on the base branch would
+  # leave a pull request stacked on another feature branch unverified until it
+  # was retargeted, which is exactly when it is easiest to merge something red.
   pull_request:
-    branches: [main, develop]
   push:
     branches: [main, develop]
 
