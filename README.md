@@ -106,7 +106,12 @@ older JDK comes first on `PATH`, which is the usual state on macOS:
 
 ```bash
 export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+export PATH="$JAVA_HOME/bin:$PATH"
 ```
+
+Both lines are needed. Setting `JAVA_HOME` alone leaves the older `java` first
+on `PATH`, and `firebase-tools` runs that one — the emulator then refuses to
+start with a version error that reads as if nothing were installed.
 
 These are currently the only tests in the repository, and deliberately so — they
 cover the one part of this app that is a security boundary rather than a

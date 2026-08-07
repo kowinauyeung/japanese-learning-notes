@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 /**
@@ -6,6 +7,11 @@ import { defineConfig } from 'vitest/config';
  * emulator over the wire; nothing is bundled.
  */
 export default defineConfig({
+  // Mirrors vite.config.ts. Kept in step by hand rather than shared, because
+  // importing that config would pull its plugins in with it.
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',

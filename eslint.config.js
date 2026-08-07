@@ -121,15 +121,20 @@ export default tseslint.config(
     },
   },
 
-  // Rules tests. Same strictness as src, Node globals, and no vendor fence —
-  // driving the emulator is the whole point.
+  // Tests. Same strictness as src, Node globals, and no vendor fence — driving
+  // the emulator is the whole point.
+  //
+  // Named explicitly rather than left to projectService, which resolves through
+  // the nearest tsconfig.json. That is the solution file, and tsconfig.test.json
+  // is deliberately not one of its references: referencing it would require
+  // tsconfig.app.json to emit, which it does not.
   {
     files: ['tests/**/*.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       globals: globals.node,
       parserOptions: {
-        projectService: true,
+        project: './tsconfig.test.json',
         tsconfigRootDir: import.meta.dirname,
       },
     },

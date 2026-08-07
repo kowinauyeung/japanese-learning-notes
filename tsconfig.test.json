@@ -1,13 +1,14 @@
 {
+  // Standalone rather than a referenced project: tests import from src through
+  // the `@/` alias, and a composite project may only reach another project's
+  // files through a reference — which tsconfig.app.json cannot be, because it
+  // disables emit. `yarn typecheck` runs this one as a second, separate pass.
   "compilerOptions": {
-    "composite": true,
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
-
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["node"],
+    "types": ["node", "vite/client"],
 
     "strict": true,
     "noUnusedLocals": true,
@@ -22,7 +23,10 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["tests", "vitest.config.ts"]
+  "include": ["tests"]
 }
