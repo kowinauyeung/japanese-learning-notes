@@ -3,6 +3,7 @@ import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-route
 import { useAuth } from '../lib/auth';
 import { EntriesProvider } from '../lib/entries';
 import { EntryFormModal } from './entry-form/EntryFormModal';
+import { LogoMark } from './Logo';
 import { useTheme } from '../lib/theme';
 import { useClickOutside } from '../lib/useClickOutside';
 
@@ -41,7 +42,11 @@ export function AppLayout() {
     <div className="min-h-dvh bg-bg text-ink">
       <header className="border-line bg-card/85 sticky top-0 z-30 border-b backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
-          <NavLink to="/" className="font-display mr-1 text-lg font-bold text-accent">
+          <NavLink
+            to="/"
+            className="font-display mr-1 flex items-center gap-1.5 text-lg font-bold text-accent"
+          >
+            <LogoMark className="h-7 w-7" />
             語彙庭
           </NavLink>
 
