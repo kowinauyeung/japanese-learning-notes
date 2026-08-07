@@ -34,12 +34,17 @@ service cloud.firestore {
     // set — or under a set id that does not exist — and it would be served as
     // part of that set to everyone reading or adopting it.
     //
-    // Two document reads per call. They are only paid on publish, which is rare
-    // and already batched, and a list evaluates the rule once rather than per
-    // row.
+    // getAfter, not get: a first publish writes the set and its first entries in
+    // one batch, and get() only sees committed state, so the child would be
+    // evaluated against a parent that does not exist yet and every first publish
+    // would be denied. getAfter evaluates the batch's end state, which is what
+    // "does this row belong here once this write lands" actually means. It still
+    // returns null for a set nobody is creating, so an entry under an unrelated
+    // or non-existent set stays denied.
+    //
+    // One document read per call, paid only on publish.
     function ownsParentSet(publicSetId) {
-      return exists(setPath(publicSetId))
-        && get(setPath(publicSetId)).data.ownerUid == request.auth.uid;
+      return getAfter(setPath(publicSetId)).data.ownerUid == request.auth.uid;
     }
 
     // The single gate that keeps this a private notebook.

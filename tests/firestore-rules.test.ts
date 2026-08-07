@@ -193,6 +193,29 @@ describe('snapshot entries under a published set', () => {
     await assertFails(as(ALICE).doc(`publicSets/set-ghost/entries/x`).set(snapshotEntry(ALICE)));
   });
 
+  /**
+   * A first publish writes the set and its first entries in one batch. Checking
+   * the parent with get() would evaluate the children against committed state,
+   * where the set does not exist yet, and deny every first publish — the parent
+   * check that fixed cross-user injection would have quietly broken publishing
+   * itself. getAfter() evaluates the batch's end state instead.
+   */
+  it('allows a first publish creating the set and its first entry in one batch', async () => {
+    const db = as(ALICE);
+    const batch = db.batch();
+    batch.set(db.doc(`publicSets/set-first`), { ...snapshotEntry(ALICE), entryCount: 1 });
+    batch.set(db.doc(`publicSets/set-first/entries/x1`), snapshotEntry(ALICE));
+    await assertSucceeds(batch.commit());
+  });
+
+  it('refuses a batch that creates the set under another owner', async () => {
+    const db = as(ALICE);
+    const batch = db.batch();
+    batch.set(db.doc(`publicSets/set-spoof`), { ...snapshotEntry(BOB), entryCount: 1 });
+    batch.set(db.doc(`publicSets/set-spoof/entries/x1`), snapshotEntry(ALICE));
+    await assertFails(batch.commit());
+  });
+
   it('allows a create under the writer own set', async () => {
     await assertSucceeds(
       as(ALICE).doc(`publicSets/set-alice/entries/x2`).set(snapshotEntry(ALICE)),
