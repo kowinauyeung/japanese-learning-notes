@@ -167,14 +167,20 @@ hitting it:
   `403 Permission denied to get service [firestore.googleapis.com]`, which reads
   like a Firestore problem and is not one.
 - The provider's attribute condition matches on `assertion.repository` and stops
-  there. Adding `&& assertion.ref == 'refs/heads/develop'` looks like free
-  hardening and is not: a pull request's token carries
-  `ref = refs/pull/<n>/merge`, so it would block every preview deploy. See the
-  trust boundary below for what actually contains the risk.
-- A pool cannot span projects. Automating production means a second pool,
-  provider and service account inside `goitei`, and a second set of secrets —
-  the procedure is reusable, nothing else is. Until then, deploy production by
-  hand.
+  there, deliberately. Narrowing it further is the obvious-looking improvement
+  that breaks previews — see the trust boundary below before changing it.
+- Production should get its own pool, provider and service account in `goitei`,
+  and its own secrets under different names. Reusing the dev secret names is how
+  a production build quietly ships against the dev Firestore. Until that exists,
+  deploy production by hand.
+
+  A pool is a project-scoped resource but is not confined to one: a service
+  account in `goitei` could be bound to the `goitei-dev` pool through
+  `roles/iam.workloadIdentityUser`, which is granted on the service account
+  rather than on the pool. Keeping them separate is a choice — it gives
+  production an independent trust anchor, so loosening the dev provider's
+  attribute condition cannot reach production. The procedure is reusable; the
+  resources are not.
 
 #### Trust boundary
 
@@ -201,9 +207,9 @@ that leaks them gives away nothing that visiting the dev site would not.
 The provider's attribute condition is `assertion.repository` only, and stopping
 there is deliberate. Adding `&& assertion.ref == 'refs/heads/develop'` does stop
 a token minted in a pull request context from being exchanged — and with it,
-every preview deploy, since a pull request's token carries
-`ref = refs/pull/<n>/merge`. That is not defence in depth, it is the feature
-switched off.
+every preview deploy, because pull-request tokens carry
+`ref = refs/pull/<n>/merge`. That is not defence in depth; it switches the
+feature off.
 
 The tightening that costs nothing is two service accounts instead of one, bound
 through the pool's `attribute.event`: `push` gets hosting **and** rules admin,
