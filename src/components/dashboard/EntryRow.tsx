@@ -6,17 +6,17 @@ export function EntryRow({ entry }: { entry: Entry }) {
   return (
     <Link
       to={`/vocabulary/${entry.id}`}
-      className="hover:bg-bg-alt rounded-panel flex items-center gap-3 px-3 py-2.5 transition"
+      className="flex items-center gap-3 rounded-panel px-3 py-2.5 transition hover:bg-bg-alt"
     >
       <Ruby
         headword={entry.headword}
         reading={entry.reading}
-        className="font-display has-ruby text-base font-bold"
+        className="has-ruby font-display text-base font-bold"
       />
-      <span className="text-muted prose-cjk flex-1 truncate text-sm">
+      <span className="prose-cjk flex-1 truncate text-sm text-muted">
         {entry.senses[0]?.description || entry.definition}
       </span>
-      <span className="text-muted shrink-0 text-xs tabular-nums">{entry.learnedOn}</span>
+      <span className="shrink-0 text-xs text-muted tabular-nums">{entry.learnedOn}</span>
     </Link>
   );
 }

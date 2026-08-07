@@ -18,9 +18,24 @@ import type { Timestamp } from 'firebase/firestore';
  * source of truth. 形容詞/形容動詞 use the learner-facing い/な naming.
  */
 export const POS = [
-  '名詞', '代名詞', '動詞', 'い形容詞', 'な形容詞', '副詞',
-  '連体詞', '接続詞', '感動詞', '助詞', '助動詞', '接頭辞', '接尾辞',
-  '擬音語', '擬態語', '慣用句', 'ことわざ', '表現',
+  '名詞',
+  '代名詞',
+  '動詞',
+  'い形容詞',
+  'な形容詞',
+  '副詞',
+  '連体詞',
+  '接続詞',
+  '感動詞',
+  '助詞',
+  '助動詞',
+  '接頭辞',
+  '接尾辞',
+  '擬音語',
+  '擬態語',
+  '慣用句',
+  'ことわざ',
+  '表現',
 ] as const;
 export type Pos = (typeof POS)[number];
 

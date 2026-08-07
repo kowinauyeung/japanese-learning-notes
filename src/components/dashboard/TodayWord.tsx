@@ -26,15 +26,15 @@ export function TodayWord({ entry }: { entry: Entry }) {
   return (
     <Link
       to={`/vocabulary/${entry.id}`}
-      className="rounded-card border-line from-accent-soft to-card shadow-panel relative block overflow-hidden border bg-linear-to-br p-5 transition hover:-translate-y-0.5"
+      className="relative block overflow-hidden rounded-card border border-line bg-linear-to-br from-accent-soft to-card p-5 shadow-panel transition hover:-translate-y-0.5"
     >
       {/* Decorative, and already announced by the heading below. */}
       <LogoMark className="pointer-events-none absolute -right-6 -bottom-8 h-40 w-40 opacity-[0.06]" />
 
       <div className="relative">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-accent text-xs font-semibold tracking-wide">📅 今日の単語</p>
-          <span className="rounded-pill bg-card/70 text-accent shrink-0 px-2 py-0.5 text-[11px] font-semibold">
+          <p className="text-xs font-semibold tracking-wide text-accent">📅 今日の単語</p>
+          <span className="shrink-0 rounded-pill bg-card/70 px-2 py-0.5 text-[11px] font-semibold text-accent">
             {entry.jlpt}
           </span>
         </div>
@@ -42,26 +42,23 @@ export function TodayWord({ entry }: { entry: Entry }) {
         <Ruby
           headword={entry.headword}
           reading={entry.reading}
-          className="font-display has-ruby mt-3 block text-4xl font-bold"
+          className="has-ruby mt-3 block font-display text-4xl font-bold"
         />
 
         {summary && <p className="prose-cjk mt-2 line-clamp-2 text-sm">{summary}</p>}
 
         <div className="mt-4 flex flex-wrap items-center gap-1.5">
           {entry.pos.slice(0, 2).map((part) => (
-            <span
-              key={part}
-              className="bg-card/70 text-muted rounded-pill px-2 py-0.5 text-[11px]"
-            >
+            <span key={part} className="rounded-pill bg-card/70 px-2 py-0.5 text-[11px] text-muted">
               {part}
             </span>
           ))}
           {entry.tags.slice(0, 2).map((tag) => (
-            <span key={tag} className="text-accent rounded-pill px-1 text-[11px]">
+            <span key={tag} className="rounded-pill px-1 text-[11px] text-accent">
               #{tag}
             </span>
           ))}
-          <span className="text-accent ml-auto text-xs font-semibold">詳しく見る →</span>
+          <span className="ml-auto text-xs font-semibold text-accent">詳しく見る →</span>
         </div>
       </div>
     </Link>

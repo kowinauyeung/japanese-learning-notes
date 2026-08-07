@@ -17,7 +17,14 @@ export function LogoMark({ className = 'h-7 w-7' }: { className?: string }) {
   return (
     <svg viewBox="0 0 48 48" className={className} role="presentation" focusable="false">
       <defs>
-        <linearGradient id={gradientId} x1="24" y1="22" x2="24" y2="5" gradientUnits="userSpaceOnUse">
+        <linearGradient
+          id={gradientId}
+          x1="24"
+          y1="22"
+          x2="24"
+          y2="5"
+          gradientUnits="userSpaceOnUse"
+        >
           <stop offset="0" stopColor="var(--c-accent)" />
           <stop offset="1" stopColor="var(--c-sprout)" />
         </linearGradient>

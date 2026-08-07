@@ -9,8 +9,14 @@ import { readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from 'n
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  normalizePos, normalizeJlpt, normalizeOrigin, normalizeStyle,
-  normalizePoliteness, normalizeFreq, FOLDER_TAGS, stripDeep,
+  normalizePos,
+  normalizeJlpt,
+  normalizeOrigin,
+  normalizeStyle,
+  normalizePoliteness,
+  normalizeFreq,
+  FOLDER_TAGS,
+  stripDeep,
 } from './normalize.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -45,7 +51,10 @@ function splitBlocks(text) {
         emoji,
         kind: emoji ? SECTION_BY_EMOJI[emoji] : null,
         // drop the emoji and the trailing " (English gloss)" some headings carry
-        title: title.replace(emoji ?? '', '').replace(/\s*\([^)]*\)\s*$/, '').trim(),
+        title: title
+          .replace(emoji ?? '', '')
+          .replace(/\s*\([^)]*\)\s*$/, '')
+          .trim(),
         lines: [],
       };
       blocks.push(current);
@@ -74,14 +83,17 @@ function parseTable(body) {
  * horizontal rule, or end of block.
  */
 function fieldAfterLabel(body, labelPattern) {
-  const re = new RegExp(`\\*\\*${labelPattern}\\s*[：:]\\s*\\*\\*([\\s\\S]*?)(?=\\n\\s*\\*\\*|\\n\\s*---|$)`);
+  const re = new RegExp(
+    `\\*\\*${labelPattern}\\s*[：:]\\s*\\*\\*([\\s\\S]*?)(?=\\n\\s*\\*\\*|\\n\\s*---|$)`,
+  );
   const m = body.match(re);
   return m ? m[1].trim() : '';
 }
 
 /** Strip blockquote markers; separate the sentence from its （意味：…） gloss. */
 function parseQuotedExample(raw) {
-  const lines = raw.split('\n')
+  const lines = raw
+    .split('\n')
     .map((l) => l.replace(/^\s*>\s?/, '').trim())
     .filter(Boolean);
   const sentence = [];
@@ -213,7 +225,10 @@ function parseFile(path, folder, filename) {
   const manifestIndex = find('manifest');
   if (manifestIndex === -1) warn('📋 MANIFEST セクションがない');
   const manifest = Object.fromEntries(
-    (manifestIndex === -1 ? [] : parseTable(blocks[manifestIndex].body)).map((r) => [r.label, r.value]),
+    (manifestIndex === -1 ? [] : parseTable(blocks[manifestIndex].body)).map((r) => [
+      r.label,
+      r.value,
+    ]),
   );
   for (const key of ['品詞', 'JLPTレベル', '語種', '文体', '丁寧さ', '頻度']) {
     if (!manifest[key]) warn(`MANIFEST に「${key}」がない`);
@@ -285,9 +300,7 @@ function parseFile(path, folder, filename) {
     politeness: normalizePoliteness(manifest['丁寧さ']),
     freq: normalizeFreq(manifest['頻度']),
     citationForm: manifest['登録形'] ?? '',
-    posInfo: posInfoRows.length
-      ? { title: blocks[posInfoIndex].title, rows: posInfoRows }
-      : null,
+    posInfo: posInfoRows.length ? { title: blocks[posInfoIndex].title, rows: posInfoRows } : null,
 
     definition: defJa ? defJa[1].trim() : '',
     definitionSub: defTr ? defTr[1].trim() : '',

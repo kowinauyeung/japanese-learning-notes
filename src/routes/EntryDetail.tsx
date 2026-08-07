@@ -46,15 +46,15 @@ export function Component() {
     }
   };
 
-  if (loading) return <p className="text-muted py-16 text-center text-sm">読み込み中…</p>;
-  if (error) return <p className="text-danger py-16 text-center text-sm">{error}</p>;
+  if (loading) return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
+  if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
 
   const entry = entries.find((item) => item.id === id);
   if (!entry) {
     return (
       <div className="py-16 text-center">
-        <p className="text-muted text-sm">単語が見つかりません</p>
-        <Link to="/vocabulary" className="text-accent mt-2 inline-block text-sm underline">
+        <p className="text-sm text-muted">単語が見つかりません</p>
+        <Link to="/vocabulary" className="mt-2 inline-block text-sm text-accent underline">
           一覧に戻る
         </Link>
       </div>
@@ -80,20 +80,20 @@ export function Component() {
   return (
     <article className="space-y-4">
       {/* Header */}
-      <header className="rounded-card bg-card shadow-panel p-5 sm:p-6">
+      <header className="rounded-card bg-card p-5 shadow-panel sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <Ruby
               headword={entry.headword}
               reading={entry.reading}
-              className="font-display has-ruby block text-[34px] font-bold sm:text-[40px]"
+              className="has-ruby block font-display text-[34px] font-bold sm:text-[40px]"
             />
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-              <span className="rounded-pill bg-accent-soft text-accent px-2.5 py-1 font-semibold">
+              <span className="rounded-pill bg-accent-soft px-2.5 py-1 font-semibold text-accent">
                 {entry.jlpt}
               </span>
               {entry.pos.map((part) => (
-                <span key={part} className="bg-bg-alt text-muted rounded-pill px-2.5 py-1">
+                <span key={part} className="rounded-pill bg-bg-alt px-2.5 py-1 text-muted">
                   {part}
                 </span>
               ))}
@@ -108,7 +108,7 @@ export function Component() {
                   <Link
                     key={tag}
                     to={`/vocabulary?tag=${encodeURIComponent(tag)}`}
-                    className="text-accent text-xs"
+                    className="text-xs text-accent"
                   >
                     #{tag}
                   </Link>
@@ -121,14 +121,14 @@ export function Component() {
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="rounded-pill bg-bg-alt text-ink min-h-9 px-4 text-xs font-semibold"
+              className="min-h-9 rounded-pill bg-bg-alt px-4 text-xs font-semibold text-ink"
             >
               編集
             </button>
             <button
               type="button"
               onClick={() => setConfirmingDelete(true)}
-              className="rounded-pill bg-danger-soft text-danger min-h-9 px-4 text-xs font-semibold"
+              className="min-h-9 rounded-pill bg-danger-soft px-4 text-xs font-semibold text-danger"
             >
               削除
             </button>
@@ -152,14 +152,14 @@ export function Component() {
           the word was actually learned in. */}
       {entry.context.original && (
         <Section emoji="📌" title="この文での使われ方">
-          <blockquote className="border-accent prose-cjk bg-bg-alt rounded-panel border-l-4 px-4 py-3 text-sm">
+          <blockquote className="prose-cjk rounded-panel border-l-4 border-accent bg-bg-alt px-4 py-3 text-sm">
             {entry.context.original}
           </blockquote>
           {entry.context.ja && (
             <p className="prose-cjk mt-4 text-sm whitespace-pre-line">{entry.context.ja}</p>
           )}
           {entry.context.translation && (
-            <p className="prose-cjk text-muted mt-3 text-sm whitespace-pre-line">
+            <p className="prose-cjk mt-3 text-sm whitespace-pre-line text-muted">
               {entry.context.translation}
             </p>
           )}
@@ -172,7 +172,7 @@ export function Component() {
             <p className="prose-cjk text-sm whitespace-pre-line">{entry.definition}</p>
           )}
           {entry.definitionSub && (
-            <p className="prose-cjk border-line mt-4 border-t pt-4 text-sm whitespace-pre-line">
+            <p className="prose-cjk mt-4 border-t border-line pt-4 text-sm whitespace-pre-line">
               {entry.definitionSub}
             </p>
           )}
@@ -181,29 +181,27 @@ export function Component() {
 
       {entry.senses.length > 0 && (
         <Section emoji="🌐" title="文脈別の意味">
-          <ol className="divide-line divide-y">
+          <ol className="divide-y divide-line">
             {entry.senses.map((sense, index) => (
               <li key={index} className="py-4 first:pt-0 last:pb-0">
                 <h3 className="text-sm font-semibold">
-                  <span className="text-accent mr-1.5">{circled(index)}</span>
+                  <span className="mr-1.5 text-accent">{circled(index)}</span>
                   {sense.label}
                 </h3>
-                {sense.description && (
-                  <p className="prose-cjk mt-2 text-sm">{sense.description}</p>
-                )}
+                {sense.description && <p className="prose-cjk mt-2 text-sm">{sense.description}</p>}
                 {sense.example && (
-                  <blockquote className="border-line prose-cjk mt-3 border-l-2 pl-3 text-sm">
+                  <blockquote className="prose-cjk mt-3 border-l-2 border-line pl-3 text-sm">
                     {sense.example}
                     {sense.exampleGloss && (
-                      <span className="text-muted block text-xs">（意味：{sense.exampleGloss}）</span>
+                      <span className="block text-xs text-muted">
+                        （意味：{sense.exampleGloss}）
+                      </span>
                     )}
                   </blockquote>
                 )}
-                {sense.translation && (
-                  <p className="prose-cjk mt-2 text-sm">{sense.translation}</p>
-                )}
+                {sense.translation && <p className="prose-cjk mt-2 text-sm">{sense.translation}</p>}
                 {sense.usage && (
-                  <p className="text-muted prose-cjk mt-2 text-xs">使う場面：{sense.usage}</p>
+                  <p className="prose-cjk mt-2 text-xs text-muted">使う場面：{sense.usage}</p>
                 )}
               </li>
             ))}
@@ -213,15 +211,15 @@ export function Component() {
 
       {entry.examples.length > 0 && (
         <Section emoji="📝" title="例文">
-          <ol className="divide-line divide-y">
+          <ol className="divide-y divide-line">
             {entry.examples.map((example, index) => (
               <li key={index} className="py-3 first:pt-0 last:pb-0">
                 <p className="prose-cjk text-sm">
-                  <span className="text-accent mr-1.5">{circled(index)}</span>
+                  <span className="mr-1.5 text-accent">{circled(index)}</span>
                   {example.ja}
                 </p>
                 {example.translation && (
-                  <p className="prose-cjk text-muted mt-1 pl-6 text-sm">{example.translation}</p>
+                  <p className="prose-cjk mt-1 pl-6 text-sm text-muted">{example.translation}</p>
                 )}
               </li>
             ))}
@@ -237,20 +235,18 @@ export function Component() {
 
       {entry.related.length > 0 && (
         <Section emoji="🔗" title="関連語">
-          <ul className="divide-line divide-y text-sm">
+          <ul className="divide-y divide-line text-sm">
             {entry.related.map((related, index) => (
               <li key={index} className="py-2.5 first:pt-0 last:pb-0">
                 <span className="font-display font-bold">{related.headword}</span>
-                <span className="text-muted prose-cjk"> — {related.note}</span>
+                <span className="prose-cjk text-muted"> — {related.note}</span>
               </li>
             ))}
           </ul>
         </Section>
       )}
 
-      {entry.source && (
-        <p className="text-muted px-1 text-xs">出處：{entry.source}</p>
-      )}
+      {entry.source && <p className="px-1 text-xs text-muted">出處：{entry.source}</p>}
 
       <EntryFormModal open={editing} entry={entry} onClose={() => setEditing(false)} />
 

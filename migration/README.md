@@ -8,7 +8,7 @@ It has already run against `goitei-dev`. It has **not** run against production.
 The Markdown notes were removed once the import was verified, so they are no
 longer in the working tree. Recovering them from history is not equivalent
 either: three headword readings were corrected and six 文脈別の意味 sections were
-written by hand *during* the migration, after the last commit that still
+written by hand _during_ the migration, after the last commit that still
 contained the Markdown. Re-parsing `4fb4ab8~1` would faithfully reproduce the
 three errors.
 
@@ -23,13 +23,13 @@ value in Firestore is surprising. They are not re-runnable without the notes.
 
 ## Files
 
-| File | Role |
-|---|---|
-| `parse.mjs` | Markdown → `Entry` JSON. Needs `bak/` (not in the repo); writes `output.json` and `review.json`. |
-| `normalize.mjs` | Field-level coercion — 品詞, JLPT, 語種, 文体, 丁寧さ, 頻度, and inline-Markdown stripping. |
-| `upload.mjs` | Writes `output.json` to Firestore. The only script that still needs to run. |
-| `output.json` | The 67 verified entries. **The artefact of record.** |
-| `review.json` | Parser warnings needing human judgement. `[]` = clean. |
+| File            | Role                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| `parse.mjs`     | Markdown → `Entry` JSON. Needs `bak/` (not in the repo); writes `output.json` and `review.json`. |
+| `normalize.mjs` | Field-level coercion — 品詞, JLPT, 語種, 文体, 丁寧さ, 頻度, and inline-Markdown stripping.      |
+| `upload.mjs`    | Writes `output.json` to Firestore. The only script that still needs to run.                      |
+| `output.json`   | The 67 verified entries. **The artefact of record.**                                             |
+| `review.json`   | Parser warnings needing human judgement. `[]` = clean.                                           |
 
 ## Running the upload
 

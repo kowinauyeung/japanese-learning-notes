@@ -130,7 +130,9 @@ export function fromSearchParams(params: URLSearchParams): Filters {
   return {
     q: params.get('q') ?? '',
     tags: params.getAll('tag'),
-    jlpt: params.getAll('jlpt').filter((level) => (JLPT_LEVELS as readonly string[]).includes(level)),
+    jlpt: params
+      .getAll('jlpt')
+      .filter((level) => (JLPT_LEVELS as readonly string[]).includes(level)),
     pos: oneOf(params.get('pos'), POS),
     origin: oneOf(params.get('origin'), WORD_ORIGINS),
     style: oneOf(params.get('style'), STYLES),

@@ -78,11 +78,11 @@ export function EntryFormModal({
       onClose={onClose}
       footer={
         <div className="flex items-center gap-3">
-          {error && <p className="text-danger flex-1 text-xs">{error}</p>}
+          {error && <p className="flex-1 text-xs text-danger">{error}</p>}
           <button
             type="button"
             onClick={onClose}
-            className="rounded-pill bg-bg-alt text-ink ml-auto min-h-10 px-5 text-sm font-semibold"
+            className="ml-auto min-h-10 rounded-pill bg-bg-alt px-5 text-sm font-semibold text-ink"
           >
             キャンセル
           </button>
@@ -90,7 +90,7 @@ export function EntryFormModal({
             type="button"
             onClick={() => void save()}
             disabled={saving}
-            className="rounded-pill bg-accent text-on-accent min-h-10 px-5 text-sm font-semibold disabled:opacity-60"
+            className="min-h-10 rounded-pill bg-accent px-5 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
             {saving ? '保存中…' : '保存する'}
           </button>
@@ -98,13 +98,13 @@ export function EntryFormModal({
       }
     >
       {!entry && (
-        <div className="bg-bg-alt rounded-pill mb-5 flex gap-1 p-1">
+        <div className="mb-5 flex gap-1 rounded-pill bg-bg-alt p-1">
           {TABS.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setTab(item.id)}
-              className={`rounded-pill flex-1 py-1.5 text-xs font-semibold transition ${
+              className={`flex-1 rounded-pill py-1.5 text-xs font-semibold transition ${
                 tab === item.id ? 'bg-card text-ink shadow-panel' : 'text-muted'
               }`}
             >
@@ -143,7 +143,7 @@ export function EntryFormModal({
               placeholder="仕事 N2文法"
             />
           </Field>
-          <p className="text-muted text-xs">
+          <p className="text-xs text-muted">
             残りの項目は「詳細」タブ、または保存後の編集から入力できます。
           </p>
         </div>

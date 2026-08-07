@@ -1,10 +1,4 @@
-import {
-  JLPT_LEVELS,
-  POLITENESS,
-  POS,
-  STYLES,
-  WORD_ORIGINS,
-} from '@/types/entry';
+import { JLPT_LEVELS, POLITENESS, POS, STYLES, WORD_ORIGINS } from '@/types/entry';
 import type {
   Entry,
   EntryContext,
@@ -86,7 +80,9 @@ const isoDate = (value: unknown, fallback: string): string => {
 const objects = <T>(value: unknown, map: (item: Record<string, unknown>) => T): T[] =>
   Array.isArray(value)
     ? value
-        .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+        .filter(
+          (item): item is Record<string, unknown> => typeof item === 'object' && item !== null,
+        )
         .map(map)
     : [];
 
@@ -142,10 +138,7 @@ const posInfo = (value: unknown): PosInfo | null => {
  * `fallback` supplies the defaults for absent fields — a blank draft on import,
  * the stored entry on read — so this doubles as "fill in what is missing".
  */
-export function sanitizeDraft(
-  value: unknown,
-  fallback: EntryDraft = emptyDraft(),
-): EntryDraft {
+export function sanitizeDraft(value: unknown, fallback: EntryDraft = emptyDraft()): EntryDraft {
   const raw = record(value);
   return {
     headword: str(raw.headword).trim() || fallback.headword,
