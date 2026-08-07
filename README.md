@@ -159,3 +159,8 @@ rules enforce account access only, never document shape.
 > The app UI is in Japanese and repository documentation is in English. Entry
 > content is mostly Japanese, with Cantonese (Traditional Chinese) translations
 > and remarks in `definitionSub` and the translation fields.
+
+## License
+
+[MIT](LICENSE). This covers the application code. Vocabulary entries are
+personal study notes.
