@@ -50,7 +50,7 @@ export function Component() {
   return (
     <main className="grid min-h-dvh place-items-center bg-bg px-4">
       <div className="rounded-card bg-card shadow-panel w-full max-w-[360px] p-8">
-        <h1 className="font-display text-center text-3xl font-bold text-accent">単語帳</h1>
+        <h1 className="font-display text-center text-3xl font-bold text-accent">語彙庭</h1>
         <p className="text-muted mt-1 text-center text-sm">ログインして続ける</p>
 
         <button

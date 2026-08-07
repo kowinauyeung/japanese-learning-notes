@@ -42,7 +42,7 @@ export function AppLayout() {
       <header className="border-line bg-card/85 sticky top-0 z-30 border-b backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
           <NavLink to="/" className="font-display mr-1 text-lg font-bold text-accent">
-            単語帳
+            語彙庭
           </NavLink>
 
           {/* Desktop: the full pill row. */}
