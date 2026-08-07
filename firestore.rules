@@ -24,6 +24,24 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
+    function setPath(publicSetId) {
+      return /databases/$(database)/documents/publicSets/$(publicSetId);
+    }
+
+    // Carrying ownerUid on a snapshot entry answers "who wrote this row", but
+    // not "may this row be in this set". Without checking the parent, any
+    // allowlisted account could create an entry under somebody else's published
+    // set — or under a set id that does not exist — and it would be served as
+    // part of that set to everyone reading or adopting it.
+    //
+    // Two document reads per call. They are only paid on publish, which is rare
+    // and already batched, and a list evaluates the rule once rather than per
+    // row.
+    function ownsParentSet(publicSetId) {
+      return exists(setPath(publicSetId))
+        && get(setPath(publicSetId)).data.ownerUid == request.auth.uid;
+    }
+
     // The single gate that keeps this a private notebook.
     //
     // The paths below are already multi-user: every rule is written against
@@ -62,30 +80,44 @@ service cloud.firestore {
     // A published copy is an immutable snapshot. Republishing overwrites it
     // wholesale and bumps its version; unpublishing deletes it. Only the owner
     // writes, and ownerUid can never be reassigned to somebody else.
+    //
+    // Every mutation is gated on isAllowed(), not just create. Removing an
+    // account from allowedUsers has to revoke it completely — otherwise a
+    // revoked account keeps the ability to edit what it has already put in front
+    // of other people, which is the one thing revocation is for. The cost is
+    // that it can no longer delete its own published copies either; admin
+    // tooling cleans those up, which is the right way round for a ban.
     match /publicEntries/{publicEntryId} {
       allow read: if isAllowed();
-      allow create: if isOwner(request.resource.data.ownerUid) && isAllowed();
-      allow update: if isOwner(resource.data.ownerUid)
+      allow create: if isAllowed() && isOwner(request.resource.data.ownerUid);
+      allow update: if isAllowed() && isOwner(resource.data.ownerUid)
                     && request.resource.data.ownerUid == resource.data.ownerUid;
-      allow delete: if isOwner(resource.data.ownerUid);
+      allow delete: if isAllowed() && isOwner(resource.data.ownerUid);
     }
 
     match /publicSets/{publicSetId} {
       allow read: if isAllowed();
-      allow create: if isOwner(request.resource.data.ownerUid) && isAllowed();
-      allow update: if isOwner(resource.data.ownerUid)
+      allow create: if isAllowed() && isOwner(request.resource.data.ownerUid);
+      allow update: if isAllowed() && isOwner(resource.data.ownerUid)
                     && request.resource.data.ownerUid == resource.data.ownerUid;
-      allow delete: if isOwner(resource.data.ownerUid);
+      allow delete: if isAllowed() && isOwner(resource.data.ownerUid);
 
-      // Snapshot entries carry ownerUid themselves, so this needs no get() on
-      // the parent set — a parent read would be billed and rate-limited on every
-      // single row of every page.
       match /entries/{entryId} {
-        allow read: if isAllowed();
-        allow create: if isOwner(request.resource.data.ownerUid) && isAllowed();
-        allow update: if isOwner(resource.data.ownerUid)
-                      && request.resource.data.ownerUid == resource.data.ownerUid;
-        allow delete: if isOwner(resource.data.ownerUid);
+        // Deleting publicSets/{id} does NOT delete this subcollection —
+        // Firestore has no cascading delete. Requiring the parent to exist means
+        // an unpublish that fails part-way through cannot leave a snapshot
+        // readable from a path somebody already knows. PublicationRepository
+        // still has to delete the children first; this is the backstop, not the
+        // mechanism.
+        allow read: if isAllowed() && exists(setPath(publicSetId));
+        allow create: if isAllowed() && isOwner(request.resource.data.ownerUid)
+                      && ownsParentSet(publicSetId);
+        allow update: if isAllowed() && isOwner(resource.data.ownerUid)
+                      && request.resource.data.ownerUid == resource.data.ownerUid
+                      && ownsParentSet(publicSetId);
+        // Deliberately no parent check: orphans left by a half-finished
+        // unpublish must stay deletable by their owner.
+        allow delete: if isAllowed() && isOwner(resource.data.ownerUid);
       }
     }
 

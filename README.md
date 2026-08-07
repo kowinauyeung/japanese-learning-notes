@@ -95,8 +95,22 @@ source tree.
 | `yarn build`                           | Type-check, then build to `dist/` (`.env.production`) |
 | `yarn preview`                         | Serve the existing `dist/` build locally              |
 | `yarn typecheck`                       | `tsc -b --noEmit`                                     |
+| `yarn test`                            | Firestore rules tests, in the emulator                |
 | `yarn rules:dev` / `yarn rules:prod`   | Deploy `firestore.rules`                              |
 | `yarn auth:login` / `yarn auth:revoke` | Repo-local Google ADC, used by the migration upload   |
+
+`yarn test` starts the Firestore emulator around
+[`tests/`](tests/firestore-rules.test.ts). The emulator is a Java process and
+`firebase-tools` requires **JDK 21 or newer**; installing it is not enough if an
+older JDK comes first on `PATH`, which is the usual state on macOS:
+
+```bash
+export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+```
+
+These are currently the only tests in the repository, and deliberately so — they
+cover the one part of this app that is a security boundary rather than a
+behaviour. Everything else is tracked in issue #2.
 
 `yarn auth:login` writes to `.gcloud/` via `CLOUDSDK_CONFIG`, deliberately apart
 from the machine-wide `~/.config/gcloud`. There is no long-lived service-account

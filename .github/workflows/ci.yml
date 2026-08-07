@@ -24,6 +24,14 @@ jobs:
           node-version-file: .nvmrc
           cache: yarn
 
+      # The Firestore emulator is a Java process, and firebase-tools refuses
+      # anything below 21. Pinned rather than left to the runner image default,
+      # which has moved before and would take the rules tests with it.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - run: yarn install --frozen-lockfile
 
       # Each step runs even if an earlier one failed, so a single push reports
@@ -42,3 +50,10 @@ jobs:
       - name: Build
         if: '!cancelled()'
         run: yarn build
+
+      # Rules are the only thing protecting the data — the app is client-side
+      # and its config ships in the bundle — so this is the one job here that
+      # covers a security property rather than a behaviour.
+      - name: Firestore rules tests
+        if: '!cancelled()'
+        run: yarn test

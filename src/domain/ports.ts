@@ -73,6 +73,15 @@ export interface PublicationRepository {
   adoptEntry(publicEntryId: string): Promise<string>;
 
   publishSet(setId: string): Promise<string>;
+  /**
+   * Must delete the snapshot's entries **before** the set document itself.
+   *
+   * Firestore does not cascade: deleting a parent leaves its subcollection in
+   * place, and those documents stay addressable by anyone who noted the set id.
+   * The rules refuse to read a snapshot entry whose parent is gone, so a
+   * half-finished unpublish fails closed rather than leaking — but that is a
+   * backstop for a crash, not permission to rely on it.
+   */
   unpublishSet(setId: string): Promise<void>;
   adoptSet(publicSetId: string): Promise<string>;
 }
