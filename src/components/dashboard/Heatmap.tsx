@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { addDays, dateKey, shortDate } from '../../lib/dates';
+import { useMemo, useState } from 'react';
+import { addDays, dateKey, fullDate } from '../../lib/dates';
 
 const MONTHS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
 
@@ -18,6 +18,23 @@ export function Heatmap({
   selected: string | null;
   onSelect: (key: string | null) => void;
 }) {
+  const [tip, setTip] = useState<{ label: string; x: number; y: number } | null>(null);
+
+  /**
+   * Positioned `fixed` from the cell's viewport rect rather than absolutely
+   * inside the grid: the grid scrolls horizontally, and a container with
+   * `overflow-x: auto` clips on the vertical axis too, which would cut the
+   * tooltip off above the top row.
+   */
+  const showTip = (cell: HTMLElement, day: { key: string; count: number }) => {
+    const rect = cell.getBoundingClientRect();
+    setTip({
+      label: `${fullDate(day.key)} ・ ${day.count}語`,
+      x: rect.left + rect.width / 2,
+      y: rect.top,
+    });
+  };
+
   const weeks = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -71,12 +88,17 @@ export function Heatmap({
                   <button
                     key={day.key}
                     type="button"
-                    title={`${shortDate(day.key)} — ${day.count}語`}
-                    aria-label={`${shortDate(day.key)} ${day.count}語`}
+                    aria-label={`${fullDate(day.key)} ${day.count}語`}
                     onClick={() => onSelect(selected === day.key ? null : day.key)}
+                    onMouseEnter={(event) => showTip(event.currentTarget, day)}
+                    onFocus={(event) => showTip(event.currentTarget, day)}
+                    onMouseLeave={() => setTip(null)}
+                    onBlur={() => setTip(null)}
                     style={{ background: `var(--heat-${level(day.count)})` }}
                     className={`h-[11px] w-[11px] rounded-[2px] transition ${
-                      selected === day.key ? 'ring-ink ring-2' : ''
+                      selected === day.key
+                        ? 'ring-ink ring-2'
+                        : 'hover:ring-ink/40 focus-visible:ring-ink/40 hover:ring-1 focus-visible:ring-1'
                     }`}
                   />
                 ),
@@ -97,6 +119,16 @@ export function Heatmap({
         ))}
         <span>多い</span>
       </div>
+
+      {tip && (
+        <div
+          role="tooltip"
+          style={{ left: tip.x, top: tip.y - 8 }}
+          className="rounded-pill bg-ink text-bg shadow-panel pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-full px-2.5 py-1 text-xs font-medium whitespace-nowrap"
+        >
+          {tip.label}
+        </div>
+      )}
     </section>
   );
 }
