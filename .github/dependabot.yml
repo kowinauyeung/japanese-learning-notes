@@ -5,8 +5,12 @@ updates:
   # dozen. Major bumps stay separate: React, Firebase and Vite majors each
   # need reading release notes, which is not a review to rubber-stamp
   # alongside a patch bump.
+  # develop, not the repository default. The default branch is main, which is
+  # production; a dependency bump has no business landing there without going
+  # through dev first.
   - package-ecosystem: npm
     directory: /
+    target-branch: develop
     schedule:
       interval: weekly
       day: monday
@@ -24,6 +28,7 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
+    target-branch: develop
     schedule:
       interval: monthly
     commit-message:

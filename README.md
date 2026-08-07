@@ -106,9 +106,10 @@ key in this project, and there should not be one.
 ## Environments
 
 `.firebaserc` maps `default` and `dev` to `goitei-dev`, and `prod` to `goitei`,
-so a deploy with no `--project` targets development. Branches follow the same split
-by convention — `develop` for dev, `main` for production — but nothing enforces
-it; there is no CI yet and every deploy so far has been manual.
+so a deploy with no `--project` targets development. Branches follow the same
+split — `develop` for dev, `main` for production. Both are protected: changes
+land through a pull request with a green CI run, and neither accepts a force
+push. Deploys themselves are still run by hand.
 
 Which project a build talks to comes from the env file Vite picks, not from the
 `--project` flag, so the two must be set together:
