@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
-import { useEntries } from '@/lib/entries';
-import { JLPT_LEVELS } from '@/types/entry';
+import { Distribution } from '@/components/dashboard/Distribution';
+import { EntryRow } from '@/components/dashboard/EntryRow';
+import { Heatmap } from '@/components/dashboard/Heatmap';
+import { StatTiles } from '@/components/dashboard/StatTiles';
+import { TodayWord, pickWordOfDay } from '@/components/dashboard/TodayWord';
 import {
   dateKey,
   parseLocalDate,
@@ -9,11 +12,8 @@ import {
   startOfMonth,
   startOfYear,
 } from '@/lib/dates';
-import { StatTiles } from '@/components/dashboard/StatTiles';
-import { Distribution } from '@/components/dashboard/Distribution';
-import { Heatmap } from '@/components/dashboard/Heatmap';
-import { TodayWord, pickWordOfDay } from '@/components/dashboard/TodayWord';
-import { EntryRow } from '@/components/dashboard/EntryRow';
+import { useEntries } from '@/lib/entries';
+import { JLPT_LEVELS } from '@/types/entry';
 
 export function Component() {
   const { entries, loading, error } = useEntries();

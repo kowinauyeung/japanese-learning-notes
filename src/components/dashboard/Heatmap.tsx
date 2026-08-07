@@ -110,14 +110,21 @@ export function Heatmap({
     const start = addDays(from, -from.getDay());
 
     const result: { key: string; date: Date; count: number; future: boolean }[][] = [];
+    // `start` is a Sunday by construction, so the first iteration always opens
+    // a week before anything is pushed into one. Holding the current week in a
+    // variable says that to the compiler; indexing result.length - 1 did not.
+    let week: (typeof result)[number] = [];
     for (
       let cursor = start;
       cursor <= today || cursor.getDay() !== 0;
       cursor = addDays(cursor, 1)
     ) {
-      if (cursor.getDay() === 0) result.push([]);
+      if (cursor.getDay() === 0) {
+        week = [];
+        result.push(week);
+      }
       const key = dateKey(cursor);
-      result[result.length - 1].push({
+      week.push({
         key,
         date: new Date(cursor),
         count: countsByDay.get(key) ?? 0,
@@ -154,12 +161,12 @@ export function Heatmap({
           <div className="min-w-max">
             {/* Month label sits above the week that contains the 1st. */}
             <div className="mb-1 grid grid-flow-col gap-[2px]">
-              {weeks.map((week) => {
+              {weeks.map((week, index) => {
                 const first = week.find((day) => day.date.getDate() <= 7);
                 const isMonthStart = week.some((day) => day.date.getDate() === 1);
                 return (
                   <span
-                    key={week[0].key}
+                    key={week[0]?.key ?? index}
                     className="h-3 w-[11px] text-[10px] leading-3 whitespace-nowrap text-muted"
                   >
                     {isMonthStart && first ? MONTHS[first.date.getMonth()] : ''}

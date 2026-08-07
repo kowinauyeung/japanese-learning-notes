@@ -1,9 +1,10 @@
 import js from '@eslint/js';
-import globals from 'globals';
+import prettier from 'eslint-config-prettier';
+import perfectionist from 'eslint-plugin-perfectionist';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import globals from 'globals';
 import tseslint from 'typescript-eslint';
-import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
@@ -15,6 +16,27 @@ export default tseslint.config(
   {
     rules: {
       'no-irregular-whitespace': ['error', { skipRegExps: true }],
+    },
+  },
+
+  // Import order only. Perfectionist can also sort object keys, union members
+  // and JSX props, and none of those are wanted: the manifest rows, the schema
+  // in jsonImport.ts and the POS_MAP in normalize.mjs are all ordered on
+  // purpose, and alphabetising them would destroy information.
+  {
+    plugins: { perfectionist },
+    rules: {
+      'perfectionist/sort-imports': [
+        'error',
+        {
+          type: 'natural',
+          internalPattern: ['^@/'],
+          newlinesBetween: 'ignore',
+          // Bare selectors, so a `import type` stays beside the value import
+          // from the same module instead of being hoisted into a types block.
+          groups: ['builtin', 'external', 'internal', ['parent', 'sibling', 'index'], 'unknown'],
+        },
+      ],
     },
   },
 

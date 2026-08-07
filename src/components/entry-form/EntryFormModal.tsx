@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import type { Entry, EntryDraft } from '@/types/entry';
-import { createEntry, updateEntry } from '@/lib/entryWrite';
-import { emptyDraft, invalidTags, parseTags, toDraft } from '@/lib/draft';
-import { isValidIsoDate } from '@/lib/sanitize';
-import { useEntries } from '@/lib/entries';
 import { Modal } from '@/components/Modal';
+import { emptyDraft, invalidTags, parseTags, toDraft } from '@/lib/draft';
+import { useEntries } from '@/lib/entries';
+import { createEntry, updateEntry } from '@/lib/entryWrite';
+import { isValidIsoDate } from '@/lib/sanitize';
+import type { Entry, EntryDraft } from '@/types/entry';
 import { EntryForm } from './EntryForm';
-import { JsonImport } from './JsonImport';
 import { Area, Field, Text } from './fields';
+import { JsonImport } from './JsonImport';
 
 type Tab = 'simple' | 'full' | 'json';
 

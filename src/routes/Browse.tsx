@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { EntryCard } from '@/components/browse/EntryCard';
+import { FilterPanel } from '@/components/browse/FilterPanel';
 import { useEntries } from '@/lib/entries';
 import {
   EMPTY_FILTERS,
@@ -10,8 +12,6 @@ import {
   toSearchParams,
 } from '@/lib/filters';
 import type { Filters } from '@/lib/filters';
-import { EntryCard } from '@/components/browse/EntryCard';
-import { FilterPanel } from '@/components/browse/FilterPanel';
 
 export function Component() {
   const { entries, loading, error } = useEntries();

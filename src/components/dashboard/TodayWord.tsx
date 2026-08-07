@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import type { Entry } from '@/types/entry';
-import { Ruby } from '@/components/Ruby';
 import { LogoMark } from '@/components/Logo';
+import { Ruby } from '@/components/Ruby';
+import type { Entry } from '@/types/entry';
 
 /**
  * Same word all day, a different one tomorrow, with nothing persisted: the
@@ -12,7 +12,7 @@ export function pickWordOfDay(entries: Entry[], todayKey: string): Entry | null 
   let hash = 0;
   for (const char of todayKey) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   const ordered = [...entries].sort((a, b) => a.id.localeCompare(b.id));
-  return ordered[hash % ordered.length];
+  return ordered[hash % ordered.length] ?? null;
 }
 
 /**

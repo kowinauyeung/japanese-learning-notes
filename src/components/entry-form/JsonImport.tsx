@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { EntryDraft } from '@/types/entry';
 import { buildPrompt, jsonToDraft, SCHEMA } from '@/lib/jsonImport';
+import type { EntryDraft } from '@/types/entry';
 import { Area, Field, inputClass } from './fields';
 
 export function JsonImport({ onLoad }: { onLoad: (draft: EntryDraft) => void }) {
