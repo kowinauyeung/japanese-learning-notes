@@ -69,7 +69,12 @@ export function Component() {
 
   return (
     <div className="space-y-4">
-      <StatTiles week={stats.inWeek} month={stats.inMonth} year={stats.inYear} />
+      {/* Hero row. Without a word of the day the notebook is empty, so the
+          counts drop to a single full-width column rather than leaving a gap. */}
+      <div className={`grid gap-4 ${wordOfDay ? 'sm:grid-cols-2' : ''}`}>
+        {wordOfDay && <TodayWord entry={wordOfDay} />}
+        <StatTiles week={stats.inWeek} month={stats.inMonth} year={stats.inYear} />
+      </div>
 
       <section className="rounded-card bg-card shadow-panel p-5">
         <h2 className="text-muted text-xs font-semibold tracking-wide">最新の練習</h2>
@@ -87,8 +92,6 @@ export function Component() {
         <Distribution title={`JLPTレベル（全 ${entries.length} 語）`} rows={stats.jlptRows} />
         <Distribution title="品詞" rows={stats.posRows} />
       </div>
-
-      {wordOfDay && <TodayWord entry={wordOfDay} />}
 
       <Heatmap
         countsByDay={stats.countsByDay}
