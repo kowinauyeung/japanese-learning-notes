@@ -43,3 +43,12 @@ export function shortDate(key: string): string {
   const date = parseLocalDate(key);
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
+
+/**
+ * 「2025年6月24日」 — for the heatmap, which spans a full year and wraps past
+ * the same month twice, so a bare 6/24 would not say which one.
+ */
+export function fullDate(key: string): string {
+  const date = parseLocalDate(key);
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+}

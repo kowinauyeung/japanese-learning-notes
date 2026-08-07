@@ -1,4 +1,4 @@
-# 語彙帳 — Japanese Vocabulary Notebook
+# 語彙庭 Goitei — Japanese Vocabulary Notebook
 
 A personal web app for recording and reviewing Japanese vocabulary picked up in
 daily life and at work, with Cantonese translations and notes.

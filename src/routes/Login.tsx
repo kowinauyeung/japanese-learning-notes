@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { projectId } from '../lib/firebase';
+import { LogoMark } from '../components/Logo';
 
 /**
  * Where to land after signing in. `state.from` is set by `AppLayout` when it
@@ -50,8 +51,11 @@ export function Component() {
   return (
     <main className="grid min-h-dvh place-items-center bg-bg px-4">
       <div className="rounded-card bg-card shadow-panel w-full max-w-[360px] p-8">
-        <h1 className="font-display text-center text-3xl font-bold text-accent">単語帳</h1>
-        <p className="text-muted mt-1 text-center text-sm">ログインして続ける</p>
+        <h1 className="flex flex-col items-center gap-3">
+          <LogoMark className="h-16 w-16" />
+          <span className="font-display text-3xl font-bold text-accent">語彙庭</span>
+        </h1>
+        <p className="text-muted mt-2 text-center text-sm">ログインして続ける</p>
 
         <button
           type="button"
