@@ -1,5 +1,5 @@
 import { useAuth } from '@/lib/auth';
-import { projectId } from '@/lib/firebase';
+import { projectId } from '@/lib/env';
 
 export function Component() {
   const { user, signOutUser } = useAuth();

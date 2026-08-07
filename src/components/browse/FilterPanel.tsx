@@ -1,5 +1,5 @@
+import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import type { Filters, SortKey } from '@/lib/filters';
-import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '@/types/entry';
 
 const SORTS: { value: SortKey; label: string }[] = [
   { value: 'new', label: '追加日（新しい順）' },

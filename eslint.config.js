@@ -71,9 +71,78 @@ export default tseslint.config(
     },
   },
 
+  // Vendor fence. `src/infra` is the only place allowed to reach for the
+  // Firebase SDK; everything else works in domain types and plain ISO strings.
+  //
+  // Enforced mechanically rather than by convention because the leak it prevents
+  // is invisible: `types/entry.ts` used to `import type { Timestamp }`, one line
+  // that pulled a vendor type through `Entry` into every component that touched
+  // an entry. Type-only imports are covered — hence the typescript-eslint
+  // version of the rule, which sees them. The pattern is a regex anchored on the
+  // bare specifier, because `group` matches anywhere in a path and would also
+  // catch `@/infra/firebase/…`, which is the next rule's job, not this one's.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/infra/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^firebase(/|$)',
+              message:
+                'Import the Firebase SDK only in src/infra. Depend on src/domain/ports instead.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // The UI never names an adapter. Wiring a port to its implementation is the
+  // job of the providers in src/lib, which are the composition root; a card or a
+  // route reaching past them is how a component ends up knowing where its data
+  // is stored.
+  {
+    files: ['src/components/**/*.{ts,tsx}', 'src/routes/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^@/infra/',
+              message: 'Go through a provider or hook in src/lib rather than an adapter.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // Tests. Same strictness as src, Node globals, and no vendor fence — driving
+  // the emulator is the whole point.
+  //
+  // Named explicitly rather than left to projectService, which resolves through
+  // the nearest tsconfig.json. That is the solution file, and tsconfig.test.json
+  // is deliberately not one of its references: referencing it would require
+  // tsconfig.app.json to emit, which it does not.
+  {
+    files: ['tests/**/*.ts'],
+    extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      globals: globals.node,
+      parserOptions: {
+        project: './tsconfig.test.json',
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+
   // Build config: same TypeScript rules, Node globals.
   {
-    files: ['vite.config.ts'],
+    files: ['vite.config.ts', 'vitest.config.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       globals: globals.node,

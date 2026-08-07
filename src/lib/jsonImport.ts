@@ -1,4 +1,4 @@
-import type { EntryDraft } from '@/types/entry';
+import type { EntryDraft } from '@/domain/entry';
 import { sanitizeDraft } from './sanitize';
 
 /** The shape shown in the app and asked of the assistant. */

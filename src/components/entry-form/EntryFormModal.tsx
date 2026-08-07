@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '@/components/Modal';
+import type { Entry, EntryDraft } from '@/domain/entry';
 import { emptyDraft, invalidTags, parseTags, toDraft } from '@/lib/draft';
 import { useEntries } from '@/lib/entries';
-import { createEntry, updateEntry } from '@/lib/entryWrite';
 import { isValidIsoDate } from '@/lib/sanitize';
-import type { Entry, EntryDraft } from '@/types/entry';
 import { EntryForm } from './EntryForm';
 import { Area, Field, Text } from './fields';
 import { JsonImport } from './JsonImport';
@@ -33,7 +32,7 @@ export function EntryFormModal({
   onClose: () => void;
   onSaved?: (id: string) => void;
 }) {
-  const { refresh } = useEntries();
+  const { refresh, repository } = useEntries();
   const [tab, setTab] = useState<Tab>('simple');
   const [draft, setDraft] = useState<EntryDraft>(emptyDraft);
   const [saving, setSaving] = useState(false);
@@ -59,7 +58,9 @@ export function EntryFormModal({
     setSaving(true);
     setError(null);
     try {
-      const id = entry ? (await updateEntry(entry.id, draft), entry.id) : await createEntry(draft);
+      const id = entry
+        ? (await repository.update(entry.id, draft), entry.id)
+        : await repository.create(draft);
       await refresh();
       onSaved?.(id);
       onClose();

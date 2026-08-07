@@ -1,12 +1,11 @@
-import type { User } from 'firebase/auth';
-import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { auth, googleProvider } from './firebase';
+import type { AuthUser } from '@/domain/ports';
+import { firebaseAuth } from '@/infra/firebase/authAdapter';
 
 interface AuthValue {
-  user: User | null;
-  /** True until Firebase has restored (or ruled out) a persisted session. */
+  user: AuthUser | null;
+  /** True until the provider has restored (or ruled out) a persisted session. */
   loading: boolean;
   signIn: () => Promise<void>;
   signOutUser: () => Promise<void>;
@@ -14,13 +13,18 @@ interface AuthValue {
 
 const AuthContext = createContext<AuthValue | null>(null);
 
+/**
+ * The composition point for authentication: the adapter is named here and
+ * nowhere else, so everything downstream sees the domain `AuthUser` rather than
+ * Firebase's much wider `User`.
+ */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(
     () =>
-      onAuthStateChanged(auth, (next) => {
+      firebaseAuth.onChange((next) => {
         setUser(next);
         setLoading(false);
       }),
@@ -31,12 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
-      signIn: async () => {
-        await signInWithPopup(auth, googleProvider);
-      },
-      signOutUser: async () => {
-        await signOut(auth);
-      },
+      signIn: () => firebaseAuth.signIn(),
+      signOutUser: () => firebaseAuth.signOut(),
     }),
     [user, loading],
   );

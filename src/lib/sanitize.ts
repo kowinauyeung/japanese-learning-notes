@@ -1,4 +1,5 @@
-import { JLPT_LEVELS, POLITENESS, POS, STYLES, WORD_ORIGINS } from '@/types/entry';
+import type { Attribution } from '@/domain/common';
+import { JLPT_LEVELS, POLITENESS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import type {
   Entry,
   EntryContext,
@@ -9,7 +10,7 @@ import type {
   RelatedWord,
   Sense,
   UsageNotes,
-} from '@/types/entry';
+} from '@/domain/entry';
 import { emptyDraft, parseTags } from './draft';
 
 /**
@@ -76,6 +77,27 @@ const isoDate = (value: unknown, fallback: string): string => {
   return isValidIsoDate(raw) ? raw : fallback;
 };
 
+/**
+ * A full instant, as written by `infra/firebase/mappers.ts`.
+ *
+ * Unlike `learnedOn` these are never user input, but they can still be absent:
+ * `serverTimestamp()` resolves asynchronously, so a document read back from the
+ * local cache immediately after a write has `null` there until the server
+ * round-trip lands. An empty string is the honest answer, and no view reads
+ * these today — the dashboard counts `learnedOn`.
+ */
+const isoDateTime = (value: unknown): string => {
+  const raw = str(value).trim();
+  if (!raw) return '';
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+};
+
+const nonNegativeInt = (value: unknown): number => {
+  const n = typeof value === 'number' ? value : Number.parseInt(str(value), 10);
+  return Number.isInteger(n) && n >= 0 ? n : 0;
+};
+
 /** Drops non-objects (the `[null]` case) before the mapper can touch them. */
 const objects = <T>(value: unknown, map: (item: Record<string, unknown>) => T): T[] =>
   Array.isArray(value)
@@ -123,6 +145,24 @@ const usage = (value: unknown): UsageNotes => {
   return { when: str(raw.when), translation: str(raw.translation), caution: str(raw.caution) };
 };
 
+/**
+ * Null unless every part of it survives coercion. A half-populated attribution
+ * is worse than none: it would render as an empty creator name next to a real
+ * "copied from" label.
+ */
+const attribution = (value: unknown): Attribution | null => {
+  if (value === null || value === undefined) return null;
+  const raw = record(value);
+  const ownerNickname = str(raw.ownerNickname).trim();
+  const copiedAt = isoDateTime(raw.copiedAt);
+  if (!ownerNickname || !copiedAt) return null;
+  return {
+    ownerNickname,
+    sourceKind: raw.sourceKind === 'set' ? 'set' : 'entry',
+    copiedAt,
+  };
+};
+
 const posInfo = (value: unknown): PosInfo | null => {
   if (value === null || value === undefined) return null;
   const raw = record(value);
@@ -163,24 +203,32 @@ export function sanitizeDraft(value: unknown, fallback: EntryDraft = emptyDraft(
     context: entryContext(raw.context),
     usage: usage(raw.usage),
     tags: parseTags(strings(raw.tags).join(' ')),
-    wordSets: strings(raw.wordSets),
     learnedOn: isoDate(raw.learnedOn, fallback.learnedOn),
   };
 }
 
 /**
- * Coerce a Firestore document into an `Entry`.
+ * Coerce a stored document into an `Entry`.
  *
- * `createdAt` / `updatedAt` pass through untouched: they are Firestore
- * `Timestamp`s written only by `entryWrite.ts`, never user input, and no view
- * reads them today.
+ * The bookkeeping and ownership fields used to be `as`-cast straight through,
+ * which was the one place this module did the very thing it exists to prevent.
+ * They are coerced now — the adapter has already turned any `Timestamp` into a
+ * string by this point, so there is no vendor type left to cast around.
+ *
+ * `ownerUid` is trusted from the document rather than passed in: it is written
+ * by the repository and enforced by the security rules, and re-deriving it from
+ * the caller would invent a second source of truth for who owns the row.
  */
 export function sanitizeEntry(id: string, data: unknown): Entry {
   const raw = record(data);
   return {
     ...sanitizeDraft(raw),
     id,
-    createdAt: raw.createdAt as Entry['createdAt'],
-    updatedAt: raw.updatedAt as Entry['updatedAt'],
+    ownerUid: str(raw.ownerUid),
+    publishedId: str(raw.publishedId) || null,
+    publishedVersion: nonNegativeInt(raw.publishedVersion),
+    copiedFrom: attribution(raw.copiedFrom),
+    createdAt: isoDateTime(raw.createdAt),
+    updatedAt: isoDateTime(raw.updatedAt),
   };
 }

@@ -1,34 +1,133 @@
 rules_version = '2';
 
-// Single-user notebook: everything is readable and writable by one verified
-// Google account and nobody else. Locking on the verified email rather than a
-// uid means the same rules work in both projects without hard-coding two
-// different uids.
+// Private data lives under users/{uid} and is reachable by that account alone.
+// Published copies are separate, deliberately duplicated documents in their own
+// top-level collections.
+//
+// Two properties are worth stating because they are what make this simple:
+//
+//  * Rules *reject* a query they cannot satisfy — they never filter one. A
+//    listing that forgot to scope itself to the signed-in user therefore fails
+//    loudly instead of returning somebody else's rows.
+//  * **No user ever writes to another user's document.** A copy counter on
+//    published sets was designed and dropped to keep that true. If a feature
+//    seems to need a cross-user write, that is the signal it belongs in a search
+//    index or a backend, not in an exception here.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isOwner() {
-      return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email == 'kowinauyeung@gmail.com';
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
     }
 
-    match /entries/{entryId} {
-      allow read, write: if isOwner();
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
     }
 
-    match /entryProgress/{entryId} {
-      allow read, write: if isOwner();
+    function setPath(publicSetId) {
+      return /databases/$(database)/documents/publicSets/$(publicSetId);
     }
 
-    match /practiceSessions/{sessionId} {
-      allow read, write: if isOwner();
+    // Carrying ownerUid on a snapshot entry answers "who wrote this row", but
+    // not "may this row be in this set". Without checking the parent, any
+    // allowlisted account could create an entry under somebody else's published
+    // set — or under a set id that does not exist — and it would be served as
+    // part of that set to everyone reading or adopting it.
+    //
+    // getAfter, not get: a first publish writes the set and its first entries in
+    // one batch, and get() only sees committed state, so the child would be
+    // evaluated against a parent that does not exist yet and every first publish
+    // would be denied. getAfter evaluates the batch's end state, which is what
+    // "does this row belong here once this write lands" actually means. It still
+    // returns null for a set nobody is creating, so an entry under an unrelated
+    // or non-existent set stays denied.
+    //
+    // One document read per call, paid only on publish.
+    function ownsParentSet(publicSetId) {
+      return getAfter(setPath(publicSetId)).data.ownerUid == request.auth.uid;
     }
 
-    match /wordSets/{slug} {
-      allow read, write: if isOwner();
+    // The single gate that keeps this a private notebook.
+    //
+    // The paths below are already multi-user: every rule is written against
+    // request.auth.uid and nothing depends on there being one account. This
+    // check is the only thing standing between the current state and open
+    // signups, and it is deliberate — the billing plan has no hard spending
+    // cap, so a stranger who signed up would be writing to a project that can
+    // be alerted on but not capped.
+    //
+    // It is an allowlist collection rather than a hard-coded address so that
+    // adding somebody is a document rather than a rules deploy, and so the same
+    // mechanism becomes a beta invite list later. `allowedUsers` has no match
+    // block of its own, so no client can read or write it — a rules-internal
+    // exists() is not itself subject to rules, and admin tooling writes it.
+    //
+    // Note this cannot be replaced by anything in front of the site: Firebase
+    // Hosting serves the config that reaches Firestore, so basic auth or any
+    // other gate on the HTML protects the page, not the data.
+    //
+    // To open signups: delete this function and its call sites. Do that
+    // together with App Check and a budget-alert kill switch, not before.
+    function isAllowed() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.uid));
     }
 
-    // Anything not listed above stays denied.
+    // Everything private, in one rule. No field-level conditions, no visibility
+    // flags, nothing to get subtly wrong.
+    match /users/{uid} {
+      allow read, write: if isOwner(uid) && isAllowed();
+      match /{document=**} {
+        allow read, write: if isOwner(uid) && isAllowed();
+      }
+    }
+
+    // A published copy is an immutable snapshot. Republishing overwrites it
+    // wholesale and bumps its version; unpublishing deletes it. Only the owner
+    // writes, and ownerUid can never be reassigned to somebody else.
+    //
+    // Every mutation is gated on isAllowed(), not just create. Removing an
+    // account from allowedUsers has to revoke it completely — otherwise a
+    // revoked account keeps the ability to edit what it has already put in front
+    // of other people, which is the one thing revocation is for. The cost is
+    // that it can no longer delete its own published copies either; admin
+    // tooling cleans those up, which is the right way round for a ban.
+    match /publicEntries/{publicEntryId} {
+      allow read: if isAllowed();
+      allow create: if isAllowed() && isOwner(request.resource.data.ownerUid);
+      allow update: if isAllowed() && isOwner(resource.data.ownerUid)
+                    && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if isAllowed() && isOwner(resource.data.ownerUid);
+    }
+
+    match /publicSets/{publicSetId} {
+      allow read: if isAllowed();
+      allow create: if isAllowed() && isOwner(request.resource.data.ownerUid);
+      allow update: if isAllowed() && isOwner(resource.data.ownerUid)
+                    && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if isAllowed() && isOwner(resource.data.ownerUid);
+
+      match /entries/{entryId} {
+        // Deleting publicSets/{id} does NOT delete this subcollection —
+        // Firestore has no cascading delete. Requiring the parent to exist means
+        // an unpublish that fails part-way through cannot leave a snapshot
+        // readable from a path somebody already knows. PublicationRepository
+        // still has to delete the children first; this is the backstop, not the
+        // mechanism.
+        allow read: if isAllowed() && exists(setPath(publicSetId));
+        allow create: if isAllowed() && isOwner(request.resource.data.ownerUid)
+                      && ownsParentSet(publicSetId);
+        allow update: if isAllowed() && isOwner(resource.data.ownerUid)
+                      && request.resource.data.ownerUid == resource.data.ownerUid
+                      && ownsParentSet(publicSetId);
+        // Deliberately no parent check: orphans left by a half-finished
+        // unpublish must stay deletable by their owner.
+        allow delete: if isAllowed() && isOwner(resource.data.ownerUid);
+      }
+    }
+
+    // Anything not listed above stays denied. The old top-level /entries,
+    // /entryProgress, /practiceSessions and /wordSets collections are gone: they
+    // had no owner field, so they could not be secured per user.
   }
 }

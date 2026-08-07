@@ -5,7 +5,6 @@ import { KeyValueTable, Section } from '@/components/detail/Section';
 import { EntryFormModal } from '@/components/entry-form/EntryFormModal';
 import { Ruby } from '@/components/Ruby';
 import { useEntries } from '@/lib/entries';
-import { deleteEntry } from '@/lib/entryWrite';
 
 /** ①②③… for sense and example numbering, matching the notes. */
 function circled(index: number): string {
@@ -19,7 +18,7 @@ function stars(freq: number): string {
 export function Component() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { entries, loading, error, refresh } = useEntries();
+  const { entries, loading, error, refresh, repository } = useEntries();
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -35,7 +34,7 @@ export function Component() {
     setDeleting(true);
     setDeleteError(null);
     try {
-      await deleteEntry(entryId);
+      await repository.remove(entryId);
       await refresh();
       void navigate('/vocabulary', { replace: true });
     } catch (cause) {

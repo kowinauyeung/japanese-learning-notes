@@ -42,6 +42,3 @@ export const db = initializeFirestore(app, {
 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-
-/** Handy in the console and in dev-only UI to confirm which project is live. */
-export const projectId = config.projectId;
