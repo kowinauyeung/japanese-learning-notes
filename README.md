@@ -162,5 +162,10 @@ rules enforce account access only, never document shape.
 
 ## License
 
-[MIT](LICENSE). This covers the application code. Vocabulary entries are
-personal study notes.
+Source code: [MIT](LICENSE).
+
+The Japanese vocabulary entries are **not** covered by it. They are personal
+study notes, committed as `migration/output.json` and `migration/review.json`
+so the Firestore import stays inspectable — see
+[`migration/README.md`](migration/README.md) — and they are reserved. The scope
+note at the bottom of [`LICENSE`](LICENSE) is the authoritative wording.

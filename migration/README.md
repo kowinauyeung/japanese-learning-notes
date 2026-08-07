@@ -31,6 +31,11 @@ value in Firestore is surprising. They are not re-runnable without the notes.
 | `output.json`   | The 67 verified entries. **The artefact of record.**                                             |
 | `review.json`   | Parser warnings needing human judgement. `[]` = clean.                                           |
 
+The scripts are MIT like the rest of the source. The entries inside
+`output.json` and `review.json` are not: they are personal study notes,
+committed for provenance rather than reuse. See the scope note at the bottom of
+[`LICENSE`](../LICENSE).
+
 ## Running the upload
 
 Credentials resolve in this order, and the machine-wide ADC is never used
