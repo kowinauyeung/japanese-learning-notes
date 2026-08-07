@@ -150,10 +150,31 @@ repository secrets:
 | `GCP_DEPLOY_SERVICE_ACCOUNT`     | Email of the service account the workflow impersonates                                                                                           |
 | `VITE_FIREBASE_*` (six)          | Same values as `.env.example`. Vite inlines them at build time; they are public by design, but the repo is public too, so they are not committed |
 
-The service account needs **Firebase Hosting Admin**, **Cloud Datastore Index
-Admin** and **Firebase Rules Admin** on `goitei-dev`, and the pool's provider
-must be restricted to this repository — an unrestricted provider lets any GitHub
-repository mint credentials for it.
+#### Setting them up
+
+The identity is a Workload Identity Federation pool and provider in the Google
+Cloud console, restricted to this repository, plus a service account the pool is
+allowed to impersonate. No key is created at any point — that is the whole
+reason for federating rather than downloading one.
+
+Three things about it are worth writing down, because each was learned by
+hitting it:
+
+- The service account needs **Service Usage Consumer** on top of Firebase
+  Hosting Admin and Firebase Rules Admin. Before deploying rules,
+  `firebase-tools` checks that `firestore.googleapis.com` is enabled, and that
+  check needs `serviceusage.services.get`. Without it the deploy stops on
+  `403 Permission denied to get service [firestore.googleapis.com]`, which reads
+  like a Firestore problem and is not one.
+- The provider's attribute condition matches on `assertion.repository` and stops
+  there. Adding `&& assertion.ref == 'refs/heads/develop'` looks like free
+  hardening and is not: a pull request's token carries
+  `ref = refs/pull/<n>/merge`, so it would block every preview deploy. See the
+  trust boundary below for what actually contains the risk.
+- A pool cannot span projects. Automating production means a second pool,
+  provider and service account inside `goitei`, and a second set of secrets —
+  the procedure is reusable, nothing else is. Until then, deploy production by
+  hand.
 
 #### Trust boundary
 
@@ -177,9 +198,18 @@ The six `VITE_FIREBASE_*` values are the exception, and are scoped to the build
 step. They can already be read out of the deployed bundle by anyone, so a build
 that leaks them gives away nothing that visiting the dev site would not.
 
-Tighten the provider further if you can: an attribute condition of
-`assertion.repository == '<owner>/<repo>' && assertion.ref == 'refs/heads/develop'`
-means a token minted in a pull request context cannot be exchanged at all.
+The provider's attribute condition is `assertion.repository` only, and stopping
+there is deliberate. Adding `&& assertion.ref == 'refs/heads/develop'` does stop
+a token minted in a pull request context from being exchanged — and with it,
+every preview deploy, since a pull request's token carries
+`ref = refs/pull/<n>/merge`. That is not defence in depth, it is the feature
+switched off.
+
+The tightening that costs nothing is two service accounts instead of one, bound
+through the pool's `attribute.event`: `push` gets hosting **and** rules admin,
+`pull_request` gets hosting admin only. A preview then cannot touch rules even
+if something goes wrong upstream of it. Worth doing if this workflow ever grows
+past one environment.
 
 ## Data model
 
