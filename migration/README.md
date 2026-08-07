@@ -27,7 +27,7 @@ value in Firestore is surprising. They are not re-runnable without the notes.
 | --------------- | ------------------------------------------------------------------------------------------------ |
 | `parse.mjs`     | Markdown → `Entry` JSON. Needs `bak/` (not in the repo); writes `output.json` and `review.json`. |
 | `normalize.mjs` | Field-level coercion — 品詞, JLPT, 語種, 文体, 丁寧さ, 頻度, and inline-Markdown stripping.      |
-| `upload.mjs`    | Writes `output.json` to Firestore. The only script that still needs to run.                      |
+| `upload.mjs`    | Writes `output.json` to `users/{uid}/entries`. The only script that still needs to run.          |
 | `output.json`   | The 67 verified entries. **The artefact of record.**                                             |
 | `review.json`   | Parser warnings needing human judgement. `[]` = clean.                                           |
 
@@ -48,15 +48,28 @@ apart from the one in `~/.config/gcloud`:
 4. machine-wide ADC — only with `--use-global-adc`
 
 ```bash
-node migration/upload.mjs dev              # goitei-dev
-node migration/upload.mjs prod --confirm   # goitei — --confirm is mandatory
+node migration/upload.mjs --owner you@example.com                     # goitei-dev
+node migration/upload.mjs prod --owner you@example.com --confirm      # goitei
 ```
 
-`upload.mjs` uses `set()` without merge, so a document is fully replaced and
-stale fields disappear. It is idempotent: re-running converges on `output.json`.
+`--owner` is mandatory. Entries live at `users/{uid}/entries/{autoId}`, and the
+uid is resolved from that address through the Admin SDK rather than guessed, so
+the account must have signed into the app at least once. The uploader also
+ensures `allowedUsers/{uid}` exists — the security rules gate every path on it
+and no client can write that collection, so uploading a notebook its owner would
+then be denied access to is the easy mistake to make.
 
-Documents **not** in `output.json` are left untouched — `dev` currently holds
-four entries created through the app that the uploader will never overwrite.
+`upload.mjs` uses `set()` without merge, so a document is fully replaced and
+stale fields disappear. It is still idempotent, but by a different mechanism:
+document ids used to be the note filenames, so `set()` on a known id converged.
+Ids are auto-generated now — slugs are unique per user at best and would collide
+the moment anything is shared — so the old slug rides along as `migrationKey`,
+and the script reads the collection once to map key → document before choosing
+update or create. Without that, a second run would create 67 duplicates.
+
+Documents **not** in `output.json` are left untouched. Pass `--wipe-legacy` to
+delete the pre-ownership top-level `entries` collection, which no rule matches
+any more and which therefore only costs storage.
 
 ## Production rollout
 
@@ -64,7 +77,10 @@ Production has never been written to and has no rules deployed. In order:
 
 1. `yarn rules:prod` — deploy `firestore.rules` first, so the collection is
    never briefly writable by anyone but the owner.
-2. `node migration/upload.mjs prod --confirm` — loads the 67 entries.
-3. Verify the count is 67 and spot-check one entry with a 📌 context section.
+2. Sign into the production app once, so the account exists and `--owner` can
+   resolve to a uid.
+3. `node migration/upload.mjs prod --owner you@example.com --confirm` — loads
+   the 67 entries and adds the `allowedUsers` record.
+4. Verify the count is 67 and spot-check one entry with a 📌 context section.
 
 Step 1 before step 2 is the whole point of the ordering; do not reverse it.

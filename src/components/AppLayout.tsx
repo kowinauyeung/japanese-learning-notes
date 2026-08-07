@@ -38,7 +38,7 @@ export function AppLayout() {
   }
 
   return (
-    <EntriesProvider>
+    <EntriesProvider uid={user.uid}>
       <div className="min-h-dvh bg-bg text-ink">
         <header className="sticky top-0 z-30 border-b border-line bg-card/85 backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">

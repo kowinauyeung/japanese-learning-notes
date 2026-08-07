@@ -1,18 +1,32 @@
-import { collection, getDocs } from 'firebase/firestore';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { Entry } from '@/types/entry';
-import { db } from './firebase';
-import { sanitizeEntry } from './sanitize';
+import type { Entry } from '@/domain/entry';
+import type { EntryRepository } from '@/domain/ports';
+import { createEntryRepository } from '@/infra/firebase/entryRepo';
 
 interface EntriesValue {
   entries: Entry[];
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  /**
+   * Exposed so the form and the detail page write through the same instance the
+   * list was read from, instead of each building their own. It is the only
+   * thing in the app that knows where entries are stored.
+   */
+  repository: EntryRepository;
 }
 
 const EntriesContext = createContext<EntriesValue | null>(null);
+
+/**
+ * Pages are requested in chunks rather than as one unbounded read, but every
+ * chunk is still fetched: the dashboard statistics, the heatmap and the Browse
+ * filters all reduce over the complete set, so partial data would silently show
+ * wrong counts. Teaching those views to work from a partial set is a separate
+ * change from moving them behind a repository, and this one preserves behaviour.
+ */
+const PAGE_SIZE = 200;
 
 /**
  * The whole collection is loaded once and kept in memory.
@@ -21,36 +35,52 @@ const EntriesContext = createContext<EntriesValue | null>(null);
  * every filter combination the handoff asks for run over the array in
  * microseconds, with no composite indexes and no Firestore limits on how many
  * inequality filters can be combined.
+ *
+ * It does not survive growth. Reads scale with users × words, and a lifetime
+ * notebook only gains words, so the free daily read quota is reached somewhere
+ * around 125 users at 200 words each. The repository is already paged for that.
+ *
+ * `uid` is a prop rather than a `useAuth()` call because this provider only
+ * ever renders below the auth gate in `AppLayout`. Taking it from the caller
+ * is what lets `repository` be non-null, which removes a null branch from
+ * every write site.
  */
-export function EntriesProvider({ children }: { children: ReactNode }) {
+export function EntriesProvider({ uid, children }: { uid: string; children: ReactNode }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Rebuilt when the signed-in user changes, so the `users/{uid}` path baked
+  // into the repository can never outlive the session it belongs to.
+  const repository = useMemo(() => createEntryRepository(uid), [uid]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const snapshot = await getDocs(collection(db, 'entries'));
-      // Documents are coerced rather than cast: the collection has already
-      // outlived one field rename, and a single document from an older schema
-      // would otherwise crash whichever view first reads the missing field.
-      setEntries(snapshot.docs.map((doc) => sanitizeEntry(doc.id, doc.data())));
+      const all: Entry[] = [];
+      let cursor: string | null = null;
+      do {
+        const page = await repository.list({ limit: PAGE_SIZE, cursor });
+        all.push(...page.items);
+        cursor = page.cursor;
+      } while (cursor);
+      setEntries(all);
     } catch (cause) {
       console.error(cause);
       setError('単語を読み込めませんでした。');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [repository]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   const value = useMemo(
-    () => ({ entries, loading, error, refresh }),
-    [entries, loading, error, refresh],
+    () => ({ entries, loading, error, refresh, repository }),
+    [entries, loading, error, refresh, repository],
   );
   return <EntriesContext.Provider value={value}>{children}</EntriesContext.Provider>;
 }

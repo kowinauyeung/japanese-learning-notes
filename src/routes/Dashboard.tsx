@@ -4,6 +4,7 @@ import { EntryRow } from '@/components/dashboard/EntryRow';
 import { Heatmap } from '@/components/dashboard/Heatmap';
 import { StatTiles } from '@/components/dashboard/StatTiles';
 import { TodayWord, pickWordOfDay } from '@/components/dashboard/TodayWord';
+import { JLPT_LEVELS } from '@/domain/entry';
 import {
   dateKey,
   parseLocalDate,
@@ -13,7 +14,6 @@ import {
   startOfYear,
 } from '@/lib/dates';
 import { useEntries } from '@/lib/entries';
-import { JLPT_LEVELS } from '@/types/entry';
 
 export function Component() {
   const { entries, loading, error } = useEntries();

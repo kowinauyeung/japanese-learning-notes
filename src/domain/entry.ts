@@ -6,9 +6,7 @@
  * the two disagree the schema wins and the migration converts or drops.
  */
 
-import type { Timestamp } from 'firebase/firestore';
-
-// ---------------------------------------------------------------- vocabulary
+import type { Attribution, IsoDate, IsoDateTime, Tag } from './common';
 
 /**
  * Parts of speech a learner actually needs to distinguish.
@@ -53,16 +51,6 @@ export type Politeness = (typeof POLITENESS)[number];
 
 /** 1 (rare) – 5 (everyday). Rendered as ★×freq + ☆×(5−freq). */
 export type Frequency = 1 | 2 | 3 | 4 | 5;
-
-/**
- * Free-form, user-created tags, following the same rule as an Instagram
- * hashtag: any script's letters, digits and underscores, nothing else. Kanji
- * and kana are fine. Excluding whitespace and punctuation is what keeps a tag
- * usable in `?tag=…` — the value still gets percent-encoded, but it survives
- * the round trip and browsers display it decoded.
- */
-export const TAG_PATTERN = /^[\p{L}\p{N}_]{1,32}$/u;
-export type Tag = string;
 
 /** Part-of-speech-specific detail table, e.g. 名詞情報: 可算性 / する動詞化. */
 export interface PosInfo {
@@ -112,6 +100,13 @@ export interface UsageNotes {
 
 export interface Entry {
   id: string;
+  /**
+   * Redundant with the document path (`users/{uid}/entries/{id}`) and kept
+   * anyway: a published snapshot is a standalone document outside that path and
+   * still has to name its owner, and rules on the public collections read this
+   * field rather than walking up to a parent.
+   */
+  ownerUid: string;
 
   // --- the word itself
   headword: string;
@@ -158,8 +153,26 @@ export interface Entry {
 
   // --- organisation
   tags: Tag[];
-  /** Slugs of the user-made word sets this entry belongs to. */
-  wordSets: Tag[];
+
+  // --- publication
+  /**
+   * The `publicEntries` document this was last published to, or null.
+   *
+   * Stored on the private side so republishing and unpublishing need no lookup,
+   * and so the list can show publication state without a second read. The
+   * public id is an auto-id, never derived from this document's id or the uid —
+   * deriving it would put the uid in a public URL and make it a stable public
+   * identifier.
+   */
+  publishedId: string | null;
+  /**
+   * Increments on every republish. A published copy is an immutable snapshot,
+   * so this is how the UI can tell that the live entry has moved on from what
+   * other people can see.
+   */
+  publishedVersion: number;
+  /** Set when this entry was copied from someone else's public one. */
+  copiedFrom: Attribution | null;
 
   // --- bookkeeping
   /**
@@ -167,54 +180,21 @@ export interface Entry {
    * statistic and the contribution heatmap count. Kept separate from createdAt
    * so a word heard last week can be back-filled without distorting history.
    */
-  learnedOn: string; // YYYY-MM-DD
+  learnedOn: IsoDate;
   /** Set once when the document is created; never written again. */
-  createdAt: Timestamp;
+  createdAt: IsoDateTime;
   /** Rewritten on every save. */
-  updatedAt: Timestamp;
-}
-
-/** Fields the user may send when creating an entry. */
-export type EntryDraft = Omit<Entry, 'id' | 'createdAt' | 'updatedAt'>;
-
-// ------------------------------------------------------- review and practice
-
-export type PracticeMode = 'flashcard' | 'dictation';
-
-/** A completed practice run — the source for 履歴 and the dashboard panel. */
-export interface PracticeSession {
-  id: string;
-  mode: PracticeMode;
-  /** Human-readable description of the filters used, e.g. 「#work / 苦手のみ」. */
-  filterLabel: string;
-  total: number;
-  correct: number;
-  /** Entry ids answered wrong, for the session summary and quick re-practice. */
-  missed: string[];
-  startedAt: Timestamp;
-  finishedAt: Timestamp;
+  updatedAt: IsoDateTime;
 }
 
 /**
- * Per-entry practice state, keyed by entry id.
+ * Fields the user may send when creating or editing an entry.
  *
- * Kept out of Entry so answering a card rewrites a small document instead of
- * the whole note, and so practice history survives edits to the note content.
+ * Ownership, publication state and the timestamps are all set by the write
+ * path, never by the form, so accepting them here would be an opening to
+ * spoof them.
  */
-export interface EntryProgress {
-  entryId: string;
-  /** Outcome of the most recent attempt — what 苦手な語 is derived from. */
-  status: 'correct' | 'wrong';
-  lastMode: PracticeMode;
-  lastAt: Timestamp;
-  attempts: number;
-  correctCount: number;
-}
-
-/** A user-organised list of entries, independent of tags. */
-export interface WordSet {
-  /** URL-safe slug, also the document id. */
-  slug: Tag;
-  name: string;
-  createdAt: Timestamp;
-}
+export type EntryDraft = Omit<
+  Entry,
+  'id' | 'ownerUid' | 'publishedId' | 'publishedVersion' | 'copiedFrom' | 'createdAt' | 'updatedAt'
+>;

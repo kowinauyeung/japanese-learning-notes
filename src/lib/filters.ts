@@ -1,5 +1,5 @@
-import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '@/types/entry';
-import type { Entry } from '@/types/entry';
+import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
+import type { Entry } from '@/domain/entry';
 
 export type SortKey = 'new' | 'old' | 'headword';
 

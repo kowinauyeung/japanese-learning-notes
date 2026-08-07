@@ -65,20 +65,22 @@ Pointing this at a fresh Firebase project takes a few more steps, in order:
 2. [Create a Cloud Firestore database](https://firebase.google.com/docs/firestore/quickstart#create_a_cloud_firestore_database)
    — a new project has none — choosing a location and **Production mode**. Test
    mode leaves the data open to any client for its first 30 days.
-3. Replace the hard-coded owner email in `firestore.rules` with your own.
-4. Point the tooling at your project: change the `dev` alias in `.firebaserc`,
+3. Point the tooling at your project: change the `dev` alias in `.firebaserc`,
    or pass `--project <your-project-id>` instead of using the `rules:dev`
    script, which is wired to `goitei-dev`.
-5. `yarn firebase login`, then deploy the rules with `yarn rules:dev` (once the
+4. `yarn firebase login`, then deploy the rules with `yarn rules:dev` (once the
    alias points at your project) or
    `yarn firebase deploy --only firestore:rules --project <your-project-id>`.
+5. Sign in once, then add yourself to the allowlist — the rules deny everything
+   until `allowedUsers/{your-uid}` exists. `yarn migrate:upload` writes it for
+   you, or create the document by hand in the console.
 
 `firebase-tools` is a local devDependency, so the CLI is reached through
 `yarn firebase …` unless you have installed it globally.
 
-Steps 3 and 4 only change local configuration; nothing is enforced until step 5
-deploys the rules successfully. After that deploy, sign-in works and every read
-and write is scoped to your account.
+Step 3 only changes local configuration; nothing is enforced until step 4
+deploys the rules successfully. After step 5 every read and write is scoped to
+your account.
 
 `.env.development` and `.env.production` are gitignored. Their values ship inside
 the JS bundle and are not secrets — Firestore rules are what enforce access — but
@@ -133,9 +135,14 @@ yarn build
 yarn firebase deploy --only hosting,firestore:rules --project prod
 ```
 
-`firestore.rules` allows read and write on `entries`, `entryProgress`,
-`practiceSessions` and `wordSets` for one hard-coded verified email; every other
-path is denied. For the first production import, follow the rules-first order in
+`firestore.rules` gives an account read and write over everything beneath its
+own `users/{uid}`, and nothing else; every unlisted path is denied. Access is
+gated on `allowedUsers/{uid}` existing — an allowlist collection no client can
+write, so signups are closed until a document is added for that account. Nothing
+in front of the site can substitute for this: Hosting serves the config that
+reaches Firestore, so a password on the HTML protects the page, not the data.
+
+For the first production import, follow the rules-first order in
 [`migration/README.md`](migration/README.md).
 
 ### Deploy credentials
@@ -219,7 +226,9 @@ past one environment.
 
 ## Data model
 
-Defined in [`src/types/entry.ts`](src/types/entry.ts). Points worth knowing:
+Defined in [`src/domain/`](src/domain/), which holds no vendor imports at all —
+`src/infra/firebase` is the only place that touches the Firestore SDK, and an
+ESLint rule enforces it. Points worth knowing:
 
 - A new entry requires `headword` and `definition`. `definition` is the only
   required explanatory field and is not tied to a language; the migrated entries
@@ -230,13 +239,17 @@ Defined in [`src/types/entry.ts`](src/types/entry.ts). Points worth knowing:
 - `learnedOn` is an editable `YYYY-MM-DD` date. It drives the week/month/year
   counts, the heatmap and the recent list; the JLPT and part-of-speech
   breakdowns read their own fields. `createdAt` is written once, `updatedAt` on
-  every save.
+  every save. All three are plain ISO strings; the Firestore `Timestamp` is
+  converted at the adapter boundary and never enters the domain.
+- Set membership lives on the set (`WordSet.entryIds`, ordered) rather than on
+  the entry, so the order is the study order and publishing a set does not need
+  a query to find its contents.
 
 [`src/lib/sanitize.ts`](src/lib/sanitize.ts) coerces pasted JSON and Firestore
 documents rather than casting them: it is best-effort over the fields it knows
 about, so enums, `freq` and `learnedOn` fall back to a default when the incoming
-value is unusable, while `pitchAccent` accepts any number, tags are split but not
-checked against `TAG_PATTERN`, and `wordSets` takes arbitrary strings. URL
+value is unusable, while `pitchAccent` accepts any number and tags are split but
+not checked against `TAG_PATTERN`. URL
 parameters are parsed separately in
 `src/lib/filters.ts`. Writes are validated on their own — the form rejects a
 missing headword or definition, bad tags and an impossible `learnedOn` before

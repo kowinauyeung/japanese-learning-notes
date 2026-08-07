@@ -1,9 +1,9 @@
-import type { Entry, EntryDraft } from '@/types/entry';
-import { TAG_PATTERN } from '@/types/entry';
+import { TAG_PATTERN } from '@/domain/common';
+import type { Entry, EntryDraft } from '@/domain/entry';
 
 /**
- * Pure draft helpers, kept clear of the Firestore module so they can be used
- * and tested without initialising Firebase.
+ * Pure draft helpers, kept clear of the repository so they can be used and
+ * tested without initialising Firebase.
  */
 
 /** Everything an Entry needs, with the blanks a new note starts from. */
@@ -32,13 +32,26 @@ export function emptyDraft(): EntryDraft {
     context: { original: '', ja: '', translation: '' },
     usage: { when: '', translation: '', caution: '' },
     tags: [],
-    wordSets: [],
     learnedOn: `${today.getFullYear()}-${month}-${day}`,
   };
 }
 
+/**
+ * Drops everything the form may not send. Destructure-and-discard rather than
+ * listing the keepers, so a field added to `Entry` reaches the form by default
+ * and only the deliberately-excluded ones need naming here.
+ */
 export function toDraft(entry: Entry): EntryDraft {
-  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...draft } = entry;
+  const {
+    id: _id,
+    ownerUid: _ownerUid,
+    publishedId: _publishedId,
+    publishedVersion: _publishedVersion,
+    copiedFrom: _copiedFrom,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    ...draft
+  } = entry;
   return draft;
 }
 

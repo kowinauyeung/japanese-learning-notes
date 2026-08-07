@@ -11,6 +11,11 @@ bak/
 # Private AI-agent workspace
 .kowin/
 
+# Agent memory. Local tool state rather than project source, and several of the
+# notes cite paths inside .kowin/ — committing them here would publish exactly
+# what that folder is ignored to keep private.
+.serena/
+
 node_modules/
 dist/
 *.tsbuildinfo
