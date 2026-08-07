@@ -7,18 +7,17 @@ on:
 
 permissions:
   contents: read
-  # Workload Identity Federation mints a short-lived Google credential from
-  # this token. There is no service-account key in this project and this
-  # workflow is not a reason to create one.
-  id-token: write
-  pull-requests: write
 
 concurrency:
   group: deploy-dev-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  # Runs the pull request's own code, so it is treated as untrusted: no
+  # id-token permission, no Google credential, nothing a build could steal and
+  # escalate with. A dependency's postinstall script counts as the pull
+  # request's code too, which is why the split is by job and not by step.
+  build:
     # A fork's pull request must never reach these secrets. GitHub already
     # withholds them from fork runs, so the job would fail rather than leak,
     # but skipping outright keeps the pull request green instead of red for a
@@ -27,28 +26,63 @@ jobs:
       github.event_name == 'push' ||
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-
-    # Vite inlines VITE_-prefixed variables from the environment at build time,
-    # taking precedence over .env.production — which is gitignored, so the
-    # runner has none. Passing them here avoids writing secrets to disk.
-    #
-    # These six values ship inside the bundle and are public by design; rules,
-    # not secrecy, protect the data. They stay secrets anyway because the repo
-    # is public and a scraped key invites quota abuse.
-    env:
-      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-      VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v5
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      # Vite inlines VITE_-prefixed variables from the environment at build
+      # time, taking precedence over .env.production — which is gitignored, so
+      # the runner has none. Scoped to this step rather than the job so that
+      # install-time scripts never see them.
+      #
+      # These six ship inside the bundle and can be read from the deployed site
+      # by anyone; rules, not secrecy, protect the data. They are secrets only
+      # because the repo is public and a scraped key invites quota abuse.
+      - name: Build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+        run: yarn build
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist
+          retention-days: 1
+
+  # Holds the credentials and runs no code from the pull request. It checks out
+  # the base branch, so firebase-tools comes from a lockfile that is already
+  # merged, and takes only dist/ from the build job.
+  #
+  # The consequence worth knowing: on a pull request, firebase.json and
+  # .firebaserc are the base branch's. A pull request that changes hosting
+  # config will not see that change in its own preview. Config belongs on the
+  # trusted path, so that is the intended behaviour rather than a gap.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+
+    steps:
       # Until the federation provider exists there is nothing to deploy to, and
       # failing every pull request over a setup step nobody has done yet trains
-      # people to ignore a red check. Build and report, then stop.
+      # people to ignore a red check. Report and stop.
       #
       # The secrets context is not available to a job-level `if`, which is why
       # this is a step rather than a condition on the job.
@@ -64,15 +98,28 @@ jobs:
             echo '::notice::Deploy skipped: GCP_WORKLOAD_IDENTITY_PROVIDER is not set. See README → Deploy credentials.'
           fi
 
+      - uses: actions/checkout@v5
+        if: steps.gate.outputs.configured == 'true'
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
+
       - uses: actions/setup-node@v6
+        if: steps.gate.outputs.configured == 'true'
         with:
           node-version-file: .nvmrc
           cache: yarn
 
-      - run: yarn install --frozen-lockfile
+      # Installed before authenticating, so even a trusted postinstall script
+      # runs with no credential in the environment.
+      - name: Install firebase-tools
+        if: steps.gate.outputs.configured == 'true'
+        run: yarn install --frozen-lockfile
 
-      - name: Build
-        run: yarn build
+      - uses: actions/download-artifact@v8
+        if: steps.gate.outputs.configured == 'true'
+        with:
+          name: dist
+          path: dist
 
       - uses: google-github-actions/auth@v3
         if: steps.gate.outputs.configured == 'true'

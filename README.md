@@ -155,6 +155,32 @@ Admin** and **Firebase Rules Admin** on `goitei-dev`, and the pool's provider
 must be restricted to this repository — an unrestricted provider lets any GitHub
 repository mint credentials for it.
 
+#### Trust boundary
+
+The deploy workflow is split into two jobs, and the split is the security
+boundary rather than a build-time optimisation:
+
+- **`build`** runs the pull request's own code. It has `contents: read` and
+  nothing else — no `id-token` permission, so `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
+  is not in its environment and nothing it runs can mint a Google credential.
+  It uploads `dist/` and stops.
+- **`deploy`** holds the credentials and runs no code from the pull request. It
+  checks out the base branch, installs `firebase-tools` from a lockfile that is
+  already merged, and takes only `dist/` from the build job.
+
+A pull request is otherwise a code-execution primitive: `yarn install` runs
+whatever `postinstall` the branch's lockfile asks for, before any file in the
+diff has been read by a human. Keeping that away from the credential is what
+the two jobs buy.
+
+The six `VITE_FIREBASE_*` values are the exception, and are scoped to the build
+step. They can already be read out of the deployed bundle by anyone, so a build
+that leaks them gives away nothing that visiting the dev site would not.
+
+Tighten the provider further if you can: an attribute condition of
+`assertion.repository == '<owner>/<repo>' && assertion.ref == 'refs/heads/develop'`
+means a token minted in a pull request context cannot be exchanged at all.
+
 ## Data model
 
 Defined in [`src/types/entry.ts`](src/types/entry.ts). Points worth knowing:
