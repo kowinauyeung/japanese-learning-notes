@@ -6,7 +6,10 @@
  */
 
 export function parseLocalDate(key: string): Date {
-  const [y, m, d] = key.split('-').map(Number);
+  // A malformed key leaves components missing, which is why they default to
+  // NaN: `new Date(NaN, ...)` is the Invalid Date the callers already handled,
+  // and is exactly what `undefined` coerced to before.
+  const [y = NaN, m = NaN, d = NaN] = key.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
 

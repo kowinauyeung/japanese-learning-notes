@@ -44,6 +44,6 @@ export function segmentFurigana(headword: string, reading: string): FuriganaSegm
 
   let group = 1;
   return runs.map((run) =>
-    run.kanji ? { base: run.text, rt: match[group++] } : { base: run.text, rt: '' },
+    run.kanji ? { base: run.text, rt: match[group++] ?? '' } : { base: run.text, rt: '' },
   );
 }
