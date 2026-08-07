@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+# A new push to the same branch makes the in-flight run obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      # Each step runs even if an earlier one failed, so a single push reports
+      # every problem at once instead of one per round trip.
+      - name: Typecheck
+        run: yarn typecheck
+
+      - name: Lint
+        if: '!cancelled()'
+        run: yarn lint
+
+      - name: Format check
+        if: '!cancelled()'
+        run: yarn format:check
+
+      - name: Build
+        if: '!cancelled()'
+        run: yarn build

@@ -13,24 +13,24 @@ export function Distribution({
   const max = Math.max(1, ...rows.map((row) => row.count));
 
   return (
-    <section className="rounded-card bg-card shadow-panel p-5">
-      <h2 className="text-muted text-xs font-semibold tracking-wide">{title}</h2>
+    <section className="rounded-card bg-card p-5 shadow-panel">
+      <h2 className="text-xs font-semibold tracking-wide text-muted">{title}</h2>
       <ul className="mt-4 space-y-2.5">
         {rows.map((row) => (
           <li key={row.label} className="flex items-center gap-3 text-sm">
             <span className="w-20 shrink-0 truncate" title={row.label}>
               {row.label}
             </span>
-            <span className="bg-bg-alt h-2.5 flex-1 overflow-hidden rounded-full">
+            <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-bg-alt">
               <span
                 className="block h-full rounded-full bg-accent"
                 style={{ width: `${(row.count / max) * 100}%` }}
               />
             </span>
-            <span className="text-muted w-7 shrink-0 text-right tabular-nums">{row.count}</span>
+            <span className="w-7 shrink-0 text-right text-muted tabular-nums">{row.count}</span>
           </li>
         ))}
-        {!rows.length && <li className="text-muted text-sm">データがありません</li>}
+        {!rows.length && <li className="text-sm text-muted">データがありません</li>}
       </ul>
     </section>
   );

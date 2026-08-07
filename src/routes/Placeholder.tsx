@@ -4,9 +4,9 @@
  */
 function Placeholder({ title, note }: { title: string; note: string }) {
   return (
-    <section className="rounded-card bg-card shadow-panel p-8 text-center">
+    <section className="rounded-card bg-card p-8 text-center shadow-panel">
       <h1 className="font-display text-2xl font-bold">{title}</h1>
-      <p className="text-muted mt-2 text-sm">{note}</p>
+      <p className="mt-2 text-sm text-muted">{note}</p>
     </section>
   );
 }

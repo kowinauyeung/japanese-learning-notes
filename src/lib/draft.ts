@@ -1,5 +1,5 @@
-import type { Entry, EntryDraft } from '../types/entry';
-import { TAG_PATTERN } from '../types/entry';
+import type { Entry, EntryDraft } from '@/types/entry';
+import { TAG_PATTERN } from '@/types/entry';
 
 /**
  * Pure draft helpers, kept clear of the Firestore module so they can be used

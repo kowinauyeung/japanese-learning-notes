@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { addDays, dateKey, fullDate } from '../../lib/dates';
+import { addDays, dateKey, fullDate } from '@/lib/dates';
 
-const MONTHS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+const MONTHS = [
+  '1月',
+  '2月',
+  '3月',
+  '4月',
+  '5月',
+  '6月',
+  '7月',
+  '8月',
+  '9月',
+  '10月',
+  '11月',
+  '12月',
+];
 
 /**
  * Row labels, Sunday-first to match the grid. Every other day is left blank:
@@ -97,7 +110,11 @@ export function Heatmap({
     const start = addDays(from, -from.getDay());
 
     const result: { key: string; date: Date; count: number; future: boolean }[][] = [];
-    for (let cursor = start; cursor <= today || cursor.getDay() !== 0; cursor = addDays(cursor, 1)) {
+    for (
+      let cursor = start;
+      cursor <= today || cursor.getDay() !== 0;
+      cursor = addDays(cursor, 1)
+    ) {
       if (cursor.getDay() === 0) result.push([]);
       const key = dateKey(cursor);
       result[result.length - 1].push({
@@ -111,14 +128,14 @@ export function Heatmap({
   }, [countsByDay]);
 
   return (
-    <section className="rounded-card bg-card shadow-panel p-5">
-      <h2 className="text-muted text-xs font-semibold tracking-wide">直近1年間の追加状況</h2>
+    <section className="rounded-card bg-card p-5 shadow-panel">
+      <h2 className="text-xs font-semibold tracking-wide text-muted">直近1年間の追加状況</h2>
 
       <div className="mt-4 flex gap-1">
         {/* Outside the scroller, so the labels stay put while the year scrolls
             past. The empty box matches the month row's height to keep the two
             columns aligned. Decorative — each cell already names its own date. */}
-        <div className="text-muted shrink-0 text-[10px]" aria-hidden="true">
+        <div className="shrink-0 text-[10px] text-muted" aria-hidden="true">
           <div className="mb-1 h-3" />
           <div className="grid grid-rows-7 gap-[2px]">
             {WEEKDAYS.map((label, index) => (
@@ -143,7 +160,7 @@ export function Heatmap({
                 return (
                   <span
                     key={week[0].key}
-                    className="text-muted h-3 w-[11px] text-[10px] leading-3 whitespace-nowrap"
+                    className="h-3 w-[11px] text-[10px] leading-3 whitespace-nowrap text-muted"
                   >
                     {isMonthStart && first ? MONTHS[first.date.getMonth()] : ''}
                   </span>
@@ -169,8 +186,8 @@ export function Heatmap({
                       style={{ background: `var(--heat-${level(day.count)})` }}
                       className={`h-[11px] w-[11px] rounded-[2px] transition ${
                         selected === day.key
-                          ? 'ring-ink ring-2'
-                          : 'hover:ring-ink/40 focus-visible:ring-ink/40 hover:ring-1 focus-visible:ring-1'
+                          ? 'ring-2 ring-ink'
+                          : 'hover:ring-1 hover:ring-ink/40 focus-visible:ring-1 focus-visible:ring-ink/40'
                       }`}
                     />
                   ),
@@ -181,7 +198,7 @@ export function Heatmap({
         </div>
       </div>
 
-      <div className="text-muted mt-3 flex items-center justify-end gap-1.5 text-[11px]">
+      <div className="mt-3 flex items-center justify-end gap-1.5 text-[11px] text-muted">
         <span>少ない</span>
         {[0, 1, 2, 3, 4].map((step) => (
           <span
@@ -202,7 +219,7 @@ export function Heatmap({
             top: pos?.top ?? 0,
             visibility: pos ? 'visible' : 'hidden',
           }}
-          className="rounded-pill bg-ink text-bg shadow-panel pointer-events-none fixed z-50 px-2.5 py-1 text-xs font-medium whitespace-nowrap"
+          className="pointer-events-none fixed z-50 rounded-pill bg-ink px-2.5 py-1 text-xs font-medium whitespace-nowrap text-bg shadow-panel"
         >
           {tip.label}
         </div>

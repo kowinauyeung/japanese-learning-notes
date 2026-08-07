@@ -1,4 +1,4 @@
-import type { EntryDraft } from '../types/entry';
+import type { EntryDraft } from '@/types/entry';
 import { sanitizeDraft } from './sanitize';
 
 /** The shape shown in the app and asked of the assistant. */
@@ -88,7 +88,13 @@ export function jsonToDraft(
   let parsed: Record<string, unknown>;
   try {
     // Tolerate a ```json fence, which assistants add even when told not to.
-    parsed = JSON.parse(raw.replace(/^\s*```(?:json)?/, '').replace(/```\s*$/, '').trim());
+    // The shape is validated by the guards below; JSON.parse's `any` stops here.
+    parsed = JSON.parse(
+      raw
+        .replace(/^\s*```(?:json)?/, '')
+        .replace(/```\s*$/, '')
+        .trim(),
+    ) as Record<string, unknown>;
   } catch {
     return { error: 'JSON として解析できませんでした。' };
   }

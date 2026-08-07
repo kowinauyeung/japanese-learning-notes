@@ -38,9 +38,7 @@ export function segmentFurigana(headword: string, reading: string): FuriganaSegm
 
   // Kana runs become literals; each kanji run becomes a lazy capture, so the
   // shortest reading that still satisfies the following anchor wins.
-  const pattern = runs
-    .map((run) => (run.kanji ? '(.+?)' : escapeRegExp(run.text)))
-    .join('');
+  const pattern = runs.map((run) => (run.kanji ? '(.+?)' : escapeRegExp(run.text))).join('');
   const match = reading.match(new RegExp(`^${pattern}$`));
   if (!match) return [{ base: headword, rt: reading }];
 

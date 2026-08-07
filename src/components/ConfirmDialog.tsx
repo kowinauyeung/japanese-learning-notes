@@ -27,11 +27,11 @@ export function ConfirmDialog({
       onClose={onClose}
       footer={
         <div className="flex items-center justify-end gap-3">
-          {error && <p className="text-danger flex-1 text-xs">{error}</p>}
+          {error && <p className="flex-1 text-xs text-danger">{error}</p>}
           <button
             type="button"
             onClick={onClose}
-            className="rounded-pill bg-bg-alt text-ink min-h-10 px-5 text-sm font-semibold"
+            className="min-h-10 rounded-pill bg-bg-alt px-5 text-sm font-semibold text-ink"
           >
             キャンセル
           </button>
@@ -39,7 +39,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className="rounded-pill bg-danger text-on-accent min-h-10 px-5 text-sm font-semibold disabled:opacity-60"
+            className="min-h-10 rounded-pill bg-danger px-5 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
             {busy ? '処理中…' : confirmLabel}
           </button>

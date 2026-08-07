@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useEntries } from '../lib/entries';
-import { JLPT_LEVELS } from '../types/entry';
+import { useEntries } from '@/lib/entries';
+import { JLPT_LEVELS } from '@/types/entry';
 import {
   dateKey,
   parseLocalDate,
@@ -8,12 +8,12 @@ import {
   startOfISOWeek,
   startOfMonth,
   startOfYear,
-} from '../lib/dates';
-import { StatTiles } from '../components/dashboard/StatTiles';
-import { Distribution } from '../components/dashboard/Distribution';
-import { Heatmap } from '../components/dashboard/Heatmap';
-import { TodayWord, pickWordOfDay } from '../components/dashboard/TodayWord';
-import { EntryRow } from '../components/dashboard/EntryRow';
+} from '@/lib/dates';
+import { StatTiles } from '@/components/dashboard/StatTiles';
+import { Distribution } from '@/components/dashboard/Distribution';
+import { Heatmap } from '@/components/dashboard/Heatmap';
+import { TodayWord, pickWordOfDay } from '@/components/dashboard/TodayWord';
+import { EntryRow } from '@/components/dashboard/EntryRow';
 
 export function Component() {
   const { entries, loading, error } = useEntries();
@@ -64,8 +64,8 @@ export function Component() {
 
   const wordOfDay = useMemo(() => pickWordOfDay(entries, dateKey(new Date())), [entries]);
 
-  if (loading) return <p className="text-muted py-16 text-center text-sm">読み込み中…</p>;
-  if (error) return <p className="text-danger py-16 text-center text-sm">{error}</p>;
+  if (loading) return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
+  if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
 
   return (
     <div className="space-y-4">
@@ -76,13 +76,13 @@ export function Component() {
         <StatTiles week={stats.inWeek} month={stats.inMonth} year={stats.inYear} />
       </div>
 
-      <section className="rounded-card bg-card shadow-panel p-5">
-        <h2 className="text-muted text-xs font-semibold tracking-wide">最新の練習</h2>
+      <section className="rounded-card bg-card p-5 shadow-panel">
+        <h2 className="text-xs font-semibold tracking-wide text-muted">最新の練習</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {['フラッシュカード', '書き取り練習'].map((mode) => (
             <div key={mode} className="rounded-panel bg-bg-alt p-4">
               <p className="text-sm font-medium">{mode}</p>
-              <p className="text-muted mt-1 text-xs">まだ実施していません</p>
+              <p className="mt-1 text-xs text-muted">まだ実施していません</p>
             </div>
           ))}
         </div>
@@ -93,22 +93,18 @@ export function Component() {
         <Distribution title="品詞" rows={stats.posRows} />
       </div>
 
-      <Heatmap
-        countsByDay={stats.countsByDay}
-        selected={selectedDay}
-        onSelect={setSelectedDay}
-      />
+      <Heatmap countsByDay={stats.countsByDay} selected={selectedDay} onSelect={setSelectedDay} />
 
-      <section className="rounded-card bg-card shadow-panel p-5">
+      <section className="rounded-card bg-card p-5 shadow-panel">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-muted text-xs font-semibold tracking-wide">
+          <h2 className="text-xs font-semibold tracking-wide text-muted">
             {selectedDay ? `${shortDate(selectedDay)} で追加した語` : '最近追加した語'}
           </h2>
           {selectedDay && (
             <button
               type="button"
               onClick={() => setSelectedDay(null)}
-              className="text-accent text-xs"
+              className="text-xs text-accent"
             >
               元に戻る
             </button>
@@ -118,7 +114,7 @@ export function Component() {
           {recent.length ? (
             recent.map((entry) => <EntryRow key={entry.id} entry={entry} />)
           ) : (
-            <p className="text-muted px-3 py-4 text-sm">この日に追加した語はありません</p>
+            <p className="px-3 py-4 text-sm text-muted">この日に追加した語はありません</p>
           )}
         </div>
       </section>

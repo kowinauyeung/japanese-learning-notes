@@ -17,10 +17,10 @@ export function StatTiles({ week, month, year }: { week: number; month: number; 
       {tiles.map((tile) => (
         <div
           key={tile.label}
-          className="rounded-card bg-accent-soft flex flex-1 items-center justify-between gap-3 px-5 py-4"
+          className="flex flex-1 items-center justify-between gap-3 rounded-card bg-accent-soft px-5 py-4"
         >
-          <p className="text-muted text-sm">{tile.label}</p>
-          <p className="font-display text-accent text-3xl font-bold tabular-nums">{tile.value}</p>
+          <p className="text-sm text-muted">{tile.label}</p>
+          <p className="font-display text-3xl font-bold text-accent tabular-nums">{tile.value}</p>
         </div>
       ))}
     </div>

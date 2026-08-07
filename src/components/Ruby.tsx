@@ -1,4 +1,4 @@
-import { segmentFurigana } from '../lib/furigana';
+import { segmentFurigana } from '@/lib/furigana';
 
 /**
  * Furigana aligned to the characters it reads: one <ruby> per kanji run, with

@@ -46,17 +46,17 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         onClick={(event) => event.stopPropagation()}
-        className="bg-card shadow-panel flex max-h-[88vh] w-full flex-col rounded-t-3xl nav:max-h-[86vh] nav:max-w-2xl nav:rounded-3xl"
+        className="flex max-h-[88vh] w-full flex-col rounded-t-3xl bg-card shadow-panel nav:max-h-[86vh] nav:max-w-2xl nav:rounded-3xl"
       >
         <div className="shrink-0 px-5 pt-3 nav:pt-5">
-          <div className="bg-line mx-auto mb-3 h-1 w-10 rounded-full nav:hidden" />
+          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line nav:hidden" />
           <div className="flex items-center justify-between">
             <h2 className="font-display text-lg font-bold">{title}</h2>
             <button
               type="button"
               onClick={onClose}
               aria-label="閉じる"
-              className="hover:bg-bg-alt rounded-pill grid h-9 w-9 place-items-center text-lg"
+              className="grid h-9 w-9 place-items-center rounded-pill text-lg hover:bg-bg-alt"
             >
               ✕
             </button>
@@ -65,7 +65,7 @@ export function Modal({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
 
-        {footer && <div className="border-line shrink-0 border-t px-5 py-3">{footer}</div>}
+        {footer && <div className="shrink-0 border-t border-line px-5 py-3">{footer}</div>}
       </div>
     </div>
   );

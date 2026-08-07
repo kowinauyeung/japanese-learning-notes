@@ -1,5 +1,5 @@
-import type { Filters, SortKey } from '../../lib/filters';
-import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '../../types/entry';
+import type { Filters, SortKey } from '@/lib/filters';
+import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '@/types/entry';
 
 const SORTS: { value: SortKey; label: string }[] = [
   { value: 'new', label: '追加日（新しい順）' },
@@ -17,8 +17,7 @@ function chipClass(active: boolean) {
   }`;
 }
 
-const selectClass =
-  'rounded-panel border-line bg-bg text-ink min-h-9 border px-2 text-xs w-full';
+const selectClass = 'rounded-panel border-line bg-bg text-ink min-h-9 border px-2 text-xs w-full';
 
 export function FilterPanel({
   filters,
@@ -33,7 +32,7 @@ export function FilterPanel({
     onChange({ ...filters, [key]: value });
 
   return (
-    <div className="rounded-card bg-card shadow-panel space-y-4 p-4">
+    <div className="space-y-4 rounded-card bg-card p-4 shadow-panel">
       {allTags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {allTags.map((tag) => (
@@ -64,7 +63,7 @@ export function FilterPanel({
 
       <div className="grid gap-2 sm:grid-cols-3">
         <label className="space-y-1">
-          <span className="text-muted text-[11px]">品詞</span>
+          <span className="text-[11px] text-muted">品詞</span>
           <select
             value={filters.pos}
             onChange={(event) => set('pos', event.target.value)}
@@ -80,7 +79,7 @@ export function FilterPanel({
         </label>
 
         <label className="space-y-1">
-          <span className="text-muted text-[11px]">語種</span>
+          <span className="text-[11px] text-muted">語種</span>
           <select
             value={filters.origin}
             onChange={(event) => set('origin', event.target.value)}
@@ -96,7 +95,7 @@ export function FilterPanel({
         </label>
 
         <label className="space-y-1">
-          <span className="text-muted text-[11px]">文体</span>
+          <span className="text-[11px] text-muted">文体</span>
           <select
             value={filters.style}
             onChange={(event) => set('style', event.target.value)}
@@ -112,7 +111,7 @@ export function FilterPanel({
         </label>
 
         <label className="space-y-1">
-          <span className="text-muted text-[11px]">頻度（以上）</span>
+          <span className="text-[11px] text-muted">頻度（以上）</span>
           <select
             value={filters.minFreq}
             onChange={(event) => set('minFreq', Number(event.target.value))}
@@ -129,7 +128,7 @@ export function FilterPanel({
         </label>
 
         <label className="space-y-1">
-          <span className="text-muted text-[11px]">開始日</span>
+          <span className="text-[11px] text-muted">開始日</span>
           <input
             type="date"
             value={filters.from}
@@ -139,7 +138,7 @@ export function FilterPanel({
         </label>
 
         <label className="space-y-1">
-          <span className="text-muted text-[11px]">終了日</span>
+          <span className="text-[11px] text-muted">終了日</span>
           <input
             type="date"
             value={filters.to}
@@ -150,7 +149,7 @@ export function FilterPanel({
       </div>
 
       <label className="block space-y-1">
-        <span className="text-muted text-[11px]">並び順</span>
+        <span className="text-[11px] text-muted">並び順</span>
         <select
           value={filters.sort}
           onChange={(event) => set('sort', event.target.value as SortKey)}

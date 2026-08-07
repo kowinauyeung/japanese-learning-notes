@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../lib/auth';
-import { projectId } from '../lib/firebase';
-import { LogoMark } from '../components/Logo';
+import { useAuth } from '@/lib/auth';
+import { projectId } from '@/lib/firebase';
+import { LogoMark } from '@/components/Logo';
 
 /**
  * Where to land after signing in. `state.from` is set by `AppLayout` when it
@@ -26,7 +26,7 @@ export function Component() {
   if (loading) {
     return (
       <main className="grid min-h-dvh place-items-center bg-bg">
-        <p className="text-muted text-sm">読み込み中…</p>
+        <p className="text-sm text-muted">読み込み中…</p>
       </main>
     );
   }
@@ -50,27 +50,27 @@ export function Component() {
 
   return (
     <main className="grid min-h-dvh place-items-center bg-bg px-4">
-      <div className="rounded-card bg-card shadow-panel w-full max-w-[360px] p-8">
+      <div className="w-full max-w-[360px] rounded-card bg-card p-8 shadow-panel">
         <h1 className="flex flex-col items-center gap-3">
           <LogoMark className="h-16 w-16" />
           <span className="font-display text-3xl font-bold text-accent">語彙庭</span>
         </h1>
-        <p className="text-muted mt-2 text-center text-sm">ログインして続ける</p>
+        <p className="mt-2 text-center text-sm text-muted">ログインして続ける</p>
 
         <button
           type="button"
           onClick={() => void onSignIn()}
           disabled={busy}
-          className="rounded-pill bg-accent text-on-accent mt-8 min-h-12 w-full text-sm font-semibold disabled:opacity-60"
+          className="mt-8 min-h-12 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
         >
           {busy ? 'ログイン中…' : 'Google でログイン'}
         </button>
 
-        {error && <p className="text-danger mt-3 text-center text-sm">{error}</p>}
+        {error && <p className="mt-3 text-center text-sm text-danger">{error}</p>}
 
         {/* Two projects share this build; knowing which one is live avoids
             editing production while thinking it is the dev copy. */}
-        <p className="text-muted mt-6 text-center text-xs">{projectId}</p>
+        <p className="mt-6 text-center text-xs text-muted">{projectId}</p>
       </div>
     </main>
   );

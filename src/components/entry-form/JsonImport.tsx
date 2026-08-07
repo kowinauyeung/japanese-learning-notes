@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { EntryDraft } from '../../types/entry';
-import { buildPrompt, jsonToDraft, SCHEMA } from '../../lib/jsonImport';
+import type { EntryDraft } from '@/types/entry';
+import { buildPrompt, jsonToDraft, SCHEMA } from '@/lib/jsonImport';
 import { Area, Field, inputClass } from './fields';
 
 export function JsonImport({ onLoad }: { onLoad: (draft: EntryDraft) => void }) {
@@ -68,20 +68,20 @@ export function JsonImport({ onLoad }: { onLoad: (draft: EntryDraft) => void }) 
         />
       </Field>
 
-      <p className="text-muted text-xs">
+      <p className="text-xs text-muted">
         文を入れると、その文脈での役割まで AI に書かせます。空のままでも構いません。
       </p>
 
       <button
         type="button"
         onClick={() => void copyPrompt()}
-        className="rounded-pill bg-accent text-on-accent min-h-10 w-full text-sm font-semibold"
+        className="min-h-10 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent"
       >
         {copied ? 'コピーしました' : 'プロンプトをコピー'}
       </button>
 
-      <details className="rounded-panel border-line border p-3">
-        <summary className="text-muted cursor-pointer text-xs">JSON スキーマを見る</summary>
+      <details className="rounded-panel border border-line p-3">
+        <summary className="cursor-pointer text-xs text-muted">JSON スキーマを見る</summary>
         <pre className="mt-2 overflow-x-auto text-[11px] leading-relaxed">{SCHEMA}</pre>
       </details>
 
@@ -89,13 +89,13 @@ export function JsonImport({ onLoad }: { onLoad: (draft: EntryDraft) => void }) 
         <Area value={raw} onChange={setRaw} rows={10} placeholder="{ …" />
       </Field>
 
-      {error && <p className="text-danger text-sm">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
 
       <button
         type="button"
         onClick={load}
         disabled={!raw.trim()}
-        className="rounded-pill bg-bg-alt text-ink min-h-10 w-full text-sm font-semibold disabled:opacity-50"
+        className="min-h-10 w-full rounded-pill bg-bg-alt text-sm font-semibold text-ink disabled:opacity-50"
       >
         読み込む
       </button>

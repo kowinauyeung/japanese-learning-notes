@@ -14,7 +14,7 @@ export function Field({
 }) {
   return (
     <label className="block space-y-1">
-      <span className="text-muted text-[11px]">
+      <span className="text-[11px] text-muted">
         {label}
         {hint && <span className="ml-1 opacity-70">{hint}</span>}
       </span>
@@ -77,11 +77,7 @@ export function Select({
   blank?: string;
 }) {
   return (
-    <select
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      className={inputClass}
-    >
+    <select value={value} onChange={(event) => onChange(event.target.value)} className={inputClass}>
       <option value="">{blank}</option>
       {options.map((option) => (
         <option key={option} value={option}>
@@ -110,13 +106,13 @@ export function RepeatableList<T>({
     <fieldset className="space-y-3">
       <legend className="text-sm font-semibold">{title}</legend>
       {items.map((item, index) => (
-        <div key={index} className="rounded-panel border-line space-y-2 border p-3">
+        <div key={index} className="space-y-2 rounded-panel border border-line p-3">
           <div className="flex items-center justify-between">
-            <span className="text-muted text-[11px]">{index + 1}</span>
+            <span className="text-[11px] text-muted">{index + 1}</span>
             <button
               type="button"
               onClick={() => onChange(items.filter((_, i) => i !== index))}
-              className="text-danger text-xs"
+              className="text-xs text-danger"
             >
               削除
             </button>
@@ -127,7 +123,7 @@ export function RepeatableList<T>({
       <button
         type="button"
         onClick={() => onChange([...items, blank()])}
-        className="rounded-pill bg-bg-alt text-muted hover:text-ink min-h-9 w-full text-xs font-medium"
+        className="min-h-9 w-full rounded-pill bg-bg-alt text-xs font-medium text-muted hover:text-ink"
       >
         ＋ 追加
       </button>

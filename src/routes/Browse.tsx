@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useEntries } from '../lib/entries';
+import { useEntries } from '@/lib/entries';
 import {
   EMPTY_FILTERS,
   fromSearchParams,
@@ -8,10 +8,10 @@ import {
   matches,
   sortEntries,
   toSearchParams,
-} from '../lib/filters';
-import type { Filters } from '../lib/filters';
-import { EntryCard } from '../components/browse/EntryCard';
-import { FilterPanel } from '../components/browse/FilterPanel';
+} from '@/lib/filters';
+import type { Filters } from '@/lib/filters';
+import { EntryCard } from '@/components/browse/EntryCard';
+import { FilterPanel } from '@/components/browse/FilterPanel';
 
 export function Component() {
   const { entries, loading, error } = useEntries();
@@ -21,19 +21,24 @@ export function Component() {
   const update = (next: Filters) => setSearchParams(toSearchParams(next), { replace: true });
 
   const allTags = useMemo(
-    () => [...new Set(entries.flatMap((entry) => entry.tags))].sort((a, b) => a.localeCompare(b, 'ja')),
+    () =>
+      [...new Set(entries.flatMap((entry) => entry.tags))].sort((a, b) => a.localeCompare(b, 'ja')),
     [entries],
   );
 
   const results = useMemo(
-    () => sortEntries(entries.filter((entry) => matches(entry, filters)), filters.sort),
+    () =>
+      sortEntries(
+        entries.filter((entry) => matches(entry, filters)),
+        filters.sort,
+      ),
     [entries, filters],
   );
 
   const active = activeChips(filters);
 
-  if (loading) return <p className="text-muted py-16 text-center text-sm">読み込み中…</p>;
-  if (error) return <p className="text-danger py-16 text-center text-sm">{error}</p>;
+  if (loading) return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
+  if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
 
   return (
     <div className="space-y-4">
@@ -42,7 +47,7 @@ export function Component() {
         value={filters.q}
         onChange={(event) => update({ ...filters, q: event.target.value })}
         placeholder="見出し語・読み方・タグ・意味・例文で検索"
-        className="rounded-pill border-line bg-card text-ink placeholder:text-muted min-h-12 w-full border px-5 text-sm"
+        className="min-h-12 w-full rounded-pill border border-line bg-card px-5 text-sm text-ink placeholder:text-muted"
       />
 
       <FilterPanel filters={filters} allTags={allTags} onChange={update} />
@@ -54,7 +59,7 @@ export function Component() {
               key={chip.key}
               type="button"
               onClick={() => update(chip.clear(filters))}
-              className="rounded-pill bg-accent-soft text-accent px-3 py-1 text-xs font-medium"
+              className="rounded-pill bg-accent-soft px-3 py-1 text-xs font-medium text-accent"
             >
               {chip.label} ✕
             </button>
@@ -62,14 +67,14 @@ export function Component() {
           <button
             type="button"
             onClick={() => update({ ...EMPTY_FILTERS, sort: filters.sort })}
-            className="text-muted hover:text-ink px-2 text-xs underline"
+            className="px-2 text-xs text-muted underline hover:text-ink"
           >
             すべて解除
           </button>
         </div>
       )}
 
-      <p className="text-muted text-xs">{results.length} 語</p>
+      <p className="text-xs text-muted">{results.length} 語</p>
 
       {results.length ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
@@ -78,7 +83,7 @@ export function Component() {
           ))}
         </div>
       ) : (
-        <p className="text-muted py-16 text-center text-sm">条件に合う単語がありません</p>
+        <p className="py-16 text-center text-sm text-muted">条件に合う単語がありません</p>
       )}
     </div>
   );
@@ -105,7 +110,8 @@ function activeChips(filters: Filters) {
       clear: (f) => ({ ...f, jlpt: f.jlpt.filter((l) => l !== level) }),
     });
   }
-  if (filters.pos) chips.push({ key: 'pos', label: filters.pos, clear: (f) => ({ ...f, pos: '' }) });
+  if (filters.pos)
+    chips.push({ key: 'pos', label: filters.pos, clear: (f) => ({ ...f, pos: '' }) });
   if (filters.origin) {
     chips.push({ key: 'origin', label: filters.origin, clear: (f) => ({ ...f, origin: '' }) });
   }

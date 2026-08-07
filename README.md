@@ -31,13 +31,13 @@ Flashcards, dictation, word sets and practice history are placeholder routes.
 
 ## Stack
 
-| Layer | Choice |
-| --- | --- |
-| Build | Vite 7 |
-| UI | React 19 + TypeScript (strict), React Router 7 |
-| Styling | Tailwind CSS 4 |
-| Data & auth | Firebase — Firestore + Google sign-in |
-| Hosting | Firebase Hosting |
+| Layer       | Choice                                         |
+| ----------- | ---------------------------------------------- |
+| Build       | Vite 7                                         |
+| UI          | React 19 + TypeScript (strict), React Router 7 |
+| Styling     | Tailwind CSS 4                                 |
+| Data & auth | Firebase — Firestore + Google sign-in          |
+| Hosting     | Firebase Hosting                               |
 
 Pure client-side app: the Firestore web SDK talks to the database directly, and
 security rules — not a server — are what protect the data. The whole `entries`
@@ -52,6 +52,12 @@ yarn install
 cp .env.example .env.development   # fill in your Firebase web config
 yarn dev
 ```
+
+`.nvmrc` and `packageManager` name what this is developed and built on — Node 24
+and Yarn 1 — so `nvm use` and CI resolve to the same line. `engines` is a
+separate, deliberately looser statement: the oldest Node the app is known to
+work on, not the version to develop against. Pinning it exactly would fail
+`yarn install` for anyone on a newer Node that runs the app perfectly well.
 
 Pointing this at a fresh Firebase project takes a few more steps, in order:
 
@@ -81,14 +87,14 @@ source tree.
 
 ### Scripts
 
-| Command | What it does |
-| --- | --- |
-| `yarn dev` | Vite dev server (`.env.development`) |
-| `yarn build` | Type-check, then build to `dist/` (`.env.production`) |
-| `yarn preview` | Serve the existing `dist/` build locally |
-| `yarn typecheck` | `tsc -b --noEmit` |
-| `yarn rules:dev` / `yarn rules:prod` | Deploy `firestore.rules` |
-| `yarn auth:login` / `yarn auth:revoke` | Repo-local Google ADC, used by the migration upload |
+| Command                                | What it does                                          |
+| -------------------------------------- | ----------------------------------------------------- |
+| `yarn dev`                             | Vite dev server (`.env.development`)                  |
+| `yarn build`                           | Type-check, then build to `dist/` (`.env.production`) |
+| `yarn preview`                         | Serve the existing `dist/` build locally              |
+| `yarn typecheck`                       | `tsc -b --noEmit`                                     |
+| `yarn rules:dev` / `yarn rules:prod`   | Deploy `firestore.rules`                              |
+| `yarn auth:login` / `yarn auth:revoke` | Repo-local Google ADC, used by the migration upload   |
 
 `yarn auth:login` writes to `.gcloud/` via `CLOUDSDK_CONFIG`, deliberately apart
 from the machine-wide `~/.config/gcloud`. There is no long-lived service-account
