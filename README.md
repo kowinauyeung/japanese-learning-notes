@@ -53,6 +53,12 @@ cp .env.example .env.development   # fill in your Firebase web config
 yarn dev
 ```
 
+`.nvmrc` and `packageManager` name what this is developed and built on — Node 24
+and Yarn 1 — so `nvm use` and CI resolve to the same line. `engines` is a
+separate, deliberately looser statement: the oldest Node the app is known to
+work on, not the version to develop against. Pinning it exactly would fail
+`yarn install` for anyone on a newer Node that runs the app perfectly well.
+
 Pointing this at a fresh Firebase project takes a few more steps, in order:
 
 1. Register a web app and enable Google sign-in.
