@@ -129,7 +129,11 @@ export function Heatmap({
           </div>
         </div>
 
-        <div className="overflow-x-auto pb-1">
+        {/* grow so the grid keeps filling the card — a flex item is content-width
+            by default, which would pack the year against the left edge on a wide
+            viewport. min-w-0 lets it shrink below content width and scroll on a
+            narrow one, which min-width:auto would otherwise prevent. */}
+        <div className="min-w-0 flex-1 overflow-x-auto pb-1">
           <div className="min-w-max">
             {/* Month label sits above the week that contains the 1st. */}
             <div className="mb-1 grid grid-flow-col gap-[2px]">
