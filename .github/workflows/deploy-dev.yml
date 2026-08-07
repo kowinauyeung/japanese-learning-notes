@@ -46,6 +46,24 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Until the federation provider exists there is nothing to deploy to, and
+      # failing every pull request over a setup step nobody has done yet trains
+      # people to ignore a red check. Build and report, then stop.
+      #
+      # The secrets context is not available to a job-level `if`, which is why
+      # this is a step rather than a condition on the job.
+      - name: Check for deploy credentials
+        id: gate
+        env:
+          PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        run: |
+          if [ -n "$PROVIDER" ]; then
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::Deploy skipped: GCP_WORKLOAD_IDENTITY_PROVIDER is not set. See README → Deploy credentials.'
+          fi
+
       - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
@@ -57,6 +75,7 @@ jobs:
         run: yarn build
 
       - uses: google-github-actions/auth@v3
+        if: steps.gate.outputs.configured == 'true'
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
@@ -65,7 +84,7 @@ jobs:
       # the .firebaserc alias for goitei-dev; prod is not reachable from this
       # workflow at all.
       - name: Deploy to goitei-dev
-        if: github.event_name == 'push'
+        if: steps.gate.outputs.configured == 'true' && github.event_name == 'push'
         run: yarn firebase deploy --only hosting,firestore:rules --project dev --non-interactive
 
       # A preview channel is hosting-only on purpose. Rules are project-wide,
@@ -73,7 +92,7 @@ jobs:
       # other preview and the dev site itself are running under.
       - name: Deploy preview channel
         id: preview
-        if: github.event_name == 'pull_request'
+        if: steps.gate.outputs.configured == 'true' && github.event_name == 'pull_request'
         env:
           PR: ${{ github.event.pull_request.number }}
         run: |
@@ -82,7 +101,7 @@ jobs:
           echo "url=$(jq -r '.result | to_entries[0].value.url' channel.json)" >> "$GITHUB_OUTPUT"
 
       - name: Comment the preview URL
-        if: github.event_name == 'pull_request'
+        if: steps.gate.outputs.configured == 'true' && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
