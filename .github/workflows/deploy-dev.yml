@@ -1,0 +1,95 @@
+name: Deploy (dev)
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+
+permissions:
+  contents: read
+  # Workload Identity Federation mints a short-lived Google credential from
+  # this token. There is no service-account key in this project and this
+  # workflow is not a reason to create one.
+  id-token: write
+  pull-requests: write
+
+concurrency:
+  group: deploy-dev-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    # A fork's pull request must never reach these secrets. GitHub already
+    # withholds them from fork runs, so the job would fail rather than leak,
+    # but skipping outright keeps the pull request green instead of red for a
+    # reason the contributor cannot fix.
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+
+    # Vite inlines VITE_-prefixed variables from the environment at build time,
+    # taking precedence over .env.production — which is gitignored, so the
+    # runner has none. Passing them here avoids writing secrets to disk.
+    #
+    # These six values ship inside the bundle and are public by design; rules,
+    # not secrecy, protect the data. They stay secrets anyway because the repo
+    # is public and a scraped key invites quota abuse.
+    env:
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      - name: Build
+        run: yarn build
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      # Hosting and rules together, and only from develop. `--project dev` is
+      # the .firebaserc alias for goitei-dev; prod is not reachable from this
+      # workflow at all.
+      - name: Deploy to goitei-dev
+        if: github.event_name == 'push'
+        run: yarn firebase deploy --only hosting,firestore:rules --project dev --non-interactive
+
+      # A preview channel is hosting-only on purpose. Rules are project-wide,
+      # so deploying them from a pull request would change the rules every
+      # other preview and the dev site itself are running under.
+      - name: Deploy preview channel
+        id: preview
+        if: github.event_name == 'pull_request'
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          ./node_modules/.bin/firebase hosting:channel:deploy "pr-$PR" \
+            --project dev --expires 7d --non-interactive --json > channel.json
+          echo "url=$(jq -r '.result | to_entries[0].value.url' channel.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Comment the preview URL
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          URL: ${{ steps.preview.outputs.url }}
+        run: |
+          printf '%s\n\n%s\n' \
+            "Preview: $URL" \
+            "Serves this branch against the **goitei-dev** Firestore — the same data as the dev site, not a copy. Expires in 7 days." \
+            > body.md
+          gh pr comment "$PR" --body-file body.md --edit-last --create-if-none

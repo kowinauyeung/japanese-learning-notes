@@ -109,7 +109,16 @@ key in this project, and there should not be one.
 so a deploy with no `--project` targets development. Branches follow the same
 split — `develop` for dev, `main` for production. Both are protected: changes
 land through a pull request with a green CI run, and neither accepts a force
-push. Deploys themselves are still run by hand.
+push.
+
+Pushing to `develop` deploys hosting and Firestore rules to `goitei-dev`, and
+every pull request gets its own Hosting preview channel that expires after seven
+days. Preview channels are hosting-only: rules are project-wide, so deploying
+them from a pull request would change the rules every other preview runs under.
+A preview reads the real `goitei-dev` data, not a copy.
+
+**Production is not automated.** Nothing in `.github/workflows/` can reach
+`goitei`; deploy it by hand with the commands below.
 
 Which project a build talks to comes from the env file Vite picks, not from the
 `--project` flag, so the two must be set together:
@@ -128,6 +137,23 @@ yarn firebase deploy --only hosting,firestore:rules --project prod
 `practiceSessions` and `wordSets` for one hard-coded verified email; every other
 path is denied. For the first production import, follow the rules-first order in
 [`migration/README.md`](migration/README.md).
+
+### Deploy credentials
+
+The dev workflow authenticates through Workload Identity Federation, so there is
+no long-lived service-account key anywhere in this project. It needs these
+repository secrets:
+
+| Secret                           | What it is                                                                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Full provider resource name, `projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>`                              |
+| `GCP_DEPLOY_SERVICE_ACCOUNT`     | Email of the service account the workflow impersonates                                                                                           |
+| `VITE_FIREBASE_*` (six)          | Same values as `.env.example`. Vite inlines them at build time; they are public by design, but the repo is public too, so they are not committed |
+
+The service account needs **Firebase Hosting Admin**, **Cloud Datastore Index
+Admin** and **Firebase Rules Admin** on `goitei-dev`, and the pool's provider
+must be restricted to this repository — an unrestricted provider lets any GitHub
+repository mint credentials for it.
 
 ## Data model
 
