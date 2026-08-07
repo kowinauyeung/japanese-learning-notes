@@ -203,7 +203,7 @@ function parseFile(path, folder, filename) {
 
   const nameMatch = filename.match(/^(\d{4})(\d{2})(\d{2})_([^_]+)_(.+)\.md$/);
   if (!nameMatch) warn('ファイル名が YYYYMMDD_romaji_語.md の形式ではない');
-  const [, y, mo, d, romaji] = nameMatch ?? [, '1970', '01', '01', filename];
+  const [, y, mo, d, romaji] = nameMatch ?? ['', '1970', '01', '01', filename];
 
   const h1 = text.split('\n').find((l) => /^#\s+\S/.test(l));
   if (!h1) warn('H1（見出し語）が見つからない');

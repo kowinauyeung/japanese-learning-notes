@@ -1,0 +1,8 @@
+dist/
+node_modules/
+yarn.lock
+
+# Committed migration artefacts. These are machine-generated records of what was
+# loaded into Firestore, and reformatting them would churn the diff for nothing.
+migration/output.json
+migration/review.json

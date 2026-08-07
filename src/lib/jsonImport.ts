@@ -88,7 +88,13 @@ export function jsonToDraft(
   let parsed: Record<string, unknown>;
   try {
     // Tolerate a ```json fence, which assistants add even when told not to.
-    parsed = JSON.parse(raw.replace(/^\s*```(?:json)?/, '').replace(/```\s*$/, '').trim());
+    // The shape is validated by the guards below; JSON.parse's `any` stops here.
+    parsed = JSON.parse(
+      raw
+        .replace(/^\s*```(?:json)?/, '')
+        .replace(/```\s*$/, '')
+        .trim(),
+    ) as Record<string, unknown>;
   } catch {
     return { error: 'JSON として解析できませんでした。' };
   }

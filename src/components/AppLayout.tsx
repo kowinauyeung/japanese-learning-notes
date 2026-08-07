@@ -99,7 +99,7 @@ export function AppLayout() {
       <EntryFormModal
         open={adding}
         onClose={() => setAdding(false)}
-        onSaved={(id) => navigate(`/vocabulary/${id}`)}
+        onSaved={(id) => void navigate(`/vocabulary/${id}`)}
       />
     </div>
     </EntriesProvider>
@@ -161,7 +161,7 @@ function AvatarMenu() {
           <button
             type="button"
             onClick={() => {
-              navigate('/account');
+              void navigate('/account');
               setOpen(false);
             }}
             className="rounded-panel hover:bg-bg-alt flex min-h-11 w-full items-center px-3 text-sm"

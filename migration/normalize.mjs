@@ -41,7 +41,7 @@ export function normalizePos(raw) {
   if (!raw) return [];
   const stripped = raw.replace(/（[^）]*）/g, '').replace(/\([^)]*\)/g, '');
   const out = [];
-  for (const chunk of stripped.split(/[／\/・、,＋+]/)) {
+  for (const chunk of stripped.split(/[／/・、,＋+]/)) {
     for (const [written, canonical] of POS_MAP) {
       if (chunk.includes(written)) {
         if (!out.includes(canonical)) out.push(canonical);
@@ -90,7 +90,7 @@ export function normalizeStyle(raw) {
 /** 丁寧さ -> first listed level. "丁寧／普通" -> 丁寧, "くだけた〜普通" -> くだけた */
 export function normalizePoliteness(raw) {
   if (!raw) return '';
-  const head = raw.split(/[／\/〜~・,、]/)[0];
+  const head = raw.split(/[／/〜~・,、]/)[0];
   for (const level of ['くだけた', 'スラング', '丁寧', '普通']) {
     if (head.includes(level)) return level;
   }

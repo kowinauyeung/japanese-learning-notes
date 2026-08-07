@@ -37,7 +37,7 @@ export function Component() {
     try {
       await deleteEntry(entryId);
       await refresh();
-      navigate('/vocabulary', { replace: true });
+      void navigate('/vocabulary', { replace: true });
     } catch (cause) {
       console.error(cause);
       setDeleteError('削除できませんでした。もう一度お試しください。');
