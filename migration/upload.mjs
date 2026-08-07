@@ -156,20 +156,6 @@ await db
   .set({ email: ownerEmail, addedAt: Timestamp.now() }, { merge: true });
 console.log(`許可    : allowedUsers/${owner.uid} を確認しました`);
 
-// Delete the pre-ownership top-level collection. Nothing reads it any more —
-// no rule matches that path, so it is unreachable rather than merely unused —
-// but it keeps billing for storage until it is gone.
-if (process.argv.includes('--wipe-legacy')) {
-  const legacy = await db.collection('entries').get();
-  console.log(`旧 entries コレクション: ${legacy.size} 件を削除します`);
-  for (let i = 0; i < legacy.docs.length; i += 400) {
-    const batch = db.batch();
-    for (const doc of legacy.docs.slice(i, i + 400)) batch.delete(doc.ref);
-    await batch.commit();
-  }
-  console.log('  削除完了');
-}
-
 // One read of the collection buys idempotency: without the key -> id map a
 // second run cannot tell an already-uploaded note from a new one.
 const existing = new Map();
@@ -217,3 +203,34 @@ for (let i = 0; i < entries.length; i += CHUNK) {
 const total = await collection.count().get();
 console.log(`完了。新規 ${created} 件 / 更新 ${updated} 件`);
 console.log(`users/${owner.uid}/entries の総数: ${total.data().count}`);
+
+// Deleting the pre-ownership top-level collection runs last, and only once the
+// new copy is present and counted.
+//
+// It used to run first, which meant a write that failed part-way through left
+// neither copy intact. Ordering it after the verification costs nothing — the
+// old collection is already unreachable, since no rule matches that path any
+// more — and turns a destructive step into one that can only run on a
+// known-good result.
+//
+// Note this is genuinely destructive: it also removes the entries created
+// through the app that are absent from output.json. On dev that is intended
+// (the data is disposable test material). Do not pass this flag anywhere the
+// difference matters without exporting first.
+if (process.argv.includes('--wipe-legacy')) {
+  if (total.data().count < entries.length) {
+    console.error(
+      `新 collection が ${total.data().count} 件しかありません（期待 ${entries.length} 件）。` +
+        '\n旧 collection は削除しません。upload を確認してからやり直してください。',
+    );
+    process.exit(1);
+  }
+  const legacy = await db.collection('entries').get();
+  console.log(`旧 entries コレクション: ${legacy.size} 件を削除します`);
+  for (let i = 0; i < legacy.docs.length; i += 400) {
+    const batch = db.batch();
+    for (const doc of legacy.docs.slice(i, i + 400)) batch.delete(doc.ref);
+    await batch.commit();
+  }
+  console.log('  削除完了');
+}

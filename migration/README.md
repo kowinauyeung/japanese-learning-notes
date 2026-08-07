@@ -67,9 +67,22 @@ the moment anything is shared — so the old slug rides along as `migrationKey`,
 and the script reads the collection once to map key → document before choosing
 update or create. Without that, a second run would create 67 duplicates.
 
-Documents **not** in `output.json` are left untouched. Pass `--wipe-legacy` to
-delete the pre-ownership top-level `entries` collection, which no rule matches
-any more and which therefore only costs storage.
+Documents **not** in `output.json` are left untouched in the new collection.
+
+`--wipe-legacy` deletes the pre-ownership top-level `entries` collection, which
+no rule matches any more and which therefore only costs storage. Two things
+about it are deliberate:
+
+- **It runs last**, after the upload has finished and the new document count has
+  been verified against `output.json`, and it refuses to run if the count falls
+  short. Wiping first would mean a write that failed part-way through left
+  neither copy intact.
+- **It is genuinely destructive.** It removes the four entries created through
+  the app (`チョコレート`, `潜り込む`, `バレる`, `ことわざ`) as well as the migrated
+  ones, because they are not in `output.json` and cannot be restored from it.
+  On `dev` that is intended — the data is disposable test material and the
+  collection is being rebuilt under `users/{uid}` from scratch. Anywhere that
+  distinction matters, export before passing the flag.
 
 ## Production rollout
 
