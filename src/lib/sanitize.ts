@@ -4,7 +4,7 @@ import {
   POS,
   STYLES,
   WORD_ORIGINS,
-} from '../types/entry';
+} from '@/types/entry';
 import type {
   Entry,
   EntryContext,
@@ -15,7 +15,7 @@ import type {
   RelatedWord,
   Sense,
   UsageNotes,
-} from '../types/entry';
+} from '@/types/entry';
 import { emptyDraft, parseTags } from './draft';
 
 /**

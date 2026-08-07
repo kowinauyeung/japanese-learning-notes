@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
-import type { Entry } from '../types/entry';
+import type { Entry } from '@/types/entry';
 import { db } from './firebase';
 import { sanitizeEntry } from './sanitize';
 

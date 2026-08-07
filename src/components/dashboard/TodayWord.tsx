@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import type { Entry } from '../../types/entry';
-import { Ruby } from '../Ruby';
-import { LogoMark } from '../Logo';
+import type { Entry } from '@/types/entry';
+import { Ruby } from '@/components/Ruby';
+import { LogoMark } from '@/components/Logo';
 
 /**
  * Same word all day, a different one tomorrow, with nothing persisted: the

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import type { Entry } from '../../types/entry';
-import { Ruby } from '../Ruby';
+import type { Entry } from '@/types/entry';
+import { Ruby } from '@/components/Ruby';
 
 export function EntryRow({ entry }: { entry: Entry }) {
   return (

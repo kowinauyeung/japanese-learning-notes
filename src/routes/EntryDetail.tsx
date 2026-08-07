@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useEntries } from '../lib/entries';
-import { deleteEntry } from '../lib/entryWrite';
-import { Ruby } from '../components/Ruby';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { EntryFormModal } from '../components/entry-form/EntryFormModal';
-import { KeyValueTable, Section } from '../components/detail/Section';
+import { useEntries } from '@/lib/entries';
+import { deleteEntry } from '@/lib/entryWrite';
+import { Ruby } from '@/components/Ruby';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { EntryFormModal } from '@/components/entry-form/EntryFormModal';
+import { KeyValueTable, Section } from '@/components/detail/Section';
 
 /** ①②③… for sense and example numbering, matching the notes. */
 function circled(index: number): string {

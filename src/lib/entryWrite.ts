@@ -6,7 +6,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from 'firebase/firestore';
-import type { EntryDraft } from '../types/entry';
+import type { EntryDraft } from '@/types/entry';
 import { db } from './firebase';
 
 const COLLECTION = 'entries';

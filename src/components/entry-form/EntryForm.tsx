@@ -1,6 +1,6 @@
-import type { EntryDraft, Pos } from '../../types/entry';
-import { JLPT_LEVELS, POLITENESS, POS, STYLES, WORD_ORIGINS } from '../../types/entry';
-import { parseTags } from '../../lib/draft';
+import type { EntryDraft, Pos } from '@/types/entry';
+import { JLPT_LEVELS, POLITENESS, POS, STYLES, WORD_ORIGINS } from '@/types/entry';
+import { parseTags } from '@/lib/draft';
 import { Area, Field, RepeatableList, Select, Text, inputClass } from './fields';
 
 export function EntryForm({
