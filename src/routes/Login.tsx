@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { LogoMark } from '@/components/Logo';
 import { useAuth } from '@/lib/auth';
 import { projectId } from '@/lib/firebase';
-import { LogoMark } from '@/components/Logo';
 
 /**
  * Where to land after signing in. `state.from` is set by `AppLayout` when it
