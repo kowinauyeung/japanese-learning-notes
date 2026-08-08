@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { AuthUser } from '@/domain/ports';
-import { firebaseAuth } from '@/infra/firebase/authAdapter';
+import { authPort } from '@/lib/backend';
 
 interface AuthValue {
   user: AuthUser | null;
@@ -14,9 +14,9 @@ interface AuthValue {
 const AuthContext = createContext<AuthValue | null>(null);
 
 /**
- * The composition point for authentication: the adapter is named here and
- * nowhere else, so everything downstream sees the domain `AuthUser` rather than
- * Firebase's much wider `User`.
+ * Holds the session for the app. The adapter behind `authPort` is chosen in
+ * `@/lib/backend` and never named here, so everything downstream sees the domain
+ * `AuthUser` rather than Firebase's much wider `User`.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(
     () =>
-      firebaseAuth.onChange((next) => {
+      authPort.onChange((next) => {
         setUser(next);
         setLoading(false);
       }),
@@ -35,8 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
-      signIn: () => firebaseAuth.signIn(),
-      signOutUser: () => firebaseAuth.signOut(),
+      signIn: () => authPort.signIn(),
+      signOutUser: () => authPort.signOut(),
     }),
     [user, loading],
   );

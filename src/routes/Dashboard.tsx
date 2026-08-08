@@ -4,58 +4,15 @@ import { EntryRow } from '@/components/dashboard/EntryRow';
 import { Heatmap } from '@/components/dashboard/Heatmap';
 import { StatTiles } from '@/components/dashboard/StatTiles';
 import { TodayWord, pickWordOfDay } from '@/components/dashboard/TodayWord';
-import { JLPT_LEVELS } from '@/domain/entry';
-import {
-  dateKey,
-  parseLocalDate,
-  shortDate,
-  startOfISOWeek,
-  startOfMonth,
-  startOfYear,
-} from '@/lib/dates';
+import { dateKey, shortDate } from '@/lib/dates';
 import { useEntries } from '@/lib/entries';
+import { summarise } from '@/lib/stats';
 
 export function Component() {
   const { entries, loading, error } = useEntries();
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
-  const stats = useMemo(() => {
-    const now = new Date();
-    const week = startOfISOWeek(now);
-    const month = startOfMonth(now);
-    const year = startOfYear(now);
-
-    const countsByDay = new Map<string, number>();
-    let inWeek = 0;
-    let inMonth = 0;
-    let inYear = 0;
-    const jlpt = new Map<string, number>();
-    const pos = new Map<string, number>();
-
-    for (const entry of entries) {
-      const learned = parseLocalDate(entry.learnedOn);
-      countsByDay.set(entry.learnedOn, (countsByDay.get(entry.learnedOn) ?? 0) + 1);
-      if (learned >= week) inWeek += 1;
-      if (learned >= month) inMonth += 1;
-      if (learned >= year) inYear += 1;
-      jlpt.set(entry.jlpt, (jlpt.get(entry.jlpt) ?? 0) + 1);
-      for (const part of entry.pos) pos.set(part, (pos.get(part) ?? 0) + 1);
-    }
-
-    return {
-      countsByDay,
-      inWeek,
-      inMonth,
-      inYear,
-      jlptRows: JLPT_LEVELS.filter((level) => jlpt.has(level)).map((level) => ({
-        label: level,
-        count: jlpt.get(level) ?? 0,
-      })),
-      posRows: [...pos.entries()]
-        .map(([label, count]) => ({ label, count }))
-        .sort((a, b) => b.count - a.count),
-    };
-  }, [entries]);
+  const stats = useMemo(() => summarise(entries, new Date()), [entries]);
 
   const recent = useMemo(() => {
     const sorted = [...entries].sort((a, b) => b.learnedOn.localeCompare(a.learnedOn));

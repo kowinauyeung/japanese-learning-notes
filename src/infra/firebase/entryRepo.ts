@@ -14,10 +14,10 @@ import {
   Timestamp,
   updateDoc,
 } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 import type { Entry, EntryDraft } from '@/domain/entry';
 import type { EntryRepository, Page, PageQuery } from '@/domain/ports';
 import { sanitizeEntry } from '@/lib/sanitize';
-import { db } from './client';
 import { decodeCursor, encodeCursor } from './cursor';
 import { withIsoTimestamps } from './mappers';
 
@@ -29,10 +29,17 @@ import { withIsoTimestamps } from './mappers';
  * query is inherently scoped: Firestore rules *reject* a query they cannot
  * satisfy rather than filtering it, so a listing that forgot to scope itself
  * would fail loudly instead of leaking.
+ *
+ * The `Firestore` instance is a parameter rather than the singleton from
+ * `./client`, which is what lets these queries run against the emulator in a
+ * test. Importing the singleton would also run its module side effects — it
+ * reads `import.meta.env` and opens an IndexedDB-backed cache — neither of
+ * which exists outside a browser build. `src/lib/entries.tsx` is the only
+ * caller and supplies the real one.
  */
-const entriesPath = (uid: string) => collection(db, 'users', uid, 'entries');
+export function createEntryRepository(db: Firestore, uid: string): EntryRepository {
+  const entriesPath = () => collection(db, 'users', uid, 'entries');
 
-export function createEntryRepository(uid: string): EntryRepository {
   const toEntry = (id: string, data: Record<string, unknown>): Entry =>
     sanitizeEntry(id, withIsoTimestamps(data));
 
@@ -48,8 +55,8 @@ export function createEntryRepository(uid: string): EntryRepository {
       const decoded = cursor ? decodeCursor(cursor) : null;
       const snapshot = await getDocs(
         decoded
-          ? query(entriesPath(uid), ...constraints, startAfter(decoded[0], decoded[1]))
-          : query(entriesPath(uid), ...constraints),
+          ? query(entriesPath(), ...constraints, startAfter(decoded[0], decoded[1]))
+          : query(entriesPath(), ...constraints),
       );
 
       // One row over the page size is fetched purely to answer "is there more",
@@ -88,7 +95,7 @@ export function createEntryRepository(uid: string): EntryRepository {
      * stamps come from the server, never the device clock.
      */
     async create(draft: EntryDraft): Promise<string> {
-      const ref = await addDoc(entriesPath(uid), {
+      const ref = await addDoc(entriesPath(), {
         ...draft,
         ownerUid: uid,
         publishedId: null,
