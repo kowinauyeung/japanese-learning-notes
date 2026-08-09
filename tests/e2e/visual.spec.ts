@@ -78,6 +78,12 @@ test.describe('visual', () => {
    * One full page, for the shell the other three sit inside: header, navigation
    * and the card grid. Scoped to a signed-in dashboard with fixed data so the
    * only thing that can move it is a change to the layout itself.
+   *
+   * This one also catches the `<ruby>` class defect, because `TodayWord` passes
+   * `block` too — but it reports it as a 3px change in page height, against the
+   * targeted shot above turning 73px into 318px. Both are red; only one tells
+   * you what broke. That is the case for keeping small, targeted baselines even
+   * where a full-page shot overlaps them.
    */
   test('the dashboard', async ({ page }) => {
     await seedSignedIn(page);

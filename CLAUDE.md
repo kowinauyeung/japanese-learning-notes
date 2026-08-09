@@ -81,6 +81,15 @@ not optional and it is not a formality — it caught a real problem here: a
 pagination test that hung to its timeout instead of failing, which reads as flake
 rather than as the regression it was.
 
+**Reproduce the defect, not something next to it.** The `<ruby>` bug was a class
+_moved_ onto the element. A check that _added_ it there while leaving the
+wrapper untouched renders differently, passes a screenshot the real defect
+fails, and put a false claim into a pull request that a reviewer then had to
+disprove by measurement. Where the original shape is in version control or
+described in a comment, reproduce that shape exactly — and when a test you
+expected to go red stays green, treat it as evidence about your reproduction
+before you treat it as a fact about the test.
+
 Say in the pull request that you did it, and name what went red.
 
 ### Screenshot baselines
