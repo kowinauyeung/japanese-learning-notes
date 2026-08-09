@@ -162,6 +162,33 @@ export default tseslint.config(
     },
   },
 
+  // The same fence the UI has, for the tests that stand in the UI's position.
+  // CLAUDE.md states it as a rule; leaving it to self-discipline while the
+  // neighbouring rule is machine-enforced is the inconsistency this closes.
+  //
+  // `tests/unit` is deliberately outside it: cursor encoding lives in
+  // `src/infra/firebase/cursor.ts` and is pure, so a unit test importing it is
+  // the cheapest layer that can see the defect, not a layering violation.
+  // `tests/integration` and `tests/rules` exist to drive the adapter and the
+  // emulator, which is the whole point of them.
+  {
+    files: ['tests/component/**/*.{ts,tsx}', 'tests/e2e/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^@/infra/',
+              message:
+                'Component and end-to-end tests go through src/lib. An adapter test belongs in tests/integration.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Build config: same TypeScript rules, Node globals.
   {
     files: ['vite.config.ts', 'vitest.config.ts', 'playwright.config.ts'],

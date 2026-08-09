@@ -81,6 +81,12 @@ jobs:
   # End-to-end and visual regression, in the Playwright image rather than on the
   # bare runner.
   #
+  # The image tag, `@playwright/test` in package.json, and the tag inside the
+  # `test:visual:update` script are one version in three files. Move them
+  # together or the browser the image ships stops matching the client that
+  # looks for it. Dependabot is told to leave the dependency alone for exactly
+  # this reason — see .github/dependabot.yml.
+  #
   # The image is the point, not a convenience. Screenshot baselines are
   # committed, and they only mean anything if the machine that compares them
   # renders text the way the machine that produced them did. Generating them

@@ -73,8 +73,13 @@ export default defineConfig({
         'src/main.tsx',
         'src/router.tsx',
         'src/lib/env.ts',
+        'src/lib/backend.ts',
         'src/infra/firebase/client.ts',
         'src/vite-env.d.ts',
+        // The end-to-end substitute. Only the `e2e` build resolves it and only
+        // Playwright exercises it, so it would sit at a permanent 0% in a
+        // report that exists to be read by a person.
+        'src/lib/backend.e2e.ts',
         // Type-only modules compile away to nothing.
         'src/domain/ports.ts',
       ],
