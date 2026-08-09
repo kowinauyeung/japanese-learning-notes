@@ -12,8 +12,10 @@ import { makeEntry } from '../fixtures/entry';
 // A Wednesday. Its ISO week starts Monday 2026-06-22.
 const NOW = new Date(2026, 5, 24, 10, 0, 0);
 
+/** Deterministic, so a failure diff reads the same on every run. */
+let sequence = 0;
 const on = (learnedOn: string, overrides = {}) =>
-  makeEntry({ id: `e-${learnedOn}-${Math.random()}`, learnedOn, ...overrides });
+  makeEntry({ id: `e${++sequence}-${learnedOn}`, learnedOn, ...overrides });
 
 describe('summarise — period counts', () => {
   it('counts the current ISO week from its Monday, inclusive', () => {

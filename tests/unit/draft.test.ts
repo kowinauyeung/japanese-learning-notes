@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { emptyDraft, invalidTags, parseTags, toDraft } from '@/lib/draft';
 import { makeEntry } from '../fixtures/entry';
 
@@ -88,10 +88,25 @@ describe('toDraft', () => {
 });
 
 describe('emptyDraft', () => {
+  /**
+   * The clock is frozen rather than read twice. Building the expected key from
+   * a real `new Date()` and then calling `emptyDraft()` is a race across
+   * midnight — red a few times a year, on whichever CI run happens to straddle
+   * it, and green on every rerun.
+   */
   it("dates a new note today, in the learner's own calendar", () => {
-    const now = new Date();
-    const expected = `${now.getFullYear()}-${`${now.getMonth() + 1}`.padStart(2, '0')}-${`${now.getDate()}`.padStart(2, '0')}`;
-    expect(emptyDraft().learnedOn).toBe(expected);
+    vi.useFakeTimers();
+    try {
+      // Local time, and deliberately single-digit in both components: it is
+      // zero-padding that a naive implementation gets wrong.
+      vi.setSystemTime(new Date(2026, 6, 5, 23, 59, 59));
+      expect(emptyDraft().learnedOn).toBe('2026-07-05');
+
+      vi.setSystemTime(new Date(2026, 11, 31, 0, 0, 1));
+      expect(emptyDraft().learnedOn).toBe('2026-12-31');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('starts blank, with freq mid-scale and no level claimed', () => {

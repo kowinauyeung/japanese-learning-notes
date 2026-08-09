@@ -34,9 +34,13 @@ import { emptyDraft } from '@/lib/draft';
  * running for the rules tests.
  *
  * Rules are deliberately bypassed here (`mockUserToken: 'owner'`); who may read
- * what is `tests/rules/`'s subject. Each test gets a fresh uid instead of
- * clearing the database, so nothing here can disturb a rules test running in
- * the same emulator.
+ * what is `tests/rules/`'s subject.
+ *
+ * A fresh uid per test is why no cleanup is needed *within* this file. It is
+ * not what keeps this file and the rules file apart: those share one emulator,
+ * and `clearFirestore()` there wipes the whole database regardless of uid. The
+ * only thing separating them is `fileParallelism: false` in vitest.config.ts —
+ * so anything that re-enables parallelism has to solve that first.
  */
 
 let app: FirebaseApp;
@@ -226,7 +230,11 @@ describe('update', () => {
     expect(after?.headword).toBe('前兆');
     expect(after?.definition).toBe('起こる前のしるし。');
     expect(after?.createdAt).toBe(before?.createdAt);
-    expect(after?.updatedAt).not.toBe('');
+    // Not `not.toBe('')`: the stamp written at creation is already non-empty,
+    // so that form stays green even with `updatedAt: serverTimestamp()` deleted
+    // from update(). Comparing against the value before the edit is what makes
+    // this a test of the thing its name claims.
+    expect(after?.updatedAt).not.toBe(before?.updatedAt);
   });
 
   /**

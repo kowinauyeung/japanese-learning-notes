@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath, URL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { JLPT_LEVELS, POLITENESS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import { isValidIsoDate, sanitizeEntry } from '@/lib/sanitize';
@@ -22,7 +23,11 @@ interface RawEntry extends Record<string, unknown> {
   wordSets: unknown[];
 }
 
-const raw = JSON.parse(readFileSync('migration/output.json', 'utf8')) as RawEntry[];
+// Resolved from this file rather than the working directory, so the test does
+// not depend on vitest having been started from the repository root.
+const OUTPUT = fileURLToPath(new URL('../../migration/output.json', import.meta.url));
+
+const raw = JSON.parse(readFileSync(OUTPUT, 'utf8')) as RawEntry[];
 
 /** Exactly what `upload.mjs` writes for one entry, minus the Timestamps. */
 function asUploaded(entry: RawEntry): Record<string, unknown> {
@@ -37,9 +42,16 @@ function asUploaded(entry: RawEntry): Record<string, unknown> {
   };
 }
 
-/** Collected rather than asserted one at a time, so a failure names every row. */
+/**
+ * Collected rather than asserted one at a time, so a failure names every row.
+ * `check` runs once per entry: calling it twice would let the condition and the
+ * message it reports disagree the moment one of them stops being pure.
+ */
 const problems = (check: (entry: RawEntry) => string | null): string[] =>
-  raw.map((entry) => (check(entry) ? `${entry.id}: ${check(entry)}` : '')).filter(Boolean);
+  raw.flatMap((entry) => {
+    const problem = check(entry);
+    return problem ? [`${entry.id}: ${problem}`] : [];
+  });
 
 describe('migration/output.json — the notes as they will be uploaded', () => {
   it('holds all 67 notes', () => {
