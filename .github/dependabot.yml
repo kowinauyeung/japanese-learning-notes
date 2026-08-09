@@ -25,6 +25,15 @@ updates:
       development-minor-patch:
         dependency-type: development
         update-types: [minor, patch]
+    ignore:
+      # Pinned by hand, because the version exists in three places that must
+      # agree: this dependency, the container image in ci.yml, and the same
+      # image tag in the `test:visual:update` script. Only the first is
+      # something Dependabot can see — the github-actions ecosystem below
+      # rewrites `uses:` references and never a `container.image` tag. A
+      # grouped bump would therefore leave the image behind, and the e2e job
+      # would fail with `Executable doesn't exist at /ms-playwright/…`.
+      - dependency-name: '@playwright/test'
 
   - package-ecosystem: github-actions
     directory: /

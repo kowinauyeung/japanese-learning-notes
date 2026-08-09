@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import type { Entry } from '@/domain/entry';
 import type { EntryRepository } from '@/domain/ports';
-import { createEntryRepository } from '@/infra/firebase/entryRepo';
+import { entryRepositoryFor } from '@/lib/backend';
 
 interface EntriesValue {
   entries: Entry[];
@@ -52,7 +52,7 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
 
   // Rebuilt when the signed-in user changes, so the `users/{uid}` path baked
   // into the repository can never outlive the session it belongs to.
-  const repository = useMemo(() => createEntryRepository(uid), [uid]);
+  const repository = useMemo(() => entryRepositoryFor(uid), [uid]);
 
   const refresh = useCallback(async () => {
     setLoading(true);

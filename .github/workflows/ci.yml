@@ -14,6 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Everything that needs neither a JDK nor a browser. Kept first and fastest so
+  # a typo is reported in about a minute rather than behind an emulator boot.
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -23,14 +25,6 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: yarn
-
-      # The Firestore emulator is a Java process, and firebase-tools refuses
-      # anything below 21. Pinned rather than left to the runner image default,
-      # which has moved before and would take the rules tests with it.
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '21'
 
       - run: yarn install --frozen-lockfile
 
@@ -51,9 +45,82 @@ jobs:
         if: '!cancelled()'
         run: yarn build
 
+      - name: Unit and component tests
+        if: '!cancelled()'
+        run: yarn test:unit
+
+  # Security rules and the Firestore adapter, against the emulator. Split out
+  # because it is the only job that needs a JVM, and because a red here means
+  # something different from a red above: the data boundary, not the code.
+  emulator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      # The Firestore emulator is a Java process, and firebase-tools refuses
+      # anything below 21. Pinned rather than left to the runner image default,
+      # which has moved before and would take the rules tests with it.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - run: yarn install --frozen-lockfile
+
       # Rules are the only thing protecting the data — the app is client-side
       # and its config ships in the bundle — so this is the one job here that
       # covers a security property rather than a behaviour.
-      - name: Firestore rules tests
+      - name: Rules and adapter tests
+        run: yarn test:emulator
+
+  # End-to-end and visual regression, in the Playwright image rather than on the
+  # bare runner.
+  #
+  # The image tag, `@playwright/test` in package.json, and the tag inside the
+  # `test:visual:update` script are one version in three files. Move them
+  # together or the browser the image ships stops matching the client that
+  # looks for it. Dependabot is told to leave the dependency alone for exactly
+  # this reason — see .github/dependabot.yml.
+  #
+  # The image is the point, not a convenience. Screenshot baselines are
+  # committed, and they only mean anything if the machine that compares them
+  # renders text the way the machine that produced them did. Generating them
+  # with `yarn test:visual:update` uses this exact image, so the fonts,
+  # freetype and browser build are identical here — which is also why no
+  # `playwright install` step and no browser cache appear below.
+  e2e:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      # Chromium's default /dev/shm is too small inside a container and it
+      # crashes part way through a run rather than failing an assertion.
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      # Builds in `e2e` mode and serves it; see playwright.config.ts. Nothing
+      # here reaches Firebase — the in-memory adapters replace it at the one
+      # seam the architecture already had.
+      - name: End-to-end and visual tests
+        run: yarn test:e2e
+
+      # A screenshot diff is unreadable as a log line, so the report — which
+      # embeds expected, actual and diff — is what makes a red run actionable.
+      - uses: actions/upload-artifact@v4
         if: '!cancelled()'
-        run: yarn test
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

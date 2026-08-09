@@ -28,6 +28,9 @@ dist/
 # dev and prod projects stay decoupled from the source tree.
 .env*
 !.env.example
+# Committed on purpose: no credentials, only the mode name for the end-to-end
+# build. See the file itself for why.
+!.env.e2e
 
 # Service-account private keys used by the upload script — never commit these.
 migration/service-account-*.json
@@ -39,3 +42,9 @@ migration/service-account-*.json
 
 .DS_Store
 *.log
+
+# Test output. Screenshot baselines under tests/e2e/__screenshots__ ARE
+# committed — they are the expected result, not a report.
+coverage/
+playwright-report/
+test-results/

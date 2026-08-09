@@ -40,10 +40,10 @@ Flashcards, dictation, word sets and practice history are placeholder routes.
 | Hosting     | Firebase Hosting                               |
 
 Pure client-side app: the Firestore web SDK talks to the database directly, and
-security rules — not a server — are what protect the data. The whole `entries`
-collection is loaded into memory once, and search, filtering and sorting all run
-over that array. There is no pagination; the design assumes a personal notebook,
-not a corpus.
+security rules — not a server — are what protect the data. The repository pages
+its reads, but the provider walks every page on load and keeps the whole
+collection in memory, so search, filtering and sorting run over that array with
+no round trip. The design assumes a personal notebook, not a corpus.
 
 ## Getting started
 
@@ -94,28 +94,11 @@ source tree.
 | `yarn dev`                             | Vite dev server (`.env.development`)                  |
 | `yarn build`                           | Type-check, then build to `dist/` (`.env.production`) |
 | `yarn preview`                         | Serve the existing `dist/` build locally              |
-| `yarn typecheck`                       | `tsc -b --noEmit`                                     |
-| `yarn test`                            | Firestore rules tests, in the emulator                |
+| `yarn typecheck`                       | The app, then `tsconfig.test.json`                    |
+| `yarn test`                            | Unit, component, rules and adapter tests              |
+| `yarn test:e2e`                        | Playwright: user flows and visual regression          |
 | `yarn rules:dev` / `yarn rules:prod`   | Deploy `firestore.rules`                              |
 | `yarn auth:login` / `yarn auth:revoke` | Repo-local Google ADC, used by the migration upload   |
-
-`yarn test` starts the Firestore emulator around
-[`tests/`](tests/firestore-rules.test.ts). The emulator is a Java process and
-`firebase-tools` requires **JDK 21 or newer**; installing it is not enough if an
-older JDK comes first on `PATH`, which is the usual state on macOS:
-
-```bash
-export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
-export PATH="$JAVA_HOME/bin:$PATH"
-```
-
-Both lines are needed. Setting `JAVA_HOME` alone leaves the older `java` first
-on `PATH`, and `firebase-tools` runs that one — the emulator then refuses to
-start with a version error that reads as if nothing were installed.
-
-These are currently the only tests in the repository, and deliberately so — they
-cover the one part of this app that is a security boundary rather than a
-behaviour. Everything else is tracked in issue #2.
 
 `yarn auth:login` writes to `.gcloud/` via `CLOUDSDK_CONFIG`, deliberately apart
 from the machine-wide `~/.config/gcloud`. There is no long-lived service-account
@@ -123,6 +106,46 @@ key in this project, and there should not be one.
 
 `migrate:parse` and `migrate:upload` are one-shot migration scripts — see
 [`migration/README.md`](migration/README.md) before running either.
+
+## Tests
+
+Five layers, split by what each one needs to run rather than by what it covers.
+[`CLAUDE.md`](CLAUDE.md) has the rules for choosing between them and for writing
+new ones.
+
+| Command                   | Covers                                                                                                                     | Needs    |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `yarn test:unit`          | `tests/unit` — coercion, filters, dates, furigana, import, redirects; `tests/component` — rendered DOM                     | nothing  |
+| `yarn test:emulator`      | `tests/rules` — who may read and write what; `tests/integration` — the Firestore adapter's queries, cursors and timestamps | JDK 21   |
+| `yarn test:e2e`           | `tests/e2e` — sign-in, browse, create, edit, delete; four screenshot baselines                                             | Chromium |
+| `yarn test:visual:update` | Regenerates those baselines                                                                                                | Docker   |
+| `yarn coverage`           | Reported, never enforced                                                                                                   | nothing  |
+
+Three things worth knowing before adding to it:
+
+- **The end-to-end build does not touch Firebase.** `vite build --mode e2e`
+  aliases `src/lib/backend.ts` to an in-memory twin, so Playwright is
+  deterministic and needs no emulator or Google popup. Firestore is covered
+  where it can be asserted precisely instead — `tests/integration` for the
+  adapter, `tests/rules` for the boundary.
+- **Screenshot baselines are Linux-only.** They are generated in the same
+  container image CI runs, because macOS renders Japanese glyphs differently.
+  The visual specs skip themselves anywhere else and say so.
+- **The emulator is a Java process** and `firebase-tools` requires **JDK 21 or
+  newer**. Installing it is not enough if an older JDK comes first on `PATH`,
+  which is the usual state on macOS:
+
+  ```bash
+  export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+  export PATH="$JAVA_HOME/bin:$PATH"
+  ```
+
+  Both lines are needed. Setting `JAVA_HOME` alone leaves the older `java` first
+  on `PATH`, and `firebase-tools` runs that one — the emulator then refuses to
+  start with a version error that reads as if nothing were installed.
+
+CI runs the three suites as separate jobs, so a red tells you which boundary
+broke: `verify` (typecheck, lint, format, build, unit), `emulator`, and `e2e`.
 
 ## Environments
 

@@ -8,7 +8,16 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', '.vite/**', 'migration/output.json', 'migration/review.json'],
+    ignores: [
+      'dist/**',
+      '.vite/**',
+      'coverage/**',
+      'playwright-report/**',
+      'test-results/**',
+      'tests/e2e/__screenshots__/**',
+      'migration/output.json',
+      'migration/review.json',
+    ],
   },
 
   // Full-width spaces (U+3000) are ordinary Japanese text here, and appear
@@ -121,28 +130,68 @@ export default tseslint.config(
     },
   },
 
-  // Tests. Same strictness as src, Node globals, and no vendor fence — driving
-  // the emulator is the whole point.
+  // Tests. Same strictness as src, and no vendor fence — driving the emulator
+  // is the whole point.
+  //
+  // Both global sets, because a Playwright spec is a Node file that also ships
+  // callbacks into the page: `addInitScript` runs its argument in the browser,
+  // where `window` is the only thing there is.
   //
   // Named explicitly rather than left to projectService, which resolves through
   // the nearest tsconfig.json. That is the solution file, and tsconfig.test.json
   // is deliberately not one of its references: referencing it would require
   // tsconfig.app.json to emit, which it does not.
   {
-    files: ['tests/**/*.ts'],
+    files: ['tests/**/*.{ts,tsx}'],
     extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
     languageOptions: {
-      globals: globals.node,
+      globals: { ...globals.node, ...globals.browser },
       parserOptions: {
         project: './tsconfig.test.json',
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    rules: {
+      // Same underscore convention as src. Tests destructure-and-discard more
+      // often than the app does — it is how a fixture reproduces exactly what a
+      // script drops before writing.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
+  // The same fence the UI has, for the tests that stand in the UI's position.
+  // CLAUDE.md states it as a rule; leaving it to self-discipline while the
+  // neighbouring rule is machine-enforced is the inconsistency this closes.
+  //
+  // `tests/unit` is deliberately outside it: cursor encoding lives in
+  // `src/infra/firebase/cursor.ts` and is pure, so a unit test importing it is
+  // the cheapest layer that can see the defect, not a layering violation.
+  // `tests/integration` and `tests/rules` exist to drive the adapter and the
+  // emulator, which is the whole point of them.
+  {
+    files: ['tests/component/**/*.{ts,tsx}', 'tests/e2e/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^@/infra/',
+              message:
+                'Component and end-to-end tests go through src/lib. An adapter test belongs in tests/integration.',
+            },
+          ],
+        },
+      ],
+    },
   },
 
   // Build config: same TypeScript rules, Node globals.
   {
-    files: ['vite.config.ts', 'vitest.config.ts'],
+    files: ['vite.config.ts', 'vitest.config.ts', 'playwright.config.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       globals: globals.node,
