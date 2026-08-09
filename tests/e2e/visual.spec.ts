@@ -80,10 +80,17 @@ test.describe('visual', () => {
    * only thing that can move it is a change to the layout itself.
    *
    * This one also catches the `<ruby>` class defect, because `TodayWord` passes
-   * `block` too — but it reports it as a 3px change in page height, against the
-   * targeted shot above turning 73px into 318px. Both are red; only one tells
-   * you what broke. That is the case for keeping small, targeted baselines even
-   * where a full-page shot overlaps them.
+   * `block` too — but it reports it as 3px of page height, against 73px becoming
+   * 89px in the targeted shot above. Both go red; 16px inside a 244px crop is
+   * legible and 3px off a 1280x1135 page is a puzzle. That is the case for
+   * keeping small, targeted baselines even where a full-page one overlaps them.
+   *
+   * Worth knowing before reading that diff: under the real defect the targeted
+   * shot fails for two reasons at once. The annotation moves, and `.has-ruby`
+   * travels onto `<ruby>` with the rest of the class, so the locator resolves to
+   * the first `<ruby>` and the crop narrows from 切り分け to 切 alone. It fails
+   * either way, which is what the gate is for, but the diff is not purely a
+   * story about placement.
    */
   test('the dashboard', async ({ page }) => {
     await seedSignedIn(page);
