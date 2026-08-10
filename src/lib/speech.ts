@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * The Web Speech API, which is the one browser capability this app cannot
@@ -116,45 +116,49 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
     };
   }, []);
 
+  /**
+   * Which candidate the next press will use.
+   *
+   * A ref, not state, because it must survive a re-render without causing one,
+   * and because the value is read inside a callback that must stay stable.
+   */
+  const candidate = useRef(0);
+
   const speak = useCallback(
     (text: string) => {
       const engine = synth();
       if (!engine || !text) return;
       setFailed(false);
 
-      /**
-       * One attempt, with or without an explicitly named voice.
-       *
-       * **Failure 8: a listed voice with nothing behind it.** macOS reports
-       * every system voice it could use, downloaded or not, so `localService`
-       * says where a voice would come from and not whether it can be heard.
-       * An attempt that never starts therefore falls through to the next
-       * candidate rather than being reported — see `speechCandidates` for the
-       * order and why the network voice is in it.
-       */
       const candidates = speechCandidates(voices);
+      const voice = candidates[Math.min(candidate.current, candidates.length - 1)] ?? null;
 
-      const attempt = (index: number) => {
-        const voice = candidates[index] ?? null;
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'ja-JP';
-        utterance.rate = 0.85;
-        if (voice) utterance.voice = voice;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ja-JP';
+      utterance.rate = 0.85;
+      if (voice) utterance.voice = voice;
 
-        /**
-         * **Failure 5: it goes quiet and reports nothing at all.** Chrome has
-         * more than one way to swallow an utterance without firing `error` — a
-         * wedged queue, a paused engine, the unusable voice above. Enumerating
-         * them is a losing game; noticing that `start` never arrived is not.
-         */
-        const started = setTimeout(() => {
-          if (index + 1 < candidates.length) {
-            console.warn(
-              `speechSynthesis: ${voice?.name ?? 'the default voice'} never started, trying the next candidate`,
-            );
-            attempt(index + 1);
-            return;
-          }
+      /**
+       * **Failure 5: it goes quiet and reports nothing at all.** Chrome has
+       * more than one way to swallow an utterance without firing `error`.
+       * Enumerating them is a losing game; noticing that `start` never arrived
+       * is not.
+       *
+       * This only *reports*. It deliberately does not retry, because a
+       * `speak()` from inside a timer has no user activation and can only fail
+       * the same way — see below. What it does instead is move to the next
+       * candidate, so the learner's next press tries a different voice.
+       */
+      const started = setTimeout(() => {
+        const next = candidate.current + 1;
+        if (next < candidates.length) {
+          candidate.current = next;
+          console.warn(
+            `speechSynthesis: ${voice?.name ?? 'the default voice'} never started; the next press will try ${
+              candidates[next]?.name ?? 'the browser default'
+            }`,
+          );
+        } else {
           console.error('speechSynthesis never started with any voice', {
             text,
             japaneseVoices: japaneseVoices(voices).map((item) => ({
@@ -163,60 +167,58 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
               localService: item.localService,
             })),
           });
-          setFailed(true);
-        }, START_TIMEOUT_MS);
-
-        utterance.onstart = () => clearTimeout(started);
-        utterance.onend = () => {
-          // Releases the reference taken below, once it can no longer matter.
-          if (speaking === utterance) speaking = null;
-        };
-        utterance.onerror = (event) => {
-          clearTimeout(started);
-          // 'interrupted' and 'canceled' are this component doing its job —
-          // moving to the next card while the previous word is still playing.
-          if (event.error === 'interrupted' || event.error === 'canceled') return;
-          console.error('speechSynthesis failed', event.error);
-          setFailed(true);
-        };
-
-        /**
-         * **Failure 6: a stuck `paused` engine.** Chrome leaves the synthesiser
-         * paused after some cancels and after a spell in a background tab, and
-         * a paused engine accepts `speak()`, queues it, plays nothing and
-         * reports nothing. `resume()` on an engine that is not paused does
-         * nothing, so this is unconditional rather than guarded on a flag that
-         * is itself the thing being got wrong.
-         */
-        engine.resume();
-
-        /**
-         * **Failure 3: `cancel()` then `speak()` in the same task.** Chrome
-         * drops the new utterance when both land in one turn of the event loop
-         * — the queue is torn down after the call that filled it. Cancelling
-         * only when something is actually playing, and letting the teardown
-         * finish first, is what makes pressing the button twice work.
-         */
-        if (engine.speaking || engine.pending) {
-          engine.cancel();
-          setTimeout(() => engine.speak(utterance), 0);
-        } else {
-          engine.speak(utterance);
         }
+        setFailed(true);
+      }, START_TIMEOUT_MS);
 
-        /**
-         * **Failure 7: the utterance is collected before it is spoken.** Chrome
-         * holds only a weak reference, so one that goes out of scope while
-         * queued can be garbage-collected mid-sentence — silently, and only
-         * under memory pressure, which is why it reproduces on one machine and
-         * not another. Parking it here keeps it alive until the next call.
-         *
-         * Deliberately untested: no test can make a garbage collector run.
-         */
-        speaking = utterance;
+      utterance.onstart = () => clearTimeout(started);
+      utterance.onend = () => {
+        // Releases the reference taken below, once it can no longer matter.
+        if (speaking === utterance) speaking = null;
+      };
+      utterance.onerror = (event) => {
+        clearTimeout(started);
+        // 'interrupted' and 'canceled' are this component doing its job —
+        // moving to the next card while the previous word is still playing.
+        if (event.error === 'interrupted' || event.error === 'canceled') return;
+        console.error('speechSynthesis failed', event.error);
+        setFailed(true);
       };
 
-      attempt(0);
+      /**
+       * **Failure 6: a stuck engine.** `resume()` clears a synthesiser Chrome
+       * left paused, and `cancel()` clears a queue it left occupied. Both are
+       * cheap no-ops when nothing is wrong, and a wedged engine reports
+       * `speaking: true` forever until they run.
+       */
+      engine.resume();
+      if (engine.speaking || engine.pending) engine.cancel();
+
+      /**
+       * **Failure 9: user activation does not survive a timer.**
+       *
+       * Chrome has refused `speechSynthesis.speak()` outside a user gesture
+       * since M71, and a refused call leaves the engine reporting
+       * `speaking: true` with nothing playing — measured on the reporting
+       * machine, where `speaking` was already true before any test ran and
+       * `cancel()` could not clear it.
+       *
+       * So this call is synchronous inside the click that asked for it. An
+       * earlier version deferred it by a tick to dodge the cancel-then-speak
+       * race, which traded a race that costs one repeat for a policy that
+       * costs every utterance.
+       */
+      engine.speak(utterance);
+
+      /**
+       * **Failure 7: the utterance is collected before it is spoken.** Chrome
+       * holds only a weak reference, so one that goes out of scope while queued
+       * can be garbage-collected mid-sentence — silently, and only under memory
+       * pressure, which is why it reproduces on one machine and not another.
+       *
+       * Deliberately untested: no test can make a garbage collector run.
+       */
+      speaking = utterance;
     },
     [voices],
   );

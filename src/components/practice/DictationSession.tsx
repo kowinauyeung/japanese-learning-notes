@@ -41,18 +41,26 @@ export function DictationSession({
   const { status, speak } = useJapaneseSpeech();
 
   /**
-   * Speak on arrival, so the drill starts by playing rather than by asking to.
+   * The card does **not** speak on arrival, and that is not an omission.
    *
-   * **Failure 4: no user activation.** Chrome has refused `speak()` outside a
-   * gesture since M71, and this call is one render removed from the click that
-   * caused it. When it is refused the utterance reports `not-allowed`, which
-   * the hook turns into a visible message — the button below is the path that
-   * always works, and silence is no longer the only symptom.
+   * It used to. Chrome has refused `speechSynthesis.speak()` outside a user
+   * gesture since M71, and an effect is one render removed from the click that
+   * caused it — so that call was always refused. Worse than refused: it left
+   * the engine reporting `speaking: true` with nothing playing, permanently,
+   * and `cancel()` could not clear it. Every later press of 単語を聞く then
+   * went into a queue that was already wedged, which is why the button was
+   * silent on a machine where `say -v Kyoko` worked perfectly.
+   *
+   * Measured, not deduced: on the affected page `speechSynthesis.speaking` read
+   * `true` before any test ran; on another site in the same browser it read
+   * `false` and spoke.
+   *
+   * Autoplay is not worth a wedged engine. The button is one press and it
+   * always works, because it is a gesture.
    */
   useEffect(() => {
-    if (status === 'ready') speak(spokenForm(entry));
     inputRef.current?.focus();
-  }, [entry, speak, status]);
+  }, [entry]);
 
   const check = () => {
     if (result !== null) return;

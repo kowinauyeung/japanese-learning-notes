@@ -156,11 +156,17 @@ describe('DictationSession — why the sound did not come out', () => {
     expect(screen.getByText(/日本語の音声が見つかりません/)).toBeInTheDocument();
   });
 
-  it('names the voice on the utterance rather than leaving Chrome to match it', () => {
+  /**
+   * The card is silent until asked. Speaking from an effect was refused by
+   * Chrome for want of a user gesture, and left the engine wedged — see
+   * `DictationSession` for the measurement.
+   */
+  it('does not speak until the learner presses the button', () => {
     const { spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
     setup();
+    expect(spoken).toHaveLength(0);
 
-    // The card speaks on arrival; the headword here is kana-only.
+    fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
     expect(spoken.at(-1)?.text).toBe('ちょっと');
     expect(spoken.at(-1)?.voice?.name).toBe('Kyoko');
     expect(spoken.at(-1)?.lang).toBe('ja-JP');
@@ -172,25 +178,24 @@ describe('DictationSession — why the sound did not come out', () => {
    * 単語を聞く silent — the one a learner reaches for precisely because they
    * did not catch the word.
    */
-  it('still speaks on a second press while the first word is playing', async () => {
-    vi.useFakeTimers();
-    try {
-      const { engine, spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
-      setup();
-      expect(spoken).toHaveLength(1);
+  /**
+   * The second press has to reach the engine *inside* the click. Deferring it
+   * by a tick to dodge Chrome's cancel-then-speak race was what lost the user
+   * activation the same browser demands, so the utterance is queued
+   * synchronously and the stale queue is cleared first.
+   */
+  it('speaks synchronously on a second press while the first word is playing', () => {
+    const { engine, spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
+    expect(spoken).toHaveLength(1);
 
-      engine.speaking = true;
-      fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
+    engine.speaking = true;
+    fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
 
-      expect(engine.cancel).toHaveBeenCalled();
-      // Nothing queued yet: the teardown has to finish its own task first.
-      expect(spoken).toHaveLength(1);
-
-      await vi.advanceTimersByTimeAsync(1);
-      expect(spoken).toHaveLength(2);
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(engine.cancel).toHaveBeenCalled();
+    // No timer in between: a speak() from a timer has no user activation.
+    expect(spoken).toHaveLength(2);
   });
 
   /** A refused utterance now reports itself instead of being indistinguishable
@@ -198,6 +203,7 @@ describe('DictationSession — why the sound did not come out', () => {
   it('surfaces an engine error rather than leaving the learner guessing', () => {
     const { spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
     setup();
+    fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
 
     act(() => {
       spoken.at(-1)?.onerror?.({ error: 'not-allowed' });
@@ -226,26 +232,38 @@ describe('DictationSession — silence that reports nothing', () => {
    * those are moves with each macOS release, so the chosen voice is dropped
    * and Chrome is asked to resolve `ja-JP` itself rather than guessed at.
    */
-  it('falls through to the network voice when the local one never starts', async () => {
+  const press = () => fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
+
+  /**
+   * A silent attempt cannot be retried from the timer that noticed it: a
+   * `speak()` with no user gesture behind it is refused, which is the defect
+   * this whole file is about. So the next *press* moves to the next candidate
+   * instead — the network voice being the one that cannot be a system voice
+   * macOS never downloaded.
+   */
+  it('moves to the network voice on the next press, not from the timer', async () => {
     vi.useFakeTimers();
     const { spoken } = installEngine([
       voice('ja-JP', 'Kyoko'),
       voice('ja-JP', 'Google 日本語', false),
     ]);
     setup();
+
+    press();
     expect(spoken[0]?.voice?.name).toBe('Kyoko');
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_500);
     });
+    // Nothing spoken from the timer itself.
+    expect(spoken).toHaveLength(1);
+    expect(screen.getByText(/音声を再生できませんでした/)).toBeInTheDocument();
 
-    // The one candidate that cannot be a voice macOS never downloaded.
+    press();
     expect(spoken[1]?.voice?.name).toBe('Google 日本語');
-    // Nothing claimed yet: it has not had its own chance to start.
-    expect(screen.queryByText(/音声を再生できませんでした/)).not.toBeInTheDocument();
   });
 
-  it('reports a failure only once every candidate has been silent', async () => {
+  it('ends at the browser default and stays there', async () => {
     vi.useFakeTimers();
     const { spoken } = installEngine([
       voice('ja-JP', 'Kyoko'),
@@ -253,24 +271,26 @@ describe('DictationSession — silence that reports nothing', () => {
     ]);
     setup();
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2_500);
-      await vi.advanceTimersByTimeAsync(2_500);
-    });
-    expect(spoken).toHaveLength(3);
-    expect(spoken[2]?.voice).toBeNull();
-    expect(screen.queryByText(/音声を再生できませんでした/)).not.toBeInTheDocument();
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      press();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_500);
+      });
+    }
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2_500);
-    });
-    expect(screen.getByText(/音声を再生できませんでした/)).toBeInTheDocument();
+    expect(spoken.map((item) => item.voice?.name ?? null)).toEqual([
+      'Kyoko',
+      'Google 日本語',
+      null,
+      null,
+    ]);
   });
 
   it('stays quiet about a slow engine that does eventually start', async () => {
     vi.useFakeTimers();
     const { spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
     setup();
+    fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
@@ -288,6 +308,7 @@ describe('DictationSession — silence that reports nothing', () => {
   it('resumes the engine before speaking, in case it is stuck paused', () => {
     const { engine } = installEngine([voice('ja-JP', 'Kyoko')]);
     setup();
+    fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
     expect(engine.resume).toHaveBeenCalled();
   });
 });
