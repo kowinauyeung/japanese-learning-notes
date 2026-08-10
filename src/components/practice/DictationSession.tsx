@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Ruby } from '@/components/Ruby';
 import type { Entry } from '@/domain/entry';
 import { isCorrectAnswer, spokenForm } from '@/lib/dictation';
-import { canSpeak, speak } from '@/lib/speech';
+import { useJapaneseSpeech } from '@/lib/speech';
 import { SessionHeader } from './SessionHeader';
 
 /**
@@ -38,14 +38,21 @@ export function DictationSession({
    */
   const composing = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { status, speak } = useJapaneseSpeech();
 
-  // Speak on arrival, so the drill starts by playing rather than by asking to
-  // play. The first utterance follows the 開始する click in the same document,
-  // which is the gesture autoplay policies want.
+  /**
+   * Speak on arrival, so the drill starts by playing rather than by asking to.
+   *
+   * **Failure 4: no user activation.** Chrome has refused `speak()` outside a
+   * gesture since M71, and this call is one render removed from the click that
+   * caused it. When it is refused the utterance reports `not-allowed`, which
+   * the hook turns into a visible message — the button below is the path that
+   * always works, and silence is no longer the only symptom.
+   */
   useEffect(() => {
-    speak(spokenForm(entry));
+    if (status === 'ready') speak(spokenForm(entry));
     inputRef.current?.focus();
-  }, [entry]);
+  }, [entry, speak, status]);
 
   const check = () => {
     if (result !== null) return;
@@ -75,7 +82,7 @@ export function DictationSession({
     else next();
   };
 
-  const speakable = canSpeak();
+  const speakable = status === 'ready' || status === 'loading' || status === 'failed';
 
   return (
     <section className="mx-auto max-w-2xl space-y-4">
@@ -91,8 +98,19 @@ export function DictationSession({
           >
             🔊 単語を聞く
           </button>
-          {!speakable && (
+          {status === 'unsupported' && (
             <p className="mt-2 text-xs text-danger">このブラウザは音声読み上げに対応していません</p>
+          )}
+          {status === 'no-japanese-voice' && (
+            <p className="mt-2 text-xs text-danger">
+              日本語の音声が見つかりません。システム設定 → アクセシビリティ → 読み上げコンテンツ →
+              システムの声 から日本語の声を追加してください。
+            </p>
+          )}
+          {status === 'failed' && (
+            <p className="mt-2 text-xs text-danger">
+              音声を再生できませんでした。もう一度お試しください。
+            </p>
           )}
         </div>
 
