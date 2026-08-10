@@ -220,14 +220,36 @@ describe('DictationSession — silence that reports nothing', () => {
     vi.useRealTimers();
   });
 
-  it('reports a failure when the utterance never starts', async () => {
+  /**
+   * macOS lists Japanese voices that Chrome accepts and cannot load — the Siri
+   * ones are not available to a third-party synthesiser at all. Which names
+   * those are moves with each macOS release, so the chosen voice is dropped
+   * and Chrome is asked to resolve `ja-JP` itself rather than guessed at.
+   */
+  it('retries without a named voice when the chosen one never starts', async () => {
+    vi.useFakeTimers();
+    const { spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
+    setup();
+    expect(spoken).toHaveLength(1);
+    expect(spoken[0]?.voice?.name).toBe('Kyoko');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+
+    expect(spoken).toHaveLength(2);
+    expect(spoken[1]?.voice).toBeNull();
+    // Still nothing claimed: the second attempt has not had its chance yet.
+    expect(screen.queryByText(/音声を再生できませんでした/)).not.toBeInTheDocument();
+  });
+
+  it('reports a failure once the unnamed retry is silent too', async () => {
     vi.useFakeTimers();
     installEngine([voice('ja-JP', 'Kyoko')]);
     setup();
 
-    expect(screen.queryByText(/音声を再生できませんでした/)).not.toBeInTheDocument();
-
     await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
       await vi.advanceTimersByTimeAsync(2_500);
     });
     expect(screen.getByText(/音声を再生できませんでした/)).toBeInTheDocument();

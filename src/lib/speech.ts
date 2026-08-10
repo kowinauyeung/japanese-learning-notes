@@ -89,82 +89,99 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
     (text: string) => {
       const engine = synth();
       if (!engine || !text) return;
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'ja-JP';
-      utterance.rate = 0.85;
-      // Named explicitly rather than left to `lang`. Chrome matches a voice off
-      // the language tag only when its list has loaded, and picks a system
-      // default that may not be Japanese at all when it has not.
-      const voice = pickJapaneseVoice(voices);
-      if (voice) utterance.voice = voice;
-
       setFailed(false);
 
       /**
-       * **Failure 5: it goes quiet and reports nothing at all.**
+       * One attempt, with or without an explicitly named voice.
        *
-       * Chrome has more than one way to swallow an utterance without firing
-       * `error` — a queue wedged by an earlier cancel, an engine left `paused`,
-       * a voice the list offers but the platform cannot load. Enumerating them
-       * is a losing game; noticing that `start` never arrived is not. This is
-       * the backstop that turns every remaining silent failure into something
-       * the learner can see, and it is why `onstart` exists here at all.
+       * **Failure 8: the voice list offers a voice the platform will not
+       * load.** macOS reports a dozen Japanese voices, and the ones belonging
+       * to Siri are not available to a third-party synthesiser at all — Chrome
+       * lists them, accepts them, starts nothing and reports nothing. Which
+       * names those are is a moving target across macOS releases, so rather
+       * than guess at a blocklist, a first attempt that never starts is retried
+       * once with no voice named, letting Chrome resolve `ja-JP` itself.
        */
-      const started = setTimeout(() => {
-        console.error('speechSynthesis never started', { voice: voice?.name, text });
-        setFailed(true);
-      }, START_TIMEOUT_MS);
+      const attempt = (voice: SpeechSynthesisVoice | null) => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ja-JP';
+        utterance.rate = 0.85;
+        if (voice) utterance.voice = voice;
 
-      utterance.onstart = () => clearTimeout(started);
-      utterance.onend = () => {
-        // Releases the reference taken below, once it can no longer matter.
-        if (speaking === utterance) speaking = null;
+        /**
+         * **Failure 5: it goes quiet and reports nothing at all.** Chrome has
+         * more than one way to swallow an utterance without firing `error` — a
+         * wedged queue, a paused engine, the unusable voice above. Enumerating
+         * them is a losing game; noticing that `start` never arrived is not.
+         */
+        const started = setTimeout(() => {
+          if (voice) {
+            console.warn(`speechSynthesis: "${voice.name}" never started, retrying unnamed`);
+            attempt(null);
+            return;
+          }
+          console.error('speechSynthesis never started', {
+            text,
+            japaneseVoices: japaneseVoices(voices).map((item) => ({
+              name: item.name,
+              lang: item.lang,
+              localService: item.localService,
+            })),
+          });
+          setFailed(true);
+        }, START_TIMEOUT_MS);
+
+        utterance.onstart = () => clearTimeout(started);
+        utterance.onend = () => {
+          // Releases the reference taken below, once it can no longer matter.
+          if (speaking === utterance) speaking = null;
+        };
+        utterance.onerror = (event) => {
+          clearTimeout(started);
+          // 'interrupted' and 'canceled' are this component doing its job —
+          // moving to the next card while the previous word is still playing.
+          if (event.error === 'interrupted' || event.error === 'canceled') return;
+          console.error('speechSynthesis failed', event.error);
+          setFailed(true);
+        };
+
+        /**
+         * **Failure 6: a stuck `paused` engine.** Chrome leaves the synthesiser
+         * paused after some cancels and after a spell in a background tab, and
+         * a paused engine accepts `speak()`, queues it, plays nothing and
+         * reports nothing. `resume()` on an engine that is not paused does
+         * nothing, so this is unconditional rather than guarded on a flag that
+         * is itself the thing being got wrong.
+         */
+        engine.resume();
+
+        /**
+         * **Failure 3: `cancel()` then `speak()` in the same task.** Chrome
+         * drops the new utterance when both land in one turn of the event loop
+         * — the queue is torn down after the call that filled it. Cancelling
+         * only when something is actually playing, and letting the teardown
+         * finish first, is what makes pressing the button twice work.
+         */
+        if (engine.speaking || engine.pending) {
+          engine.cancel();
+          setTimeout(() => engine.speak(utterance), 0);
+        } else {
+          engine.speak(utterance);
+        }
+
+        /**
+         * **Failure 7: the utterance is collected before it is spoken.** Chrome
+         * holds only a weak reference, so one that goes out of scope while
+         * queued can be garbage-collected mid-sentence — silently, and only
+         * under memory pressure, which is why it reproduces on one machine and
+         * not another. Parking it here keeps it alive until the next call.
+         *
+         * Deliberately untested: no test can make a garbage collector run.
+         */
+        speaking = utterance;
       };
-      utterance.onerror = (event) => {
-        clearTimeout(started);
-        // 'interrupted' and 'canceled' are this component doing its job —
-        // moving to the next card while the previous word is still playing.
-        if (event.error === 'interrupted' || event.error === 'canceled') return;
-        console.error('speechSynthesis failed', event.error);
-        setFailed(true);
-      };
 
-      /**
-       * **Failure 6: a stuck `paused` engine.** Chrome leaves the synthesiser
-       * paused after some cancels and after a spell in a background tab, and a
-       * paused engine accepts `speak()`, queues it, plays nothing and reports
-       * nothing. `resume()` on an engine that is not paused does nothing, so
-       * this is unconditional rather than guarded on a flag that is itself the
-       * thing being got wrong.
-       */
-      engine.resume();
-
-      /**
-       * **Failure 3: `cancel()` then `speak()` in the same task.** Chrome drops
-       * the new utterance when both land in one turn of the event loop — the
-       * queue is torn down after the call that filled it. Cancelling only when
-       * something is actually playing, and letting the teardown finish first,
-       * is what makes pressing the button twice work.
-       */
-      if (engine.speaking || engine.pending) {
-        engine.cancel();
-        setTimeout(() => engine.speak(utterance), 0);
-      } else {
-        engine.speak(utterance);
-      }
-
-      /**
-       * **Failure 7: the utterance is collected before it is spoken.** Chrome
-       * holds only a weak reference to it, so an utterance that goes out of
-       * scope while queued can be garbage-collected mid-sentence — silently,
-       * and only under memory pressure, which is why it reproduces on one
-       * machine and not another. Parking the current one in a module-level
-       * slot keeps it alive until the next call replaces it.
-       *
-       * Deliberately untested: no test can make a garbage collector run.
-       */
-      speaking = utterance;
+      attempt(pickJapaneseVoice(voices));
     },
     [voices],
   );
