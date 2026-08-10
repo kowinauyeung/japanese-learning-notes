@@ -19,6 +19,7 @@ import {
 } from '@/lib/practice';
 import type { Answer, PracticeFilters } from '@/lib/practice';
 import { useProgress } from '@/lib/progress';
+import { membersOf } from '@/lib/wordSetMembers';
 import { useWordSets } from '@/lib/wordSets';
 
 /**
@@ -98,6 +99,17 @@ function Practice({ mode }: { mode: PracticeMode }) {
     [entries, weakIds],
   );
 
+  /** Counted the same way and for the same reason — see `membersOf`. */
+  const setChips = useMemo(
+    () =>
+      sets.map((set) => ({
+        id: set.id,
+        name: set.name,
+        count: membersOf(set, entries).length,
+      })),
+    [sets, entries],
+  );
+
   const matches = useMemo(() => {
     const scope = scopeFor(filters, sets, weakIds);
     return entries.filter((entry) => matchesPractice(entry, filters, scope));
@@ -156,7 +168,7 @@ function Practice({ mode }: { mode: PracticeMode }) {
         mode={mode}
         filters={filters}
         allTags={allTags}
-        allSets={sets}
+        allSets={setChips}
         now={now}
         matchCount={matches.length}
         weakCount={weakCount}

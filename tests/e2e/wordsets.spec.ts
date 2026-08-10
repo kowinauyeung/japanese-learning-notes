@@ -91,7 +91,8 @@ test.describe('word sets', () => {
    * itself stays in `entryIds`: nothing walks the sets on a delete, and
    * `membersOf` resolves the list against the notebook, so a set that outlives
    * a member simply stops listing it. This case is what says the resolution is
-   * applied everywhere a set is counted, rather than only where it is listed.
+   * applied *everywhere* a set is counted; the practice chip was reading
+   * `entryIds.length` and promising cards its own queue could not deal.
    */
   test('a deleted word leaves every set that held it, and every count of them', async ({
     page,
@@ -108,6 +109,10 @@ test.describe('word sets', () => {
 
     await page.getByRole('link', { name: /ニュースセット/ }).click();
     await expect(page.locator('a[href="/vocabulary/w-choukou"]')).toBeHidden();
+
+    await page.goto('/practice/flashcards');
+    await expect(page.getByRole('button', { name: /ニュースセット/ })).toContainText('0');
+    await expect(page.getByRole('button', { name: /仕事セット/ })).toContainText('1');
   });
 
   test('deleting a set keeps every word it held', async ({ page }) => {

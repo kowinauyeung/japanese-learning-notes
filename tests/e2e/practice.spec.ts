@@ -213,8 +213,8 @@ test.describe('the practice setup screen', () => {
 
   /**
    * The 単語集 row is absent whenever there are none, which is the design's
-   * rule and — until `/wordsets` exists — the state of the running app. The
-   * pair of cases is what stops the row being quietly dropped altogether.
+   * rule for a notebook that has not organised anything yet. The pair of cases
+   * is what stops the row being quietly dropped altogether.
    */
   test('hides the 単語集 row when the learner has no sets', async ({ page }) => {
     await seedSignedIn(page);
