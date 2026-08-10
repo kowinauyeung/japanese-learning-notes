@@ -90,6 +90,31 @@ test.describe('flashcards', () => {
     await expect(page.getByRole('button', { name: '開始する' })).toBeVisible();
   });
 
+  /**
+   * もう一度 means "those words again", not "run the filters again". The
+   * session has already been recorded by the time the summary renders, so a
+   * perfect 苦手のみ run has cleared every word it drilled — re-filtering
+   * restarts into an empty queue and a 0 / 0 summary, at the moment the learner
+   * did best.
+   */
+  test('restarts a perfect 苦手のみ session with the same words, not an empty queue', async ({
+    page,
+  }) => {
+    await seed(page, { signedIn: true, entries: WORDS, weak: ['w-choukou'] });
+    await page.goto('/practice/flashcards');
+    await page.getByRole('checkbox').check();
+    await page.getByRole('button', { name: '開始する' }).click();
+
+    await page.getByRole('button', { name: '裏を見る' }).click();
+    await page.getByRole('button', { name: /わかった/ }).click();
+    await expect(page.getByText('1 / 1')).toBeVisible();
+
+    await page.getByRole('button', { name: 'もう一度' }).click();
+
+    await expect(page.getByLabel('進捗')).toHaveText('1 / 1');
+    await expect(page.getByRole('button', { name: /裏を見る/ })).toBeVisible();
+  });
+
   test('records the session, and the failed word comes back as 苦手', async ({ page }) => {
     await page.goto('/practice/flashcards');
     await page.getByRole('button', { name: '#仕事' }).click();
@@ -171,6 +196,19 @@ test.describe('the practice setup screen', () => {
     await page.getByLabel('品詞').selectOption('');
     await page.getByLabel('語種').selectOption('漢語');
     await expect(page.getByText('1 件が対象')).toBeVisible();
+  });
+
+  /**
+   * `weakIdsOf` counts progress rows and the drill counts entries. A word
+   * answered wrong and then deleted keeps its row — nothing prunes the map —
+   * so a count taken from the rows alone advertises words that cannot be
+   * drilled, and ticking the toggle yields nothing.
+   */
+  test('counts only the weak words that still exist', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, weak: ['w-choukou', 'deleted-long-ago'] });
+    await page.goto('/practice/flashcards');
+
+    await expect(page.getByText('苦手な語のみ')).toContainText('1 語');
   });
 
   /**

@@ -32,20 +32,6 @@ export function japaneseVoices(available: readonly SpeechSynthesisVoice[]): Spee
 }
 
 /**
- * Prefers a voice that runs on the device.
- *
- * A network voice is silent whenever the connection is, and this is a drill
- * somebody may be doing on a train. macOS's Kyoko is local and better than the
- * remote alternatives for single words anyway.
- */
-export function pickJapaneseVoice(
-  available: readonly SpeechSynthesisVoice[],
-): SpeechSynthesisVoice | null {
-  const candidates = japaneseVoices(available);
-  return candidates.find((voice) => voice.localService) ?? candidates[0] ?? null;
-}
-
-/**
  * Everything worth trying, best first, ending in "let the browser decide".
  *
  * **`localService` does not mean playable.** macOS lists every system voice it
@@ -67,13 +53,15 @@ export function speechCandidates(
   available: readonly SpeechSynthesisVoice[],
 ): (SpeechSynthesisVoice | null)[] {
   const candidates = japaneseVoices(available);
+  // Absent entries are dropped, never coerced to null: `?? null` deduped
+  // against the trailing fallback, which promoted it to *first* on a machine
+  // with no local Japanese voice — the exact machine the network voice is here
+  // for, demoted behind the browser's own guess.
   return [
-    ...new Set([
-      candidates.find((voice) => voice.localService) ?? null,
-      candidates.find((voice) => !voice.localService) ?? null,
-      null,
-    ]),
-  ];
+    candidates.find((voice) => voice.localService),
+    candidates.find((voice) => !voice.localService),
+    null,
+  ].filter((voice) => voice !== undefined);
 }
 
 export type SpeechStatus = 'unsupported' | 'loading' | 'no-japanese-voice' | 'ready' | 'failed';
@@ -104,6 +92,9 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
   const [voices, setVoices] = useState<readonly SpeechSynthesisVoice[]>([]);
   const [failed, setFailed] = useState(false);
 
+  /** The backstop for the utterance in flight, so unmounting can drop it. */
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     const engine = synth();
     if (!engine) return;
@@ -128,6 +119,18 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
     engine.addEventListener('voiceschanged', read);
     return () => {
       engine.removeEventListener('voiceschanged', read);
+      /**
+       * Leaving mid-utterance is the *other* half of failure 10. The mount-time
+       * cancel above cleans up after a page unlucky enough to inherit a live
+       * queue; this one stops handing the next page one. Quitting a session
+       * while the word is still playing — 中断, Escape, or navigating off the
+       * summary — is exactly that case.
+       *
+       * The backstop goes with it: after an unmount it can still fire, advance
+       * the candidate and warn about a voice nobody is waiting for.
+       */
+      if (pending.current !== null) clearTimeout(pending.current);
+      engine.cancel();
     };
   }, []);
 
@@ -165,6 +168,7 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
        * candidate, so the learner's next press tries a different voice.
        */
       const started = setTimeout(() => {
+        pending.current = null;
         const next = candidate.current + 1;
         if (next < candidates.length) {
           candidate.current = next;
@@ -185,14 +189,20 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
         }
         setFailed(true);
       }, START_TIMEOUT_MS);
+      pending.current = started;
 
-      utterance.onstart = () => clearTimeout(started);
+      const settle = () => {
+        clearTimeout(started);
+        if (pending.current === started) pending.current = null;
+      };
+
+      utterance.onstart = settle;
       utterance.onend = () => {
         // Releases the reference taken below, once it can no longer matter.
         if (speaking === utterance) speaking = null;
       };
       utterance.onerror = (event) => {
-        clearTimeout(started);
+        settle();
         // 'interrupted' and 'canceled' are this component doing its job —
         // moving to the next card while the previous word is still playing.
         if (event.error === 'interrupted' || event.error === 'canceled') return;

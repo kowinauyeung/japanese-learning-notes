@@ -3,6 +3,38 @@ import { Ruby } from '@/components/Ruby';
 import type { Entry } from '@/domain/entry';
 import { SessionHeader } from './SessionHeader';
 
+const isEditable = (node: unknown): boolean => {
+  if (!(node instanceof HTMLElement)) return false;
+  return (
+    node.isContentEditable ||
+    node instanceof HTMLInputElement ||
+    node instanceof HTMLTextAreaElement ||
+    node instanceof HTMLSelectElement
+  );
+};
+
+/**
+ * Whether the session still owns the keyboard.
+ *
+ * It does not while anything is layered over it, and the session cannot be
+ * told about all of them: `AppLayout` renders ＋追加 and the mobile ＋ button
+ * on **every** route, `/practice/:mode` included, so the add-word sheet can be
+ * open over a running card without this component ever hearing about it. A
+ * document-level listener then sees every keystroke typed into that form —
+ * `→` scores a card the learner never saw, `Space` is swallowed by
+ * `preventDefault` so it cannot be typed, and `Escape` closes the sheet *and*
+ * asks to quit the drill. The first of those writes wrong data into 苦手な語.
+ *
+ * Two questions rather than a register of overlays, because a register is what
+ * lets the next overlay forget: is focus somewhere text goes, and is a modal
+ * dialog on screen. `Modal` marks itself `role="dialog"`, which is a semantic
+ * contract rather than an implementation detail.
+ */
+const ownsKeyboard = (target: unknown): boolean =>
+  !isEditable(target) &&
+  !isEditable(document.activeElement) &&
+  document.querySelector('[role="dialog"]') === null;
+
 /** The hint printed on a button. Not shown for 中断, which has no shortcut. */
 function Key({ children }: { children: string }) {
   return (
@@ -55,12 +87,19 @@ export function FlashcardSession({
    * The arrows are ignored before the flip, exactly as the buttons are absent
    * before it. A shortcut that could answer a card whose meaning is still
    * hidden would quietly reintroduce the thing the flip gate exists to stop.
+   *
+   * Space, by contrast, turns the card *both* ways — the hint sits on 裏を見る
+   * because that is the press that matters, but pressing it again hides the
+   * meaning rather than doing nothing. That asymmetry with the arrows is
+   * deliberate: re-hiding is harmless and occasionally wanted, whereas
+   * answering early is not recoverable.
    */
   useEffect(() => {
     if (!keyboard) return;
     const onKeyDown = (event: KeyboardEvent) => {
       // A held key repeats, and a repeated answer would tear through the queue.
       if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (!ownsKeyboard(event.target)) return;
 
       if (event.key === 'Escape') {
         onQuit();

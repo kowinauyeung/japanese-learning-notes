@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 import type { WordSet } from '@/domain/wordSet';
 import { wordSetRepositoryFor } from '@/lib/backend';
@@ -13,10 +21,10 @@ interface WordSetsValue {
 const WordSetsContext = createContext<WordSetsValue | null>(null);
 
 /**
- * A page size that is really a ceiling: a learner with more than 200 named
- * 単語集 has a different problem, and every screen that wants sets wants all
- * of them — the practice filter, the detail page's "which sets is this in",
- * and `/wordsets` itself.
+ * A page size, and only that: the loop below walks every page there is. Every
+ * screen that wants sets wants all of them — the practice filter, the detail
+ * page's "which sets is this in", and `/wordsets` itself — so there is nothing
+ * to cap it at. 200 is a round number of round trips, not a limit.
  */
 const PAGE_SIZE = 200;
 
@@ -36,7 +44,20 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
 
   const repository = useMemo(() => wordSetRepositoryFor(uid), [uid]);
 
+  /**
+   * Which walk is allowed to publish its result.
+   *
+   * The loop below awaits a page at a time, so a `uid` change part-way through
+   * leaves an in-flight walk that would otherwise finish by calling `setSets`
+   * with the previous account's 単語集. `ProgressProvider` uses a `cancelled`
+   * flag scoped to its effect; that does not fit here because `refresh` is
+   * also called by hand, and a counter covers both — a superseded walk simply
+   * stops being the current one.
+   */
+  const walk = useRef(0);
+
   const refresh = useCallback(async () => {
+    const mine = (walk.current += 1);
     setLoading(true);
     setError(null);
     try {
@@ -47,12 +68,12 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
         all.push(...page.items);
         cursor = page.cursor;
       } while (cursor);
-      setSets(all);
+      if (walk.current === mine) setSets(all);
     } catch (cause) {
       console.error(cause);
-      setError('単語集を読み込めませんでした。');
+      if (walk.current === mine) setError('単語集を読み込めませんでした。');
     } finally {
-      setLoading(false);
+      if (walk.current === mine) setLoading(false);
     }
   }, [repository]);
 

@@ -87,6 +87,17 @@ function Practice({ mode }: { mode: PracticeMode }) {
     [entries],
   );
 
+  /**
+   * Counted over the entries in hand, not over progress rows. A word answered
+   * wrong and then deleted keeps its row — nothing prunes the map — so
+   * `weakIds.size` would advertise 「1 語」 for a word that cannot be drilled,
+   * and ticking the toggle would produce 「0 件が対象」.
+   */
+  const weakCount = useMemo(
+    () => entries.filter((entry) => weakIds.has(entry.id)).length,
+    [entries, weakIds],
+  );
+
   const matches = useMemo(() => {
     const scope = scopeFor(filters, sets, weakIds);
     return entries.filter((entry) => matchesPractice(entry, filters, scope));
@@ -148,7 +159,7 @@ function Practice({ mode }: { mode: PracticeMode }) {
         allSets={sets}
         now={now}
         matchCount={matches.length}
-        weakCount={weakIds.size}
+        weakCount={weakCount}
         weakState={progressError ? 'error' : progressLoading ? 'loading' : 'ready'}
         onChange={setFilters}
         onStart={() => start(shuffle(matches, Math.random), describeFilters(filters, sets))}
@@ -203,7 +214,14 @@ function Practice({ mode }: { mode: PracticeMode }) {
       missed={missed}
       saving={saving}
       saveError={saveError}
-      onRestart={() => start(shuffle(matches, Math.random), describeFilters(filters, sets))}
+      /**
+       * The same words again, reshuffled — not the filters re-applied. The
+       * session that just finished has already been recorded, so a perfect
+       * 苦手のみ run has cleared every word it drilled: re-filtering would
+       * restart into an empty queue and a 0 / 0 summary, at the moment the
+       * learner did best.
+       */
+      onRestart={() => start(shuffle(session.queue, Math.random), session.filterLabel)}
       onRetryMissed={() => start(shuffle(missed, Math.random), `${session.filterLabel} / 復習`)}
     />
   );

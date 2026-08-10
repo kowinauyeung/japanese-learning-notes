@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { japaneseVoices, pickJapaneseVoice, speechCandidates } from '@/lib/speech';
+import { japaneseVoices, speechCandidates } from '@/lib/speech';
 
 /**
  * Choosing a voice, which is the step that decides whether the dictation drill
@@ -40,25 +40,6 @@ describe('japaneseVoices', () => {
   });
 });
 
-describe('pickJapaneseVoice', () => {
-  /**
-   * A network voice is silent whenever the connection is, and this is a drill
-   * somebody may be doing on a train.
-   */
-  it('prefers a voice that runs on the device over a network one', () => {
-    const list = [voice('ja-JP', 'Google 日本語', false), voice('ja-JP', 'Kyoko', true)];
-    expect(pickJapaneseVoice(list)?.name).toBe('Kyoko');
-  });
-
-  it('takes a network voice rather than none at all', () => {
-    expect(pickJapaneseVoice([voice('ja-JP', 'Google 日本語', false)])?.name).toBe('Google 日本語');
-  });
-
-  it('returns null when nothing can read Japanese', () => {
-    expect(pickJapaneseVoice(NO_JAPANESE)).toBeNull();
-  });
-});
-
 /**
  * The order attempts are made in, which is what decides whether the drill makes
  * a sound on a Mac that lists nine Japanese voices and can play none of them.
@@ -88,5 +69,19 @@ describe('speechCandidates', () => {
 
   it('still offers the default attempt when nothing Japanese is listed', () => {
     expect(speechCandidates([voice('en-US', 'Samantha')])).toEqual([null]);
+  });
+
+  /**
+   * The case that got through: with no local voice, `?? null` produced a null
+   * in the first slot that deduped against the trailing fallback, so the
+   * browser's own guess was tried *before* the explicitly Japanese voice — on
+   * exactly the machine the network voice exists for.
+   */
+  it('keeps the network voice ahead of the default when there is no local one', () => {
+    const list = [voice('en-US', 'Samantha'), GOOGLE];
+    expect(speechCandidates(list).map((item) => item?.name ?? null)).toEqual([
+      'Google 日本語',
+      null,
+    ]);
   });
 });

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { Modal } from '@/components/Modal';
 import { FlashcardSession } from '@/components/practice/FlashcardSession';
 import { makeEntry } from '../fixtures/entry';
 
@@ -120,5 +121,80 @@ describe('FlashcardSession — shortcut hints', () => {
   it('leaves 中断 without one', () => {
     setup();
     expect(screen.getByRole('button', { name: '中断' })).toHaveTextContent('中断');
+  });
+});
+
+/**
+ * The card under an overlay it was never told about.
+ *
+ * `AppLayout` renders ＋追加 and the mobile ＋ button on every route,
+ * `/practice/:mode` included, so the add-word sheet can be open over a running
+ * card while `FlashcardSession` still has `keyboard` true — it only knows
+ * about the quit dialog its own parent renders. A document-level listener then
+ * reads every keystroke meant for the form.
+ *
+ * Composed from the real `Modal` rather than a stand-in, because the claim is
+ * about how the two behave together: `Modal` binds its own Escape on
+ * `document` and stops nothing else.
+ */
+function renderWithModal() {
+  const onAnswer = vi.fn();
+  const onQuit = vi.fn();
+  const onClose = vi.fn();
+  render(
+    <>
+      <FlashcardSession entry={entry} index={0} total={3} onAnswer={onAnswer} onQuit={onQuit} />
+      <Modal open title="単語を追加" onClose={onClose}>
+        <label>
+          見出し語
+          <input />
+        </label>
+      </Modal>
+    </>,
+  );
+  return { onAnswer, onQuit, onClose, field: screen.getByLabelText('見出し語') };
+}
+
+describe('FlashcardSession — under the add-word sheet', () => {
+  /**
+   * The worst of the three: the card is scored without ever being seen, the
+   * queue advances behind the sheet, and the answer is written into 苦手な語.
+   */
+  it('does not answer the card when an arrow key is typed into a form field', () => {
+    const { onAnswer } = renderWithModal();
+    press(' ');
+
+    fireEvent.keyDown(screen.getByLabelText('見出し語'), { key: 'ArrowRight', bubbles: true });
+
+    expect(onAnswer).not.toHaveBeenCalled();
+  });
+
+  /** `preventDefault` on the session's behalf means the space is never typed. */
+  it('lets a space reach the form field instead of swallowing it', () => {
+    const { field } = renderWithModal();
+
+    const event = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    field.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  /** Escape closes the sheet; it must not also open the quit dialog behind it. */
+  it('does not ask to quit when Escape dismisses the sheet', () => {
+    const { onQuit, onClose } = renderWithModal();
+
+    press('Escape');
+
+    expect(onClose).toHaveBeenCalled();
+    expect(onQuit).not.toHaveBeenCalled();
+  });
+
+  /** Focus outside the field is still inside a modal, and still not the card's. */
+  it('ignores the keyboard while a dialog is open even with focus outside its fields', () => {
+    const { onAnswer } = renderWithModal();
+    press(' ');
+    press('ArrowRight');
+
+    expect(onAnswer).not.toHaveBeenCalled();
   });
 });
