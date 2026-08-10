@@ -226,30 +226,42 @@ describe('DictationSession — silence that reports nothing', () => {
    * those are moves with each macOS release, so the chosen voice is dropped
    * and Chrome is asked to resolve `ja-JP` itself rather than guessed at.
    */
-  it('retries without a named voice when the chosen one never starts', async () => {
+  it('falls through to the network voice when the local one never starts', async () => {
     vi.useFakeTimers();
-    const { spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
+    const { spoken } = installEngine([
+      voice('ja-JP', 'Kyoko'),
+      voice('ja-JP', 'Google 日本語', false),
+    ]);
     setup();
-    expect(spoken).toHaveLength(1);
     expect(spoken[0]?.voice?.name).toBe('Kyoko');
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_500);
     });
 
-    expect(spoken).toHaveLength(2);
-    expect(spoken[1]?.voice).toBeNull();
-    // Still nothing claimed: the second attempt has not had its chance yet.
+    // The one candidate that cannot be a voice macOS never downloaded.
+    expect(spoken[1]?.voice?.name).toBe('Google 日本語');
+    // Nothing claimed yet: it has not had its own chance to start.
     expect(screen.queryByText(/音声を再生できませんでした/)).not.toBeInTheDocument();
   });
 
-  it('reports a failure once the unnamed retry is silent too', async () => {
+  it('reports a failure only once every candidate has been silent', async () => {
     vi.useFakeTimers();
-    installEngine([voice('ja-JP', 'Kyoko')]);
+    const { spoken } = installEngine([
+      voice('ja-JP', 'Kyoko'),
+      voice('ja-JP', 'Google 日本語', false),
+    ]);
     setup();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_500);
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+    expect(spoken).toHaveLength(3);
+    expect(spoken[2]?.voice).toBeNull();
+    expect(screen.queryByText(/音声を再生できませんでした/)).not.toBeInTheDocument();
+
+    await act(async () => {
       await vi.advanceTimersByTimeAsync(2_500);
     });
     expect(screen.getByText(/音声を再生できませんでした/)).toBeInTheDocument();

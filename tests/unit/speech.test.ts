@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { japaneseVoices, pickJapaneseVoice } from '@/lib/speech';
+import { japaneseVoices, pickJapaneseVoice, speechCandidates } from '@/lib/speech';
 
 /**
  * Choosing a voice, which is the step that decides whether the dictation drill
@@ -56,5 +56,37 @@ describe('pickJapaneseVoice', () => {
 
   it('returns null when nothing can read Japanese', () => {
     expect(pickJapaneseVoice(NO_JAPANESE)).toBeNull();
+  });
+});
+
+/**
+ * The order attempts are made in, which is what decides whether the drill makes
+ * a sound on a Mac that lists nine Japanese voices and can play none of them.
+ */
+describe('speechCandidates', () => {
+  const KYOKO = voice('ja-JP', 'Kyoko', true);
+  const GOOGLE = voice('ja-JP', 'Google 日本語', false);
+
+  /**
+   * The reported machine, exactly: nine local system voices and one network
+   * voice. `localService` says where a voice *would* come from, not whether
+   * macOS has ever downloaded it — so the network voice has to be reachable as
+   * a fallback, not filtered out as second-rate.
+   */
+  it('tries the local voice, then the network one, then the browser default', () => {
+    const list = [KYOKO, voice('ja-JP', 'Grandma (Japanese (Japan))'), GOOGLE];
+    expect(speechCandidates(list).map((item) => item?.name ?? null)).toEqual([
+      'Kyoko',
+      'Google 日本語',
+      null,
+    ]);
+  });
+
+  it('does not repeat the browser default when there is no network voice', () => {
+    expect(speechCandidates([KYOKO]).map((item) => item?.name ?? null)).toEqual(['Kyoko', null]);
+  });
+
+  it('still offers the default attempt when nothing Japanese is listed', () => {
+    expect(speechCandidates([voice('en-US', 'Samantha')])).toEqual([null]);
   });
 });

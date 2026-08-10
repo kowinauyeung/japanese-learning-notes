@@ -45,6 +45,37 @@ export function pickJapaneseVoice(
   return candidates.find((voice) => voice.localService) ?? candidates[0] ?? null;
 }
 
+/**
+ * Everything worth trying, best first, ending in "let the browser decide".
+ *
+ * **`localService` does not mean playable.** macOS lists every system voice it
+ * *could* use, downloaded or not — a Mac whose system language has never been
+ * Japanese reports Kyoko and eight others as local, and none of them has any
+ * audio data behind it. Chrome accepts such a voice, starts nothing and
+ * reports nothing.
+ *
+ * That is why the network voice is in this list rather than being treated as a
+ * poor relation: `Google 日本語` is served by the browser and depends on no
+ * system download at all, so it is the one candidate that cannot be missing.
+ * It is second rather than first because it needs a connection and a local
+ * voice does not.
+ *
+ * The trailing `null` asks Chrome to resolve `ja-JP` itself, which occasionally
+ * finds something the list does not describe.
+ */
+export function speechCandidates(
+  available: readonly SpeechSynthesisVoice[],
+): (SpeechSynthesisVoice | null)[] {
+  const candidates = japaneseVoices(available);
+  return [
+    ...new Set([
+      candidates.find((voice) => voice.localService) ?? null,
+      candidates.find((voice) => !voice.localService) ?? null,
+      null,
+    ]),
+  ];
+}
+
 export type SpeechStatus = 'unsupported' | 'loading' | 'no-japanese-voice' | 'ready' | 'failed';
 
 /**
@@ -94,15 +125,17 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
       /**
        * One attempt, with or without an explicitly named voice.
        *
-       * **Failure 8: the voice list offers a voice the platform will not
-       * load.** macOS reports a dozen Japanese voices, and the ones belonging
-       * to Siri are not available to a third-party synthesiser at all — Chrome
-       * lists them, accepts them, starts nothing and reports nothing. Which
-       * names those are is a moving target across macOS releases, so rather
-       * than guess at a blocklist, a first attempt that never starts is retried
-       * once with no voice named, letting Chrome resolve `ja-JP` itself.
+       * **Failure 8: a listed voice with nothing behind it.** macOS reports
+       * every system voice it could use, downloaded or not, so `localService`
+       * says where a voice would come from and not whether it can be heard.
+       * An attempt that never starts therefore falls through to the next
+       * candidate rather than being reported — see `speechCandidates` for the
+       * order and why the network voice is in it.
        */
-      const attempt = (voice: SpeechSynthesisVoice | null) => {
+      const candidates = speechCandidates(voices);
+
+      const attempt = (index: number) => {
+        const voice = candidates[index] ?? null;
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'ja-JP';
         utterance.rate = 0.85;
@@ -115,12 +148,14 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
          * them is a losing game; noticing that `start` never arrived is not.
          */
         const started = setTimeout(() => {
-          if (voice) {
-            console.warn(`speechSynthesis: "${voice.name}" never started, retrying unnamed`);
-            attempt(null);
+          if (index + 1 < candidates.length) {
+            console.warn(
+              `speechSynthesis: ${voice?.name ?? 'the default voice'} never started, trying the next candidate`,
+            );
+            attempt(index + 1);
             return;
           }
-          console.error('speechSynthesis never started', {
+          console.error('speechSynthesis never started with any voice', {
             text,
             japaneseVoices: japaneseVoices(voices).map((item) => ({
               name: item.name,
@@ -181,7 +216,7 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
         speaking = utterance;
       };
 
-      attempt(pickJapaneseVoice(voices));
+      attempt(0);
     },
     [voices],
   );
