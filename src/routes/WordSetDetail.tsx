@@ -1,13 +1,27 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Ruby } from '@/components/Ruby';
+import { MemberList } from '@/components/wordsets/MemberList';
 import { MemberPicker } from '@/components/wordsets/MemberPicker';
 import { WordSetEditModal } from '@/components/wordsets/WordSetEditModal';
 import type { WordSetDraft } from '@/domain/wordSet';
 import { useEntries } from '@/lib/entries';
-import { membersOf, toDraft, withMember, withoutMember } from '@/lib/wordSetMembers';
+import { EMPTY_FILTERS } from '@/lib/filters';
+import type { Filters } from '@/lib/filters';
+import { useListDrag } from '@/lib/listDrag';
+import type { DragSource, DropAt } from '@/lib/listDrag';
+import {
+  insertMemberAt,
+  membersOf,
+  reorderMembers,
+  toDraft,
+  withoutMember,
+} from '@/lib/wordSetMembers';
 import { useWordSets } from '@/lib/wordSets';
+
+/** The two drag lists on this page, named once so a typo cannot silently miss. */
+const MEMBERS = 'members';
+const CANDIDATES = 'candidates';
 
 /**
  * One 単語集: what is in it, and everything that changes it.
@@ -29,6 +43,17 @@ export function Component() {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+
+  /**
+   * The order a drop just produced, shown before the write comes back.
+   *
+   * Without it a reorder snaps to the stored order for as long as the round
+   * trip takes and then jumps to the new one, which reads as the drop having
+   * failed and been retried. Tagged with the set it belongs to, so a navigation
+   * mid-write cannot paint one set's order onto another's.
+   */
+  const [pending, setPending] = useState<{ setId: string; entryIds: string[] } | null>(null);
 
   const set = sets.find((item) => item.id === id);
 
@@ -46,6 +71,10 @@ export function Component() {
       return false;
     } finally {
       setBusy(false);
+      // Cleared whether or not it worked: the refresh above has already put the
+      // stored order back in hand, and on a failure that stored order is the
+      // honest thing to show.
+      setPending(null);
     }
   };
 
@@ -70,6 +99,43 @@ export function Component() {
     }
   };
 
+  const allTags = useMemo(
+    () =>
+      [...new Set(entries.flatMap((entry) => entry.tags))].sort((a, b) => a.localeCompare(b, 'ja')),
+    [entries],
+  );
+
+  /** The order on screen: what a drop just produced, or what is stored. */
+  const entryIds =
+    pending && set && pending.setId === set.id ? pending.entryIds : (set?.entryIds ?? []);
+
+  /**
+   * Send an order, unless it is the one already showing.
+   *
+   * The no-change guard is what stops a drop back onto the row it came from
+   * from costing a write, which is most of the drops a hesitant hand makes.
+   */
+  const applyOrder = (next: readonly string[]) => {
+    if (!set || busy) return;
+    if (next.length === entryIds.length && next.every((value, at) => value === entryIds[at]))
+      return;
+    setPending({ setId: set.id, entryIds: [...next] });
+    void write({ ...toDraft(set), entryIds: [...next] });
+  };
+
+  const drag = useListDrag((source: DragSource, at: DropAt) => {
+    // Dropping back into the notebook does nothing. Removing by dragging a word
+    // out would be the symmetric gesture, and is deliberately absent: a slip
+    // would then take a word out of the set silently, where 削除 is a button
+    // that says what it does.
+    if (at.list !== MEMBERS) return;
+    applyOrder(
+      source.list === MEMBERS
+        ? reorderMembers(entryIds, source.index, at.index)
+        : insertMemberAt(entryIds, source.id, at.index),
+    );
+  });
+
   if (loading || entriesLoading)
     return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
   if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
@@ -85,7 +151,7 @@ export function Component() {
     );
   }
 
-  const members = membersOf(set, entries);
+  const members = membersOf({ ...set, entryIds }, entries);
 
   return (
     <div className="space-y-4">
@@ -118,47 +184,34 @@ export function Component() {
 
       {writeError && <p className="text-sm text-danger">{writeError}</p>}
 
-      <MemberPicker
-        set={set}
-        entries={entries}
+      {/* 収録語 above 単語を探す: the set is what this page is about, and the
+          notebook below it is the source you pull from. It also puts the drop
+          target above its drag sources, so a drag is upward and does not fight
+          the page scrolling down. */}
+      <MemberList
+        members={members}
+        list={MEMBERS}
+        drag={drag}
         busy={busy}
-        onAdd={(entryId) =>
-          void write({ ...toDraft(set), entryIds: withMember(set.entryIds, entryId) })
+        onRemove={(entryId) =>
+          void write({ ...toDraft(set), entryIds: withoutMember(entryIds, entryId) })
+        }
+        onMoveBy={(index, delta) =>
+          applyOrder(reorderMembers(entryIds, index, delta < 0 ? index - 1 : index + 2))
         }
       />
 
-      <section className="space-y-2 rounded-card bg-card p-5 shadow-panel">
-        <h2 className="text-sm font-semibold">収録語</h2>
-        {members.length ? (
-          <ul className="divide-y divide-line">
-            {members.map((entry) => (
-              <li key={entry.id} className="flex items-center justify-between gap-3 py-2">
-                <Link to={`/vocabulary/${entry.id}`} className="min-w-0 truncate">
-                  <Ruby
-                    headword={entry.headword}
-                    reading={entry.reading}
-                    className="has-ruby font-display text-base font-bold"
-                  />
-                </Link>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void write({ ...toDraft(set), entryIds: withoutMember(set.entryIds, entry.id) })
-                  }
-                  disabled={busy}
-                  className="min-h-9 shrink-0 rounded-pill bg-danger-soft px-4 text-xs font-semibold text-danger disabled:opacity-60"
-                >
-                  削除
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="py-4 text-sm text-muted">
-            まだ単語がありません。上の検索から追加してください。
-          </p>
-        )}
-      </section>
+      <MemberPicker
+        set={set}
+        entries={entries}
+        allTags={allTags}
+        filters={filters}
+        list={CANDIDATES}
+        drag={drag}
+        busy={busy}
+        onFiltersChange={setFilters}
+        onAdd={(entryId) => applyOrder(insertMemberAt(entryIds, entryId, entryIds.length))}
+      />
 
       <button
         type="button"
@@ -194,6 +247,19 @@ export function Component() {
         }}
         onConfirm={() => void confirmDelete()}
       />
+
+      {/* What follows the finger. `pointer-events-none` is not styling: the
+          drop target is found with elementFromPoint, and a ghost under the
+          cursor would be the only thing it ever finds. */}
+      {drag.dragging && drag.point && (
+        <div
+          aria-hidden
+          style={{ left: drag.point.x, top: drag.point.y }}
+          className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 rounded-pill bg-accent px-3 py-1 font-display text-xs font-bold text-on-accent shadow-panel"
+        >
+          {entries.find((entry) => entry.id === drag.dragging?.id)?.headword}
+        </div>
+      )}
     </div>
   );
 }

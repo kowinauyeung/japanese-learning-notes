@@ -1,5 +1,41 @@
 import { expect, test } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { OVERLAPPING_SETS, seed, seedSignedIn, WORD_SETS, WORDS } from './fixtures';
+
+/** The words in 収録語, in the order the set stores them. */
+const memberOrder = (page: Page) =>
+  page.locator('[data-drop-list="members"] li a[href^="/vocabulary/"]');
+
+/**
+ * Those words as a list of hrefs, for `expect.poll`.
+ *
+ * Matched on href rather than on text: furigana splits a headword into separate
+ * `<ruby>` elements, so the accessible name of a row interleaves its readings.
+ */
+const memberHrefs = (page: Page) =>
+  memberOrder(page).evaluateAll((rows) => rows.map((row) => row.getAttribute('href')));
+
+/**
+ * Press on `grip`, move to the top of `row`, release.
+ *
+ * Hand-driven rather than `locator.dragTo`, for the reason the implementation
+ * is hand-rolled: this is a pointer-events gesture, not HTML5 drag-and-drop,
+ * and it needs intermediate moves — a single jump from press to release never
+ * produces the `pointermove` the drop target is chosen on.
+ */
+async function dragOnto(page: Page, grip: Locator, row: Locator): Promise<void> {
+  const from = await grip.boundingBox();
+  const to = await row.boundingBox();
+  if (!from || !to) throw new Error('nothing to drag: one of the two rows is not laid out');
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  // Two moves: the first starts the drag, the second lands in the target's top
+  // half, which is the half that means "insert before this row".
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height, { steps: 5 });
+  await page.mouse.move(to.x + to.width / 2, to.y + 2, { steps: 5 });
+  await page.mouse.up();
+}
 
 /**
  * 単語集, from an empty list to a drill scoped to one.
@@ -31,10 +67,10 @@ test.describe('word sets', () => {
     // Creating opens the new set: a 単語集 is worth nothing until it has words.
     await expect(page.getByRole('heading', { name: /会議の語/ })).toBeVisible();
     await expect(
-      page.getByText('まだ単語がありません。上の検索から追加してください。'),
+      page.getByText('下の一覧からドラッグ、または「＋ 追加」で入れてください'),
     ).toBeVisible();
 
-    await page.getByPlaceholder('見出し語・読み方で検索').fill('ちょうこう');
+    await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill('ちょうこう');
     await page.getByRole('button', { name: '＋ 追加' }).click();
 
     await expect(page.getByRole('heading', { name: /1 語/ })).toBeVisible();
@@ -77,7 +113,7 @@ test.describe('word sets', () => {
 
     await page.getByLabel('新しい単語集の名前').fill('ニュースの語');
     await page.getByRole('button', { name: '作成' }).click();
-    await page.getByPlaceholder('見出し語・読み方で検索').fill('ちょうこう');
+    await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill('ちょうこう');
     await page.getByRole('button', { name: '＋ 追加' }).click();
     await expect(page.getByRole('heading', { name: /1 語/ })).toBeVisible();
 
@@ -113,6 +149,55 @@ test.describe('word sets', () => {
     await page.goto('/practice/flashcards');
     await expect(page.getByRole('button', { name: /ニュースセット/ })).toContainText('0');
     await expect(page.getByRole('button', { name: /仕事セット/ })).toContainText('1');
+  });
+
+  /**
+   * The gesture, end to end, and the only place it can be seen: it is a pointer
+   * driving a hit test over a live layout, and neither half exists in jsdom.
+   * The arithmetic underneath it is unit-tested; what this proves is that a
+   * press, a move and a release over the real page reach it at all.
+   */
+  test('drags a word from the notebook into the top of the set', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
+    await page.goto('/wordsets/set-work');
+    await expect(memberOrder(page)).toHaveCount(2);
+
+    await dragOnto(
+      page,
+      page.getByRole('button', { name: 'ちょっとを並び替え' }),
+      memberOrder(page).first(),
+    );
+
+    await expect
+      .poll(() => memberHrefs(page))
+      .toEqual(['/vocabulary/w-chotto', '/vocabulary/w-kiriwake', '/vocabulary/w-choukou']);
+  });
+
+  /**
+   * Reordering is the half with no alternative: words join at the end, and
+   * until the rows could be dragged the study order was fixed by the order they
+   * happened to be filed in.
+   */
+  test('drags a member above another to change the study order', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
+    await page.goto('/wordsets/set-work');
+
+    await dragOnto(
+      page,
+      page.getByRole('button', { name: '兆候を並び替え' }),
+      memberOrder(page).first(),
+    );
+
+    await expect
+      .poll(() => memberHrefs(page))
+      .toEqual(['/vocabulary/w-choukou', '/vocabulary/w-kiriwake']);
+
+    // And it survives a reload, so what moved was the stored order and not the
+    // rows on screen.
+    await page.reload();
+    await expect
+      .poll(() => memberHrefs(page))
+      .toEqual(['/vocabulary/w-choukou', '/vocabulary/w-kiriwake']);
   });
 
   test('deleting a set keeps every word it held', async ({ page }) => {

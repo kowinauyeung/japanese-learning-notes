@@ -1,0 +1,57 @@
+import type { PointerEvent as ReactPointerEvent } from 'react';
+
+/**
+ * The grip on a draggable row — and the keyboard's way to do the same thing.
+ *
+ * A real `<button>` rather than a styled `<span>`, because the arrow keys are
+ * the only way to reorder without a pointer and they need something focusable
+ * to hang off. That is also why `onMoveBy` is required rather than optional: a
+ * grip that can only be dragged is a control half the people using this app
+ * cannot operate.
+ *
+ * `touch-action: none` is what makes it work on a phone at all. Without it the
+ * browser claims the gesture for scrolling as soon as the finger moves, and the
+ * drag never receives a second pointer event.
+ */
+export function DragHandle({
+  label,
+  disabled,
+  onPointerDown,
+  onMoveBy,
+}: {
+  /** Names the row, so the control reads as 「兆候を並び替え」 rather than 「並び替え」. */
+  label: string;
+  disabled: boolean;
+  onPointerDown: (event: ReactPointerEvent) => void;
+  /** Called with -1 or 1 when the arrow keys move the row. Null where the list has no order to change. */
+  onMoveBy: ((delta: number) => void) | null;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={`${label}を並び替え`}
+      /**
+       * `aria-disabled`, not `disabled`. A disabled button drops focus, and
+       * every arrow press writes — so the real `disabled` would throw the
+       * keyboard out of the list after each single step and make the one path
+       * that exists without a pointer unusable. The guards below refuse the
+       * gesture instead, which is the same answer without the eviction.
+       */
+      aria-disabled={disabled}
+      onPointerDown={(event) => {
+        if (disabled) return;
+        onPointerDown(event);
+      }}
+      onKeyDown={(event) => {
+        if (disabled || !onMoveBy) return;
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+        // Otherwise the page scrolls out from under the row being moved.
+        event.preventDefault();
+        onMoveBy(event.key === 'ArrowUp' ? -1 : 1);
+      }}
+      className="shrink-0 cursor-grab touch-none rounded-panel px-2 py-1 text-muted select-none hover:bg-bg-alt active:cursor-grabbing aria-disabled:cursor-default aria-disabled:opacity-40"
+    >
+      ⠿
+    </button>
+  );
+}

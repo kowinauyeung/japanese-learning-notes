@@ -1,5 +1,7 @@
 import type { Entry } from '@/domain/entry';
 import type { WordSet, WordSetDraft } from '@/domain/wordSet';
+import { matches, sortEntries } from '@/lib/filters';
+import type { Filters } from '@/lib/filters';
 
 /**
  * Turning a 単語集 into the words it holds, and back into something writable.
@@ -32,42 +34,40 @@ export function membersOf(set: WordSet, entries: readonly Entry[]): Entry[] {
   });
 }
 
-/** How many suggestions the add-a-word box offers at once. */
-export const CANDIDATE_LIMIT = 8;
+/**
+ * How many candidates the picker renders at once.
+ *
+ * A cap rather than a page, because the list is a drag source: reaching row
+ * 200 means scrolling the drop target off screen mid-gesture. The count of
+ * everything that matched is shown beside it, so a number larger than this is
+ * a prompt to narrow the filters rather than to scroll.
+ */
+export const CANDIDATE_LIMIT = 50;
 
 /**
- * Words matching what was typed, minus the ones already in the set.
+ * Words that could join the set, narrowed the same way 一覧 narrows the
+ * notebook, minus the ones already in it.
  *
  * Excluding current members is not cosmetic: adding a word twice is a no-op
- * that looks like a broken button, and the search box is the only place the
- * two lists are visible at the same time.
+ * that looks like a broken button, and this is the one screen where both lists
+ * are visible at once.
  *
- * An empty query returns nothing rather than everything — this is a picker for
- * a set that may hold a handful of words out of hundreds, and an unfiltered
- * list of the whole notebook is not a suggestion.
+ * With no filters set this is the whole notebook, newest first — `EMPTY_FILTERS`
+ * sorts by 追加日（新しい順）, so the words most likely to be filed into a set
+ * are the ones already on screen before anything is typed.
  */
 export function candidatesFor(
   set: WordSet,
   entries: readonly Entry[],
-  query: string,
+  filters: Filters,
   limit: number = CANDIDATE_LIMIT,
-): Entry[] {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return [];
-
+): { shown: Entry[]; total: number } {
   const taken = new Set(set.entryIds);
-  const found: Entry[] = [];
-  for (const entry of entries) {
-    if (found.length === limit) break;
-    if (taken.has(entry.id)) continue;
-    if (
-      entry.headword.toLowerCase().includes(needle) ||
-      entry.reading.toLowerCase().includes(needle)
-    ) {
-      found.push(entry);
-    }
-  }
-  return found;
+  const found = sortEntries(
+    entries.filter((entry) => !taken.has(entry.id) && matches(entry, filters)),
+    filters.sort,
+  );
+  return { shown: found.slice(0, limit), total: found.length };
 }
 
 /**
@@ -81,6 +81,52 @@ export function withMember(entryIds: readonly string[], entryId: string): string
 
 export function withoutMember(entryIds: readonly string[], entryId: string): string[] {
   return entryIds.filter((id) => id !== entryId);
+}
+
+/**
+ * Move the member at `from` so that it lands at insertion point `to`.
+ *
+ * `to` is an insertion index in the *original* array's coordinates — the gap
+ * before row `to` — which is what a drop indicator between two rows actually
+ * means. Removing the item first shifts everything after it down by one, so a
+ * downward move has to lose one to land where the indicator was drawn; without
+ * that correction every drag downwards stops one row short of where it was
+ * released, which reads as the feature being broken rather than off by one.
+ */
+export function reorderMembers(entryIds: readonly string[], from: number, to: number): string[] {
+  const next = [...entryIds];
+
+  // An index past the end takes nothing out, which is the answer for a stale
+  // row index arriving after a refresh has shortened the list.
+  const [moved] = next.splice(from, 1);
+  if (moved === undefined) return [...entryIds];
+
+  // Clamped at the bottom only. `splice` already clamps a high index, but a
+  // negative one counts back from the end — and ArrowUp on the first row asks
+  // for gap -1, which would then put it second instead of leaving it alone.
+  const target = Math.max(0, to);
+  next.splice(target > from ? target - 1 : target, 0, moved);
+  return next;
+}
+
+/**
+ * Put a word at a given insertion point, whether or not the set already holds it.
+ *
+ * Dragging a member onto a new position and dragging an outside word in are the
+ * same gesture, and the drop target cannot tell which it was handed — so this
+ * moves an existing member rather than inserting a duplicate.
+ */
+export function insertMemberAt(
+  entryIds: readonly string[],
+  entryId: string,
+  index: number,
+): string[] {
+  const existing = entryIds.indexOf(entryId);
+  if (existing !== -1) return reorderMembers(entryIds, existing, index);
+
+  const next = [...entryIds];
+  next.splice(Math.max(0, Math.min(index, next.length)), 0, entryId);
+  return next;
 }
 
 /**
