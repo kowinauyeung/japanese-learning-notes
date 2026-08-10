@@ -14,6 +14,9 @@ export interface E2ESeed {
   /** Start already signed in, skipping the login screen. */
   signedIn?: boolean;
   entries?: Record<string, unknown>[];
+  /** Entry ids to start marked wrong, so 苦手のみ has something to select. */
+  weak?: string[];
+  wordSets?: Record<string, unknown>[];
 }
 
 /** Fixed instant every spec runs at. A Wednesday; its ISO week starts on the 22nd. */
@@ -93,3 +96,14 @@ export async function seed(page: Page, data: E2ESeed = {}): Promise<void> {
 
 /** The common case: signed in, with the three words above already saved. */
 export const seedSignedIn = (page: Page) => seed(page, { signedIn: true, entries: WORDS });
+
+/**
+ * One 単語集 over two of the three words.
+ *
+ * Seeded rather than created through the app, because nothing creates one yet:
+ * `/wordsets` is still a placeholder. The read path is real, so this is what
+ * the practice filter will see the day the first set is written for real.
+ */
+export const WORD_SETS: Record<string, unknown>[] = [
+  { id: 'set-work', name: '仕事セット', entryIds: ['w-kiriwake', 'w-choukou'] },
+];

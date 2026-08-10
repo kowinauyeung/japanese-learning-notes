@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { toDraft } from '@/lib/draft';
-import { isValidIsoDate, sanitizeDraft, sanitizeEntry } from '@/lib/sanitize';
+import { isValidIsoDate, sanitizeDraft, sanitizeEntry, sanitizeProgressMap } from '@/lib/sanitize';
 import { makeEntry } from '../fixtures/entry';
 
 /**
@@ -326,5 +326,39 @@ describe('sanitizeEntry — a document from the previous schema', () => {
     expect(() => sanitizeEntry('x', {})).not.toThrow();
     expect(() => sanitizeEntry('x', null)).not.toThrow();
     expect(sanitizeEntry('x', 'corrupt').headword).toBe('');
+  });
+});
+
+/**
+ * The progress map is a single document, so unlike an entry there is no "one
+ * bad row, one bad card" containment: whatever this returns is every word's
+ * practice state at once.
+ */
+describe('sanitizeProgressMap', () => {
+  it('keeps the good rows when one key holds something unusable', () => {
+    const rows = sanitizeProgressMap({
+      good: { status: 'correct', lastMode: 'dictation', attempts: 2, correctCount: 2 },
+      broken: 'not an object',
+    });
+
+    expect(rows).toHaveLength(2);
+    expect(rows.find((row) => row.entryId === 'good')).toMatchObject({
+      status: 'correct',
+      attempts: 2,
+    });
+  });
+
+  /**
+   * The direction of the default is the point. An unreadable row surfaces the
+   * word in 苦手な語, where the learner sees it and drills it again; defaulting
+   * to 'correct' would drop a word they are getting wrong out of the one list
+   * built to catch that.
+   */
+  it("defaults an unreadable row to 'wrong', so it surfaces rather than disappears", () => {
+    expect(sanitizeProgressMap({ broken: null })[0]).toMatchObject({
+      entryId: 'broken',
+      status: 'wrong',
+      attempts: 0,
+    });
   });
 });
