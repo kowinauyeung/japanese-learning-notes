@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
+import type { WordSetRepository } from '@/domain/ports';
 import type { WordSet } from '@/domain/wordSet';
 import { wordSetRepositoryFor } from '@/lib/backend';
 
@@ -16,6 +17,12 @@ interface WordSetsValue {
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  /**
+   * Exposed for the same reason `EntriesProvider` exposes its own: `/wordsets`
+   * writes through the instance the list was read from, so a write and the
+   * refresh that follows it can never be talking to two different accounts.
+   */
+  repository: WordSetRepository;
 }
 
 const WordSetsContext = createContext<WordSetsValue | null>(null);
@@ -31,11 +38,9 @@ const PAGE_SIZE = 200;
 /**
  * The user's 単語集, loaded once.
  *
- * Nothing creates a set yet — `/wordsets` is still a placeholder — so in the
- * running app this list is empty and the practice filter that reads it stays
- * hidden. That is the design's own rule for the chips ("only shown if any
- * exist") rather than a stub: the read path is real, and the filter starts
- * working the day the first set is written.
+ * Every screen wants all of them and there are few, so this is one list rather
+ * than a query per page: `/wordsets` renders it, `/wordsets/:id` picks one out
+ * of it, and the practice filter builds its chips from it.
  */
 export function WordSetsProvider({ uid, children }: { uid: string; children: ReactNode }) {
   const [sets, setSets] = useState<WordSet[]>([]);
@@ -81,7 +86,10 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
     void refresh();
   }, [refresh]);
 
-  const value = useMemo(() => ({ sets, loading, error, refresh }), [sets, loading, error, refresh]);
+  const value = useMemo(
+    () => ({ sets, loading, error, refresh, repository }),
+    [sets, loading, error, refresh, repository],
+  );
   return <WordSetsContext.Provider value={value}>{children}</WordSetsContext.Provider>;
 }
 

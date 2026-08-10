@@ -1,6 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { AppLayout } from './components/AppLayout';
-import { History, WordSets } from './routes/Placeholder';
+import { History } from './routes/Placeholder';
 
 // Routes follow the handoff. AppLayout gates everything below it on auth;
 // /login sits outside so it stays reachable when signed out.
@@ -16,7 +16,8 @@ export const router = createBrowserRouter([
       // One module for both modes; it rejects anything else in :mode. The nav
       // still links the two concrete paths.
       { path: 'practice/:mode', lazy: () => import('./routes/Practice') },
-      { path: 'wordsets', element: <WordSets /> },
+      { path: 'wordsets', lazy: () => import('./routes/WordSets') },
+      { path: 'wordsets/:id', lazy: () => import('./routes/WordSetDetail') },
       { path: 'history', element: <History /> },
     ],
   },

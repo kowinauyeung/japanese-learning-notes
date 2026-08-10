@@ -100,10 +100,22 @@ export const seedSignedIn = (page: Page) => seed(page, { signedIn: true, entries
 /**
  * One 単語集 over two of the three words.
  *
- * Seeded rather than created through the app, because nothing creates one yet:
- * `/wordsets` is still a placeholder. The read path is real, so this is what
- * the practice filter will see the day the first set is written for real.
+ * Seeded rather than built through `/wordsets` in every spec that needs one:
+ * the specs about what a set *does* should not each pay for the four clicks
+ * that make it. `wordsets.spec.ts` covers those clicks once.
  */
 export const WORD_SETS: Record<string, unknown>[] = [
   { id: 'set-work', name: '仕事セット', entryIds: ['w-kiriwake', 'w-choukou'] },
+];
+
+/**
+ * Two 単語集 that both claim 兆候.
+ *
+ * A word belongs to as many sets as it is put in — membership is a list on each
+ * set, and nothing on the entry records which of them claimed it. That is what
+ * makes deleting the word a question about several documents at once.
+ */
+export const OVERLAPPING_SETS: Record<string, unknown>[] = [
+  { id: 'set-work', name: '仕事セット', entryIds: ['w-kiriwake', 'w-choukou'] },
+  { id: 'set-news', name: 'ニュースセット', entryIds: ['w-choukou'] },
 ];
