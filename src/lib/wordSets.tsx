@@ -61,9 +61,20 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
    */
   const walk = useRef(0);
 
+  /**
+   * Re-read the sets. **Deliberately does not raise `loading`.**
+   *
+   * Every write on `/wordsets` ends here, and the routes treat `loading` as
+   * "replace the page with 読み込み中…" — so raising it took the whole screen
+   * down and put it back on every add, rename and reorder. The list in hand is
+   * not invalid during a refresh, it is one write out of date, and the screen
+   * that has it is the right thing to keep showing.
+   *
+   * The gate still goes up where nothing valid *is* in hand: on mount, and when
+   * `repository` changes because the account did. That is the effect below.
+   */
   const refresh = useCallback(async () => {
     const mine = (walk.current += 1);
-    setLoading(true);
     setError(null);
     try {
       const all: WordSet[] = [];
@@ -83,6 +94,7 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
   }, [repository]);
 
   useEffect(() => {
+    setLoading(true);
     void refresh();
   }, [refresh]);
 

@@ -54,8 +54,17 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
   // into the repository can never outlive the session it belongs to.
   const repository = useMemo(() => entryRepositoryFor(uid), [uid]);
 
+  /**
+   * Re-read the notebook. **Deliberately does not raise `loading`.**
+   *
+   * Saving a word and deleting one both end here, and every route treats
+   * `loading` as "replace the page with 読み込み中…" — so raising it blanked
+   * Browse behind the add sheet on every save, losing the scroll position with
+   * it. The entries in hand are one write out of date, not invalid.
+   *
+   * The gate goes up on mount and on an account change, in the effect below.
+   */
   const refresh = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
       const all: Entry[] = [];
@@ -75,6 +84,7 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
   }, [repository]);
 
   useEffect(() => {
+    setLoading(true);
     void refresh();
   }, [refresh]);
 

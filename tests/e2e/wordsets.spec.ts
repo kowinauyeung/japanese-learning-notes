@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
-import { OVERLAPPING_SETS, seed, seedSignedIn, WORD_SETS, WORDS } from './fixtures';
+import {
+  OVERLAPPING_SETS,
+  seed,
+  seedSignedIn,
+  watchForBlanking,
+  WORD_SETS,
+  WORDS,
+} from './fixtures';
 
 /** The words in 収録語, in the order the set stores them. */
 const memberOrder = (page: Page) =>
@@ -198,6 +205,25 @@ test.describe('word sets', () => {
     await expect
       .poll(() => memberHrefs(page))
       .toEqual(['/vocabulary/w-choukou', '/vocabulary/w-kiriwake']);
+  });
+
+  /**
+   * Every write here ends in `refresh()`, and a provider that reports itself as
+   * loading during that refresh takes the whole page down with it: the route
+   * renders 読み込み中… in place of everything, then puts it back. On a fast
+   * connection that is a flash; on a slow one the set disappears while a word
+   * is being added to it, and the scroll position goes with it.
+   */
+  test('adding a word does not blank the page it was added from', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
+    await page.goto('/wordsets/set-work');
+    await expect(memberOrder(page)).toHaveCount(2);
+
+    const blanked = await watchForBlanking(page);
+    await page.getByRole('button', { name: '＋ 追加' }).click();
+    await expect(memberOrder(page)).toHaveCount(3);
+
+    expect(await blanked()).toBe(false);
   });
 
   test('deleting a set keeps every word it held', async ({ page }) => {

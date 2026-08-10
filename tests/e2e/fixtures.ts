@@ -98,6 +98,31 @@ export async function seed(page: Page, data: E2ESeed = {}): Promise<void> {
 export const seedSignedIn = (page: Page) => seed(page, { signedIn: true, entries: WORDS });
 
 /**
+ * Start recording whether the full-page 読み込み中… placeholder ever replaces the
+ * screen, and return a way to ask afterwards.
+ *
+ * A flash cannot be caught by looking for it: by the time an assertion runs, the
+ * render that caused it has already been undone. It has to be recorded as it
+ * happens, which is what the observer is for.
+ *
+ * The thing it exists to catch: every write ends in its provider's `refresh()`,
+ * and every route treats `loading` as "replace the page with 読み込み中…". A
+ * refresh that raises that flag therefore takes the whole screen down and puts
+ * it back on every single save.
+ */
+export async function watchForBlanking(page: Page): Promise<() => Promise<boolean>> {
+  await page.evaluate(() => {
+    const seen = { it: false };
+    (window as unknown as { __blanked: { it: boolean } }).__blanked = seen;
+    new MutationObserver(() => {
+      if (document.body.textContent?.includes('読み込み中')) seen.it = true;
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
+  return () =>
+    page.evaluate(() => (window as unknown as { __blanked: { it: boolean } }).__blanked.it);
+}
+
+/**
  * One 単語集 over two of the three words.
  *
  * Seeded rather than built through `/wordsets` in every spec that needs one:

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { seedSignedIn } from './fixtures';
+import { seedSignedIn, watchForBlanking } from './fixtures';
 
 /**
  * The notebook's whole reason to exist: find a word, read it, add one, change
@@ -138,6 +138,27 @@ test.describe('editing and deleting', () => {
    * documents in tests/unit/migrationOutput.test.ts, and it stays in the form
    * because a stored document is not obliged to have come from this field.
    */
+  /**
+   * The same defect as on `/wordsets`, and the reason the fix went into both
+   * providers rather than one: saving ends in `refresh()`, and a refresh that
+   * reports itself as loading replaces the whole page with 読み込み中…. Editing
+   * is where it shows on this side, because adding navigates to the new word
+   * and leaves the blanked page behind.
+   */
+  test('editing a word does not blank the page it was edited on', async ({ page }) => {
+    await page.goto('/vocabulary/w-choukou');
+    await page.getByRole('button', { name: '編集' }).click();
+
+    const dialog = editDialog(page);
+    await dialog.getByLabel('意味・説明').fill('起こる前のしるし。');
+
+    const blanked = await watchForBlanking(page);
+    await dialog.getByRole('button', { name: '保存する' }).click();
+    await expect(page.getByText('起こる前のしるし。')).toBeVisible();
+
+    expect(await blanked()).toBe(false);
+  });
+
   test('refuses to save with the learning date cleared', async ({ page }) => {
     await page.goto('/vocabulary/w-choukou');
     await page.getByRole('button', { name: '編集' }).click();
