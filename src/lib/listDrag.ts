@@ -30,6 +30,53 @@ export interface DropAt {
 }
 
 /**
+ * How far a pointer must travel before a press becomes a drag.
+ *
+ * A whole row is draggable, and a row also holds a link to the word and a
+ * button that removes it. Without a threshold every click on either would begin
+ * a drag, and a hand that moves two pixels between press and release would stop
+ * being able to open a word at all.
+ */
+const PRESS_SLOP = 5;
+
+/** How near a scroller's edge the pointer has to get, and how fast it then moves. */
+const EDGE_ZONE = 56;
+const EDGE_SPEED = 14;
+
+export function beyondSlop(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  slop: number = PRESS_SLOP,
+): boolean {
+  return Math.abs(to.x - from.x) > slop || Math.abs(to.y - from.y) > slop;
+}
+
+/**
+ * How far to scroll a panel this frame, given where the pointer is in it.
+ *
+ * Zero everywhere but the top and bottom bands, and proportional inside them,
+ * so the list creeps when the pointer is near the edge and runs when it is at
+ * it. Without this a bounded, scrolling panel can only receive a drop on the
+ * rows that happen to be showing — the reason it is here is the same reason the
+ * panels are bounded at all.
+ */
+export function edgeScrollFor(
+  top: number,
+  bottom: number,
+  clientY: number,
+  edge: number = EDGE_ZONE,
+  speed: number = EDGE_SPEED,
+): number {
+  if (clientY < top + edge) {
+    return -Math.ceil(speed * Math.min(1, (top + edge - clientY) / edge));
+  }
+  if (clientY > bottom - edge) {
+    return Math.ceil(speed * Math.min(1, (clientY - (bottom - edge)) / edge));
+  }
+  return 0;
+}
+
+/**
  * Which gap a pointer at `clientY` is nearest, given the row it is over.
  *
  * The midpoint, not the edge: dropping "on" a row is meaningless for a list
@@ -69,12 +116,37 @@ function targetAt(x: number, y: number): DropAt | null {
   return { list, index: Number(container?.dataset.dropCount ?? 0) };
 }
 
+/** The nearest ancestor of the point that actually scrolls. */
+function scrollerAt(x: number, y: number): HTMLElement | null {
+  let node = document.elementFromPoint(x, y);
+  while (node instanceof HTMLElement) {
+    const overflow = getComputedStyle(node).overflowY;
+    if ((overflow === 'auto' || overflow === 'scroll') && node.scrollHeight > node.clientHeight) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
 export interface ListDrag {
   dragging: DragSource | null;
   at: DropAt | null;
   /** Where to draw the thing following the finger. Null when not dragging. */
   point: { x: number; y: number } | null;
+  /** For the grip: arms a drag from any pointer, including touch. */
   handleProps: (source: DragSource) => {
+    onPointerDown: (event: ReactPointerEvent) => void;
+  };
+  /**
+   * For the row body: arms a drag from a mouse or a pen, never from a finger.
+   *
+   * A touch drag needs `touch-action: none` on whatever it starts from, and a
+   * whole row marked that way is a row the page can no longer be scrolled by —
+   * inside a bounded panel, that is most of the panel. On touch the grip stays
+   * the way in, and it is a 44px target for exactly that reason.
+   */
+  rowProps: (source: DragSource) => {
     onPointerDown: (event: ReactPointerEvent) => void;
   };
 }
@@ -83,6 +155,11 @@ export function useListDrag(onDrop: (source: DragSource, at: DropAt) => void): L
   const [dragging, setDragging] = useState<DragSource | null>(null);
   const [at, setAt] = useState<DropAt | null>(null);
   const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
+
+  /** A press that has not travelled far enough to be a drag yet. */
+  const press = useRef<{ source: DragSource; x: number; y: number } | null>(null);
+  /** The live pointer, read by the scroll loop between moves. */
+  const cursor = useRef<{ x: number; y: number } | null>(null);
 
   /**
    * The last target, read by `pointerup`.
@@ -107,32 +184,52 @@ export function useListDrag(onDrop: (source: DragSource, at: DropAt) => void): L
     handler.current = onDrop;
   });
 
+  const arm = useCallback((source: DragSource, event: ReactPointerEvent) => {
+    // Left button only; touch and pen report 0 here as well.
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    press.current = { source, x: event.clientX, y: event.clientY };
+    cursor.current = { x: event.clientX, y: event.clientY };
+  }, []);
+
   const handleProps = useCallback(
     (source: DragSource) => ({
-      onPointerDown: (event: ReactPointerEvent) => {
-        // Left button only; touch and pen report 0 here as well.
-        if (event.pointerType === 'mouse' && event.button !== 0) return;
-        // Stops the browser starting a text selection that then fights the drag.
-        event.preventDefault();
-        target.current = null;
-        setDragging(source);
-        setAt(null);
-        setPoint({ x: event.clientX, y: event.clientY });
-      },
+      onPointerDown: (event: ReactPointerEvent) => arm(source, event),
     }),
-    [],
+    [arm],
   );
 
-  useEffect(() => {
-    if (!dragging) return;
+  const rowProps = useCallback(
+    (source: DragSource) => ({
+      onPointerDown: (event: ReactPointerEvent) => {
+        if (event.pointerType === 'touch') return;
+        arm(source, event);
+      },
+    }),
+    [arm],
+  );
 
+  // Watching a press, whether or not it has become a drag yet.
+  useEffect(() => {
     const stop = () => {
+      press.current = null;
+      cursor.current = null;
       setDragging(null);
       setAt(null);
       setPoint(null);
     };
 
     const move = (event: PointerEvent) => {
+      const armed = press.current;
+      if (!armed) return;
+      cursor.current = { x: event.clientX, y: event.clientY };
+
+      if (!dragging) {
+        if (!beyondSlop(armed, { x: event.clientX, y: event.clientY })) return;
+        // Committed: the text the press started selecting is not wanted.
+        document.getSelection()?.removeAllRanges();
+        setDragging(armed.source);
+      }
+
       setPoint({ x: event.clientX, y: event.clientY });
       const next = targetAt(event.clientX, event.clientY);
       target.current = next;
@@ -140,10 +237,36 @@ export function useListDrag(onDrop: (source: DragSource, at: DropAt) => void): L
     };
 
     const up = () => {
-      const dropped = target.current;
+      const dropped = dragging ? target.current : null;
+      const wasDragging = dragging !== null;
       target.current = null;
       stop();
-      if (dropped) handler.current(dragging, dropped);
+
+      if (wasDragging) {
+        /**
+         * The click that would follow this release is not a click on the row —
+         * the pointer has moved across the screen since it went down — and a
+         * row is a link, so left alone it would open the word just dropped.
+         *
+         * **Unproven, and kept anyway.** Chromium fires no click at all after
+         * any drag this suite can produce, including one released on the row it
+         * started from, so nothing here has ever been observed to run. It is
+         * kept because the browsers the suite does not cover are not obliged to
+         * agree, and because a stray navigation mid-arrangement loses the
+         * screen the learner was working on. Do not treat it as tested.
+         *
+         * Removed on the next task rather than with `once`, so a gesture that
+         * produces no click cannot leave a listener waiting to eat an
+         * unrelated one.
+         */
+        const swallow = (click: MouseEvent) => {
+          click.preventDefault();
+          click.stopPropagation();
+        };
+        window.addEventListener('click', swallow, true);
+        setTimeout(() => window.removeEventListener('click', swallow, true), 0);
+      }
+      if (dropped) handler.current(dragging!, dropped);
     };
 
     const abandon = () => {
@@ -169,5 +292,40 @@ export function useListDrag(onDrop: (source: DragSource, at: DropAt) => void): L
     };
   }, [dragging]);
 
-  return { dragging, at, point, handleProps };
+  /**
+   * Scrolling the panel under the pointer while a drag is held near its edge.
+   *
+   * A frame loop rather than work done inside `pointermove`, because a pointer
+   * held still at the bottom of a list fires no more moves — and holding still
+   * at the edge is exactly the gesture that means "keep going".
+   */
+  useEffect(() => {
+    if (!dragging) return;
+    let frame = 0;
+
+    const step = () => {
+      frame = requestAnimationFrame(step);
+      const point = cursor.current;
+      if (!point) return;
+
+      const scroller = scrollerAt(point.x, point.y);
+      if (!scroller) return;
+
+      const rect = scroller.getBoundingClientRect();
+      const by = edgeScrollFor(rect.top, rect.bottom, point.y);
+      if (by === 0) return;
+
+      scroller.scrollTop += by;
+      // The rows moved under a pointer that did not, so the target it was over
+      // is stale by exactly this much.
+      const next = targetAt(point.x, point.y);
+      target.current = next;
+      setAt(next);
+    };
+
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [dragging]);
+
+  return { dragging, at, point, handleProps, rowProps };
 }

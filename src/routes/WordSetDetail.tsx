@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { MemberList } from '@/components/wordsets/MemberList';
 import { MemberPicker } from '@/components/wordsets/MemberPicker';
+import { PickerToolbar } from '@/components/wordsets/PickerToolbar';
 import { WordSetEditModal } from '@/components/wordsets/WordSetEditModal';
 import type { WordSetDraft } from '@/domain/wordSet';
 import { useEntries } from '@/lib/entries';
@@ -11,10 +12,12 @@ import type { Filters } from '@/lib/filters';
 import { useListDrag } from '@/lib/listDrag';
 import type { DragSource, DropAt } from '@/lib/listDrag';
 import {
+  candidatesFor,
   insertMemberAt,
   membersOf,
   reorderMembers,
   toDraft,
+  withMember,
   withoutMember,
 } from '@/lib/wordSetMembers';
 import { useWordSets } from '@/lib/wordSets';
@@ -152,6 +155,9 @@ export function Component() {
   }
 
   const members = membersOf({ ...set, entryIds }, entries);
+  // Against the order on screen, not the stored one, so a word just dropped in
+  // leaves the list it was dragged from in the same render.
+  const candidates = candidatesFor({ ...set, entryIds }, entries, filters);
 
   return (
     <div className="space-y-4">
@@ -184,34 +190,45 @@ export function Component() {
 
       {writeError && <p className="text-sm text-danger">{writeError}</p>}
 
-      {/* 収録語 above 単語を探す: the set is what this page is about, and the
-          notebook below it is the source you pull from. It also puts the drop
-          target above its drag sources, so a drag is upward and does not fight
-          the page scrolling down. */}
-      <MemberList
-        members={members}
-        list={MEMBERS}
-        drag={drag}
-        busy={busy}
-        onRemove={(entryId) =>
-          void write({ ...toDraft(set), entryIds: withoutMember(entryIds, entryId) })
-        }
-        onMoveBy={(index, delta) =>
-          applyOrder(reorderMembers(entryIds, index, delta < 0 ? index - 1 : index + 2))
-        }
-      />
+      <PickerToolbar filters={filters} allTags={allTags} onChange={setFilters} />
 
-      <MemberPicker
-        set={set}
-        entries={entries}
-        allTags={allTags}
-        filters={filters}
-        list={CANDIDATES}
-        drag={drag}
-        busy={busy}
-        onFiltersChange={setFilters}
-        onAdd={(entryId) => applyOrder(insertMemberAt(entryIds, entryId, entryIds.length))}
-      />
+      {/*
+        Source on the left, destination on the right, and both bounded so they
+        scroll inside themselves. Stacked one above the other they drifted
+        apart as soon as either had a few rows in it, and a drag whose start and
+        end are never on screen together cannot be performed. Below the nav
+        breakpoint they stack, which is why the cap is a fraction of the
+        viewport rather than a fixed height: two of them still fit.
+      */}
+      <div className="grid gap-4 nav:grid-cols-2">
+        <div className="flex max-h-[46vh] min-h-64 nav:max-h-[62vh]">
+          <MemberPicker
+            shown={candidates.shown}
+            total={candidates.total}
+            list={CANDIDATES}
+            drag={drag}
+            busy={busy}
+            onAdd={(entryId) => applyOrder(insertMemberAt(entryIds, entryId, entryIds.length))}
+            onAddAll={(ids) =>
+              applyOrder(ids.reduce<readonly string[]>((so, id) => withMember(so, id), entryIds))
+            }
+          />
+        </div>
+        <div className="flex max-h-[46vh] min-h-64 nav:max-h-[62vh]">
+          <MemberList
+            members={members}
+            list={MEMBERS}
+            drag={drag}
+            busy={busy}
+            onRemove={(entryId) =>
+              void write({ ...toDraft(set), entryIds: withoutMember(entryIds, entryId) })
+            }
+            onMoveBy={(index, delta) =>
+              applyOrder(reorderMembers(entryIds, index, delta < 0 ? index - 1 : index + 2))
+            }
+          />
+        </div>
+      </div>
 
       <button
         type="button"

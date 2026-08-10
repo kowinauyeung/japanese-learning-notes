@@ -74,7 +74,7 @@ test.describe('word sets', () => {
     // Creating opens the new set: a 単語集 is worth nothing until it has words.
     await expect(page.getByRole('heading', { name: /会議の語/ })).toBeVisible();
     await expect(
-      page.getByText('下の一覧からドラッグ、または「＋ 追加」で入れてください'),
+      page.getByText('ここに単語をドラッグ、または「＋ 追加」で入れてください'),
     ).toBeVisible();
 
     await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill('ちょうこう');
@@ -178,6 +178,71 @@ test.describe('word sets', () => {
     await expect
       .poll(() => memberHrefs(page))
       .toEqual(['/vocabulary/w-chotto', '/vocabulary/w-kiriwake', '/vocabulary/w-choukou']);
+  });
+
+  /**
+   * The grip is a 44px target, and a whole row is a much larger one. Dragging
+   * only ever from the grip was the first thing that turned out to be hard to
+   * do with a mouse.
+   */
+  test('drags a word by its body, not only by its grip', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
+    await page.goto('/wordsets/set-work');
+
+    await dragOnto(
+      page,
+      // The headword itself, which is row body rather than grip. `exact`
+      // because this word reads as itself, so 「ちょっと（ちょっと）」 would
+      // otherwise match the reading too.
+      page.locator('[data-drop-list="candidates"] li').first().getByText('ちょっと', {
+        exact: true,
+      }),
+      memberOrder(page).first(),
+    );
+
+    await expect
+      .poll(() => memberHrefs(page))
+      .toEqual(['/vocabulary/w-chotto', '/vocabulary/w-kiriwake', '/vocabulary/w-choukou']);
+  });
+
+  /**
+   * What the movement threshold is for, and it has to be a press that *moves* —
+   * `locator.click()` releases on the pixel it pressed, so it would open the
+   * word with the threshold removed and prove nothing. A hand pressing a row
+   * drifts a pixel or two; without the slop that is a drag, and the click it
+   * ends with is swallowed as the drag's own.
+   */
+  test('still opens the word when a press on a row drifts slightly', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
+    await page.goto('/wordsets/set-work');
+
+    const row = await memberOrder(page).first().boundingBox();
+    if (!row) throw new Error('the first member is not laid out');
+    const x = row.x + row.width / 2;
+    const y = row.y + row.height / 2;
+
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 3, y - 2);
+    await page.mouse.up();
+
+    await expect(page).toHaveURL(/\/vocabulary\/w-kiriwake$/);
+  });
+
+  /** Adding a filtered list one row at a time is the thing this replaces. */
+  test('adds every word on screen at once', async ({ page }) => {
+    await seedSignedIn(page);
+    await page.goto('/wordsets');
+    await page.getByLabel('新しい単語集の名前').fill('全部');
+    await page.getByRole('button', { name: '作成' }).click();
+
+    await page.getByRole('button', { name: '表示中の 3 語を追加' }).click();
+
+    await expect
+      .poll(() => memberHrefs(page))
+      .toEqual(['/vocabulary/w-kiriwake', '/vocabulary/w-choukou', '/vocabulary/w-chotto']);
+    // And the picker is empty afterwards, because it excludes what the set holds.
+    await expect(page.getByText('条件に合う単語がありません')).toBeVisible();
   });
 
   /**

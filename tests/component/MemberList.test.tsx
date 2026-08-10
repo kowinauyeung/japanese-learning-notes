@@ -2,20 +2,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { MemberList } from '@/components/wordsets/MemberList';
-import type { ListDrag } from '@/lib/listDrag';
+import { idleDrag } from '../fixtures/drag';
 import { makeEntry } from '../fixtures/entry';
 
 const MEMBERS = [
   makeEntry({ id: 'w1', headword: '切り分け', reading: 'きりわけ' }),
   makeEntry({ id: 'w2', headword: '兆候', reading: 'ちょうこう' }),
 ];
-
-const idle: ListDrag = {
-  dragging: null,
-  at: null,
-  point: null,
-  handleProps: () => ({ onPointerDown: () => {} }),
-};
 
 const setup = (busy = false) => {
   const onMoveBy = vi.fn();
@@ -26,7 +19,7 @@ const setup = (busy = false) => {
       <MemberList
         members={MEMBERS}
         list="members"
-        drag={idle}
+        drag={idleDrag}
         busy={busy}
         onRemove={vi.fn()}
         onMoveBy={onMoveBy}

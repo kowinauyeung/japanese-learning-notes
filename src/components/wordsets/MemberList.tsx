@@ -35,18 +35,29 @@ export function MemberList({
   const at = drag.at?.list === list ? drag.at.index : null;
 
   return (
-    <section className="space-y-2 rounded-card bg-card p-5 shadow-panel">
-      <div className="flex items-baseline justify-between gap-3">
+    <section className="flex min-h-0 flex-1 flex-col rounded-card bg-card shadow-panel">
+      <div className="flex shrink-0 items-baseline justify-between gap-3 border-b border-line p-4">
         <h2 className="text-sm font-semibold">収録語</h2>
         <p className="text-xs text-muted tabular-nums">{members.length} 語</p>
       </div>
 
-      <ul data-drop-list={list} data-drop-count={members.length} className="min-h-16">
+      <ul
+        data-drop-list={list}
+        data-drop-count={members.length}
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-2"
+      >
         {members.map((entry, index) => (
           <li
             key={entry.id}
             data-drop-index={index}
-            className={`flex items-center gap-2 border-y-2 border-transparent py-1.5 ${
+            {...drag.rowProps({ list, id: entry.id, index })}
+            /**
+             * `touch-pan-y`, not `touch-none`: a finger on a row scrolls the
+             * panel, because a bounded panel whose rows cannot be scrolled from
+             * is a panel that cannot be read. Touch drags start from the grip,
+             * which is the only element here that claims the gesture.
+             */
+            className={`flex touch-pan-y items-center gap-2 border-y-2 border-transparent py-1.5 ${
               at === index ? 'border-t-accent' : ''
             } ${at === members.length && index === members.length - 1 ? 'border-b-accent' : ''} ${
               drag.dragging?.list === list && drag.dragging.id === entry.id ? 'opacity-40' : ''
@@ -58,7 +69,18 @@ export function MemberList({
               onPointerDown={drag.handleProps({ list, id: entry.id, index }).onPointerDown}
               onMoveBy={(delta) => onMoveBy(index, delta)}
             />
-            <Link to={`/vocabulary/${entry.id}`} className="min-w-0 flex-1 truncate">
+            <Link
+              to={`/vocabulary/${entry.id}`}
+              /**
+               * An `<a>` is natively draggable, and the row body is now a drag
+               * source. Left alone, a press that drifts even a few pixels
+               * starts the browser's own link drag instead — which cancels the
+               * click, so the word cannot be opened, and fights our pointer
+               * drag for the gesture.
+               */
+              draggable={false}
+              className="min-w-0 flex-1 truncate select-none"
+            >
               <Ruby
                 headword={entry.headword}
                 reading={entry.reading}
@@ -78,11 +100,11 @@ export function MemberList({
 
         {members.length === 0 && (
           <li
-            className={`grid min-h-16 place-items-center rounded-panel border-2 border-dashed text-sm text-muted ${
+            className={`grid min-h-24 place-items-center rounded-panel border-2 border-dashed px-3 text-center text-sm text-muted ${
               at === 0 ? 'border-accent text-accent' : 'border-line'
             }`}
           >
-            下の一覧からドラッグ、または「＋ 追加」で入れてください
+            ここに単語をドラッグ、または「＋ 追加」で入れてください
           </li>
         )}
       </ul>

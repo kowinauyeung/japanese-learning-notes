@@ -49,7 +49,9 @@ export function DragHandle({
         event.preventDefault();
         onMoveBy(event.key === 'ArrowUp' ? -1 : 1);
       }}
-      className="shrink-0 cursor-grab touch-none rounded-panel px-2 py-1 text-muted select-none hover:bg-bg-alt active:cursor-grabbing aria-disabled:cursor-default aria-disabled:opacity-40"
+      // 44px square: on touch this is the only way into a drag, because a row
+      // that claimed the gesture could no longer scroll the panel it sits in.
+      className="grid h-11 w-11 shrink-0 cursor-grab touch-none place-items-center rounded-panel text-muted select-none hover:bg-bg-alt active:cursor-grabbing aria-disabled:cursor-default aria-disabled:opacity-40"
     >
       ⠿
     </button>
