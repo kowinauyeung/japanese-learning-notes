@@ -105,6 +105,8 @@ class FakeUtterance {
   lang = '';
   rate = 1;
   voice: SpeechSynthesisVoice | null = null;
+  onstart: (() => void) | null = null;
+  onend: (() => void) | null = null;
   onerror: ((event: { error: string }) => void) | null = null;
   // Declared rather than a parameter property: `erasableSyntaxOnly` rejects
   // the shorthand, since it emits code rather than erasing to nothing.
@@ -126,6 +128,7 @@ function installEngine(voices: SpeechSynthesisVoice[]) {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     cancel: vi.fn(),
+    resume: vi.fn(),
     speak: vi.fn((utterance: FakeUtterance) => spoken.push(utterance)),
   };
   vi.stubGlobal('speechSynthesis', engine);
@@ -200,5 +203,57 @@ describe('DictationSession — why the sound did not come out', () => {
       spoken.at(-1)?.onerror?.({ error: 'not-allowed' });
     });
     expect(screen.getByText(/音声を再生できませんでした/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The backstop, and the reason it exists: the reported failure came back a
+ * second time as *no sound and no error at all*. Chrome has more than one way
+ * to swallow an utterance without firing `error` — a wedged queue, a paused
+ * engine, a voice the list offers but the platform cannot load — and
+ * enumerating them is a losing game. Noticing that `start` never arrived
+ * catches all of them, including the ones nobody has hit yet.
+ */
+describe('DictationSession — silence that reports nothing', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('reports a failure when the utterance never starts', async () => {
+    vi.useFakeTimers();
+    installEngine([voice('ja-JP', 'Kyoko')]);
+    setup();
+
+    expect(screen.queryByText(/音声を再生できませんでした/)).not.toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+    expect(screen.getByText(/音声を再生できませんでした/)).toBeInTheDocument();
+  });
+
+  it('stays quiet about a slow engine that does eventually start', async () => {
+    vi.useFakeTimers();
+    const { spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
+    setup();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+      spoken.at(-1)?.onstart?.();
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(screen.queryByText(/音声を再生できませんでした/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * A paused engine accepts `speak()`, queues it, plays nothing and reports
+   * nothing. Chrome gets stuck that way after some cancels and after a spell
+   * in a background tab.
+   */
+  it('resumes the engine before speaking, in case it is stuck paused', () => {
+    const { engine } = installEngine([voice('ja-JP', 'Kyoko')]);
+    setup();
+    expect(engine.resume).toHaveBeenCalled();
   });
 });

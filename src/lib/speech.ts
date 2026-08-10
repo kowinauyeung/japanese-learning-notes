@@ -48,6 +48,18 @@ export function pickJapaneseVoice(
 export type SpeechStatus = 'unsupported' | 'loading' | 'no-japanese-voice' | 'ready' | 'failed';
 
 /**
+ * How long to wait for `start` before calling it silence.
+ *
+ * A local voice begins in tens of milliseconds; a network voice can take a
+ * beat. Long enough not to accuse a slow engine, short enough that a learner
+ * gets an explanation rather than sitting there pressing the button again.
+ */
+const START_TIMEOUT_MS = 2_000;
+
+/** See failure 7 below: keeps the queued utterance from being collected. */
+let speaking: SpeechSynthesisUtterance | null = null;
+
+/**
  * The speech engine as this app needs it: a status the UI can explain, and a
  * `speak` that is safe to call twice in a row.
  *
@@ -88,13 +100,45 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
       if (voice) utterance.voice = voice;
 
       setFailed(false);
+
+      /**
+       * **Failure 5: it goes quiet and reports nothing at all.**
+       *
+       * Chrome has more than one way to swallow an utterance without firing
+       * `error` — a queue wedged by an earlier cancel, an engine left `paused`,
+       * a voice the list offers but the platform cannot load. Enumerating them
+       * is a losing game; noticing that `start` never arrived is not. This is
+       * the backstop that turns every remaining silent failure into something
+       * the learner can see, and it is why `onstart` exists here at all.
+       */
+      const started = setTimeout(() => {
+        console.error('speechSynthesis never started', { voice: voice?.name, text });
+        setFailed(true);
+      }, START_TIMEOUT_MS);
+
+      utterance.onstart = () => clearTimeout(started);
+      utterance.onend = () => {
+        // Releases the reference taken below, once it can no longer matter.
+        if (speaking === utterance) speaking = null;
+      };
       utterance.onerror = (event) => {
+        clearTimeout(started);
         // 'interrupted' and 'canceled' are this component doing its job —
         // moving to the next card while the previous word is still playing.
         if (event.error === 'interrupted' || event.error === 'canceled') return;
         console.error('speechSynthesis failed', event.error);
         setFailed(true);
       };
+
+      /**
+       * **Failure 6: a stuck `paused` engine.** Chrome leaves the synthesiser
+       * paused after some cancels and after a spell in a background tab, and a
+       * paused engine accepts `speak()`, queues it, plays nothing and reports
+       * nothing. `resume()` on an engine that is not paused does nothing, so
+       * this is unconditional rather than guarded on a flag that is itself the
+       * thing being got wrong.
+       */
+      engine.resume();
 
       /**
        * **Failure 3: `cancel()` then `speak()` in the same task.** Chrome drops
@@ -109,6 +153,18 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
       } else {
         engine.speak(utterance);
       }
+
+      /**
+       * **Failure 7: the utterance is collected before it is spoken.** Chrome
+       * holds only a weak reference to it, so an utterance that goes out of
+       * scope while queued can be garbage-collected mid-sentence — silently,
+       * and only under memory pressure, which is why it reproduces on one
+       * machine and not another. Parking the current one in a module-level
+       * slot keeps it alive until the next call replaces it.
+       *
+       * Deliberately untested: no test can make a garbage collector run.
+       */
+      speaking = utterance;
     },
     [voices],
   );
