@@ -92,7 +92,10 @@ describe('private data under users/{uid}', () => {
   it('denies the subcollections too, not just the top document', async () => {
     const db = as(BOB);
     await assertFails(db.doc(`users/${ALICE}/wordSets/s1`).get());
-    await assertFails(db.doc(`users/${ALICE}/entryProgress/e1`).set({ attempts: 1 }));
+    // The practice paths the app actually writes: one document holding every
+    // word's progress, and one document per finished session.
+    await assertFails(db.doc(`users/${ALICE}/progress/entries`).get());
+    await assertFails(db.doc(`users/${ALICE}/progress/entries`).set({ entries: {} }));
     await assertFails(db.doc(`users/${ALICE}/practiceSessions/p1`).set({ total: 1 }));
   });
 

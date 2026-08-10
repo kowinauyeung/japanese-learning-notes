@@ -14,6 +14,8 @@ export interface E2ESeed {
   /** Start already signed in, skipping the login screen. */
   signedIn?: boolean;
   entries?: Record<string, unknown>[];
+  /** Entry ids to start marked wrong, so 苦手のみ has something to select. */
+  weak?: string[];
 }
 
 /** Fixed instant every spec runs at. A Wednesday; its ISO week starts on the 22nd. */

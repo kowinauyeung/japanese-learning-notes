@@ -25,9 +25,15 @@ artefacts and how to replay them.
 - **Create / edit / delete** — a quick form and a detailed form, plus a JSON
   import path for assistant-generated entries.
 
+- **Practice** — a setup screen (tag and JLPT chips, a 苦手な語のみ toggle, a live
+  match count) that starts either a **flashcard** run or a **dictation** run. Flashcards
+  flip to the meaning before offering もう一度 / わかった; dictation speaks the word
+  through the Web Speech API and marks what you type. A finished session is recorded
+  once, and a word answered wrong turns up under 苦手な語のみ next time.
+
 ### Planned
 
-Flashcards, dictation, word sets and practice history are placeholder routes.
+Word sets and practice history are placeholder routes.
 
 ## Stack
 

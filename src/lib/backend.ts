@@ -1,7 +1,8 @@
-import type { AuthPort, EntryRepository } from '@/domain/ports';
+import type { AuthPort, EntryRepository, ProgressRepository } from '@/domain/ports';
 import { firebaseAuth } from '@/infra/firebase/authAdapter';
 import { db } from '@/infra/firebase/client';
 import { createEntryRepository } from '@/infra/firebase/entryRepo';
+import { createProgressRepository } from '@/infra/firebase/progressRepo';
 
 /**
  * The single point where the app names its adapters.
@@ -18,3 +19,6 @@ import { createEntryRepository } from '@/infra/firebase/entryRepo';
 export const authPort: AuthPort = firebaseAuth;
 
 export const entryRepositoryFor = (uid: string): EntryRepository => createEntryRepository(db, uid);
+
+export const progressRepositoryFor = (uid: string): ProgressRepository =>
+  createProgressRepository(db, uid);

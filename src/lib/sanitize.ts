@@ -11,6 +11,8 @@ import type {
   Sense,
   UsageNotes,
 } from '@/domain/entry';
+import { PRACTICE_MODES } from '@/domain/practice';
+import type { EntryProgress, PracticeSession } from '@/domain/practice';
 import { emptyDraft, parseTags } from './draft';
 
 /**
@@ -230,5 +232,56 @@ export function sanitizeEntry(id: string, data: unknown): Entry {
     copiedFrom: attribution(raw.copiedFrom),
     createdAt: isoDateTime(raw.createdAt),
     updatedAt: isoDateTime(raw.updatedAt),
+  };
+}
+
+// ------------------------------------------------------------------ practice
+
+/**
+ * Practice records, coerced by the same rule as entries.
+ *
+ * These have one source the entry path does not: the progress map is a single
+ * document, so one malformed key would otherwise take down every word's state
+ * at once rather than one row's.
+ */
+
+/**
+ * One row of the progress map. The key is the entry id — the value carries it
+ * too, so a row stays self-describing once it is out of the map.
+ */
+const progressRow = (entryId: string, value: unknown): EntryProgress => {
+  const raw = record(value);
+  return {
+    entryId,
+    status: oneOf(raw.status, ['correct', 'wrong'] as const, 'wrong'),
+    lastMode: oneOf(raw.lastMode, PRACTICE_MODES, 'flashcard'),
+    lastAt: isoDateTime(raw.lastAt),
+    attempts: nonNegativeInt(raw.attempts),
+    correctCount: nonNegativeInt(raw.correctCount),
+  };
+};
+
+/**
+ * `status` defaults to `'wrong'` rather than `'correct'`, and that direction is
+ * deliberate: an unreadable row surfaces the word in 苦手な語, where the learner
+ * sees it and drills it again. Defaulting the other way would silently drop a
+ * word they are getting wrong out of the one list built to catch that.
+ */
+export function sanitizeProgressMap(value: unknown): EntryProgress[] {
+  const raw = record(value);
+  return Object.entries(raw).map(([entryId, row]) => progressRow(entryId, row));
+}
+
+export function sanitizeSession(id: string, data: unknown): PracticeSession {
+  const raw = record(data);
+  return {
+    id,
+    mode: oneOf(raw.mode, PRACTICE_MODES, 'flashcard'),
+    filterLabel: str(raw.filterLabel),
+    total: nonNegativeInt(raw.total),
+    correct: nonNegativeInt(raw.correct),
+    missed: strings(raw.missed),
+    startedAt: isoDateTime(raw.startedAt),
+    finishedAt: isoDateTime(raw.finishedAt),
   };
 }

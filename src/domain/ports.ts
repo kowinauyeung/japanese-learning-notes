@@ -17,7 +17,7 @@
  */
 
 import type { Entry, EntryDraft, JlptLevel, Pos } from './entry';
-import type { EntryProgress, PracticeSession } from './practice';
+import type { EntryProgress, PracticeSession, PracticeSessionDraft } from './practice';
 import type { PublicEntry, PublicSet } from './publication';
 import type { UserProfile, UserProfileDraft } from './user';
 import type { WordSet, WordSetDraft } from './wordSet';
@@ -49,10 +49,34 @@ export interface WordSetRepository {
   remove(id: string): Promise<void>;
 }
 
+/**
+ * Practice state, and the one port whose cost model is part of its contract.
+ *
+ * `listAll` returns every entry's progress and `recordSession` takes only the
+ * rows a session touched, because **the whole map is expected to be one
+ * document**. Firestore bills per document, not per round trip, so a
+ * `writeBatch` of fifty per-entry documents is still fifty writes: batching
+ * saves latency and atomicity, not quota. A 50-card session therefore costs two
+ * writes here — the progress map and the session record — instead of 51, and
+ * loading the 苦手な語 count costs one read instead of one per word.
+ *
+ * What that trades away is a per-entry query, which nothing wants: the caller
+ * already holds every entry in memory. And the map has a ceiling — Firestore
+ * caps a document at 1 MiB, roughly 15,000 entries at this shape. That is far
+ * beyond the point at which `EntriesProvider` loading the whole notebook has
+ * already had to change.
+ *
+ * `data-model-redesign.md` specifies `users/{uid}/entryProgress/{entryId}`.
+ * This deviates from it deliberately; the doc records the change.
+ */
 export interface ProgressRepository {
   listAll(): Promise<EntryProgress[]>;
-  /** One write for a whole session, never one per card. */
-  recordSession(session: PracticeSession, progress: EntryProgress[]): Promise<void>;
+  /**
+   * Writes the session and merges `progress` into the map, in that one call.
+   * Pass only the entries the session answered — anything omitted is left as
+   * it was, so a session on another device is not clobbered.
+   */
+  recordSession(session: PracticeSessionDraft, progress: EntryProgress[]): Promise<string>;
   listSessions(q: PageQuery): Promise<Page<PracticeSession>>;
 }
 

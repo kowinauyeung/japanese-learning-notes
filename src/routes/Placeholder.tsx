@@ -1,6 +1,7 @@
 /**
- * Phase 2 destinations. They exist now so the nav from the handoff is complete
- * and no link dead-ends on a 404 while the practice features are built.
+ * The two Phase 2 destinations still to be built. They exist so the nav from
+ * the handoff is complete and no link dead-ends on a 404. Practice is no longer
+ * among them — see `routes/Practice.tsx`.
  */
 function Placeholder({ title, note }: { title: string; note: string }) {
   return (
@@ -9,14 +10,6 @@ function Placeholder({ title, note }: { title: string; note: string }) {
       <p className="mt-2 text-sm text-muted">{note}</p>
     </section>
   );
-}
-
-export function Flashcards() {
-  return <Placeholder title="フラッシュカード" note="練習機能は次のフェーズで実装します。" />;
-}
-
-export function Dictation() {
-  return <Placeholder title="書き取り練習" note="練習機能は次のフェーズで実装します。" />;
 }
 
 export function WordSets() {

@@ -1,6 +1,7 @@
 import type { IsoDateTime } from './common';
 
-export type PracticeMode = 'flashcard' | 'dictation';
+export const PRACTICE_MODES = ['flashcard', 'dictation'] as const;
+export type PracticeMode = (typeof PRACTICE_MODES)[number];
 
 /** A completed practice run — the source for 履歴 and the dashboard panel. */
 export interface PracticeSession {
@@ -12,19 +13,36 @@ export interface PracticeSession {
   correct: number;
   /** Entry ids answered wrong, for the session summary and quick re-practice. */
   missed: string[];
+  /** When the learner pressed 開始する — necessarily their own clock. */
   startedAt: IsoDateTime;
+  /** Set by the write path from the server clock, never by the device. */
   finishedAt: IsoDateTime;
 }
 
 /**
- * Per-entry practice state, keyed by entry id within the owner's subcollection.
+ * Fields the caller may send when recording a session.
  *
- * Kept out of Entry so answering a card rewrites a small document instead of
- * the whole note, and so practice history survives edits to the note content.
+ * The id is assigned by the write path, the same way `EntryDraft` omits it: a
+ * caller that invented one would either collide or have to know how the
+ * datasource generates ids.
  *
- * Writing these per card would cost one write per answer — a 50-card session at
- * two sessions a day reaches the 20,000/day free write quota at around 200
- * users. Batch the whole session at the end instead.
+ * `finishedAt` is omitted for a different reason. 履歴 is ordered and paged by
+ * it, and a cursor is only sound over a value one clock produced — a device an
+ * hour fast would file its sessions above everything and repeat or skip rows at
+ * every page boundary. `startedAt` stays a device value because that is what it
+ * honestly is: the session had already begun before any write happened.
+ */
+export type PracticeSessionDraft = Omit<PracticeSession, 'id' | 'finishedAt'>;
+
+/**
+ * Per-entry practice state.
+ *
+ * Kept out of Entry so answering a card rewrites a small record instead of the
+ * whole note, and so practice history survives edits to the note content.
+ *
+ * **All of these live in one document, not one document each** — see
+ * `ProgressRepository`. The interface is still per entry because that is what
+ * every caller works in; where they are stored is the adapter's business.
  */
 export interface EntryProgress {
   entryId: string;

@@ -1,5 +1,13 @@
 import type { Entry, EntryDraft } from '@/domain/entry';
-import type { AuthPort, AuthUser, EntryRepository, Page, PageQuery } from '@/domain/ports';
+import type {
+  AuthPort,
+  AuthUser,
+  EntryRepository,
+  Page,
+  PageQuery,
+  ProgressRepository,
+} from '@/domain/ports';
+import type { EntryProgress, PracticeSession, PracticeSessionDraft } from '@/domain/practice';
 import { sanitizeEntry } from './sanitize';
 
 /**
@@ -23,6 +31,8 @@ interface Seed {
   signedIn?: boolean;
   /** Raw documents, coerced through the same sanitiser the real read path uses. */
   entries?: unknown[];
+  /** Entry ids to start marked wrong, so 苦手のみ has something to select. */
+  weak?: string[];
 }
 
 declare global {
@@ -208,6 +218,88 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
       store.delete(id);
       persist();
       return Promise.resolve();
+    },
+  };
+};
+
+// ------------------------------------------------------------ practice store
+
+/**
+ * Mirrors the Firestore adapter's split: one map for progress, a list for
+ * sessions. Both persist for the same reason the entries do — a spec that
+ * finishes a session and then navigates to check the result would otherwise be
+ * reading state the substitute threw away.
+ */
+const progressStores = new Map<string, Map<string, EntryProgress>>();
+const sessionStores = new Map<string, PracticeSession[]>();
+let sessionSequence = 0;
+
+function progressFor(uid: string): Map<string, EntryProgress> {
+  const existing = progressStores.get(uid);
+  if (existing) return existing;
+
+  const persisted = load<EntryProgress[] | null>(`progress.${uid}`, null);
+  const rows: EntryProgress[] =
+    persisted ??
+    (seed().weak ?? []).map((entryId) => ({
+      entryId,
+      status: 'wrong' as const,
+      lastMode: 'flashcard' as const,
+      lastAt: '2026-06-23T00:00:00.000Z',
+      attempts: 1,
+      correctCount: 0,
+    }));
+
+  const store = new Map(rows.map((row) => [row.entryId, row]));
+  progressStores.set(uid, store);
+  return store;
+}
+
+function sessionsFor(uid: string): PracticeSession[] {
+  const existing = sessionStores.get(uid);
+  if (existing) return existing;
+  const restored = load<PracticeSession[]>(`sessions.${uid}`, []);
+  for (const session of restored) {
+    const n = Number(/^e2e-session-(\d+)$/.exec(session.id)?.[1]);
+    if (Number.isInteger(n) && n > sessionSequence) sessionSequence = n;
+  }
+  sessionStores.set(uid, restored);
+  return restored;
+}
+
+export const progressRepositoryFor = (uid: string): ProgressRepository => {
+  const progress = progressFor(uid);
+  const sessions = sessionsFor(uid);
+
+  /** Same ordering as `orderBy('finishedAt','desc'), orderBy(__name__,'desc')`. */
+  const newestFirst = (a: PracticeSession, b: PracticeSession) =>
+    b.finishedAt.localeCompare(a.finishedAt) || b.id.localeCompare(a.id);
+
+  return {
+    listAll(): Promise<EntryProgress[]> {
+      return Promise.resolve([...progress.values()]);
+    },
+
+    recordSession(session: PracticeSessionDraft, rows: EntryProgress[]): Promise<string> {
+      const id = `e2e-session-${++sessionSequence}`;
+      sessions.push({ ...session, id, finishedAt: new Date().toISOString() });
+      // Merging row by row, not replacing the map — the real adapter writes
+      // with `merge: true` and a substitute that clobbered would hide it.
+      for (const row of rows) progress.set(row.entryId, row);
+      save(`sessions.${uid}`, sessions);
+      save(`progress.${uid}`, [...progress.values()]);
+      return Promise.resolve(id);
+    },
+
+    listSessions({ limit, cursor }: PageQuery): Promise<Page<PracticeSession>> {
+      const all = [...sessions].sort(newestFirst);
+      const start = cursor ? all.findIndex((session) => session.id === cursor) + 1 : 0;
+      const items = all.slice(start, start + limit);
+      const more = start + items.length < all.length;
+      return Promise.resolve({
+        items,
+        cursor: more ? (items[items.length - 1]?.id ?? null) : null,
+      });
     },
   };
 };
