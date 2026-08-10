@@ -1,7 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Ruby } from '@/components/Ruby';
 import type { Entry } from '@/domain/entry';
 import { SessionHeader } from './SessionHeader';
+
+/** The hint printed on a button. Not shown for 中断, which has no shortcut. */
+function Key({ children }: { children: string }) {
+  return (
+    <kbd className="ml-2 rounded border border-current/25 px-1.5 py-0.5 text-[10px] font-normal opacity-70">
+      {children}
+    </kbd>
+  );
+}
 
 /**
  * One card at a time: the word, then its meaning, then a self-assessment.
@@ -14,12 +23,18 @@ export function FlashcardSession({
   entry,
   index,
   total,
+  keyboard = true,
   onAnswer,
   onQuit,
 }: {
   entry: Entry;
   index: number;
   total: number;
+  /**
+   * False while a dialog is over the card. Without it, the Escape that closes
+   * the quit confirmation is also the Escape that reopens it.
+   */
+  keyboard?: boolean;
   onAnswer: (correct: boolean) => void;
   onQuit: () => void;
 }) {
@@ -29,6 +44,45 @@ export function FlashcardSession({
     setFlipped(false);
     onAnswer(correct);
   };
+
+  /**
+   * Space turns the card, ← and → answer it, Escape leaves.
+   *
+   * Bound on the document rather than a focused element: there is nothing here
+   * worth making the learner tab to first, and a drill answered from the
+   * keyboard is the whole point of a flashcard.
+   *
+   * The arrows are ignored before the flip, exactly as the buttons are absent
+   * before it. A shortcut that could answer a card whose meaning is still
+   * hidden would quietly reintroduce the thing the flip gate exists to stop.
+   */
+  useEffect(() => {
+    if (!keyboard) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      // A held key repeats, and a repeated answer would tear through the queue.
+      if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+
+      if (event.key === 'Escape') {
+        onQuit();
+        return;
+      }
+      if (event.key === ' ') {
+        // Space scrolls the page by default, which moves the card being read.
+        event.preventDefault();
+        setFlipped((current) => !current);
+        return;
+      }
+      if (!flipped) return;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        setFlipped(false);
+        onAnswer(event.key === 'ArrowRight');
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [keyboard, flipped, onAnswer, onQuit]);
 
   const meanings = entry.senses.map((sense) => sense.description).filter(Boolean);
   const example = entry.senses.find((sense) => sense.example)?.example ?? entry.examples[0]?.ja;
@@ -79,6 +133,7 @@ export function FlashcardSession({
             className="min-h-12 rounded-pill bg-danger-soft text-sm font-semibold text-danger"
           >
             もう一度
+            <Key>←</Key>
           </button>
           <button
             type="button"
@@ -86,6 +141,7 @@ export function FlashcardSession({
             className="min-h-12 rounded-pill bg-accent text-sm font-semibold text-on-accent"
           >
             わかった
+            <Key>→</Key>
           </button>
         </div>
       ) : (
@@ -95,6 +151,7 @@ export function FlashcardSession({
           className="min-h-12 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent"
         >
           裏を見る
+          <Key>Space</Key>
         </button>
       )}
     </section>

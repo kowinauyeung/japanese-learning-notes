@@ -13,6 +13,7 @@ import type {
 } from '@/domain/entry';
 import { PRACTICE_MODES } from '@/domain/practice';
 import type { EntryProgress, PracticeSession } from '@/domain/practice';
+import type { WordSet } from '@/domain/wordSet';
 import { emptyDraft, parseTags } from './draft';
 
 /**
@@ -283,5 +284,29 @@ export function sanitizeSession(id: string, data: unknown): PracticeSession {
     missed: strings(raw.missed),
     startedAt: isoDateTime(raw.startedAt),
     finishedAt: isoDateTime(raw.finishedAt),
+  };
+}
+
+/**
+ * A 単語集, coerced on read.
+ *
+ * `entryIds` is deduped here rather than only on write: the order *is* the
+ * study order, and a duplicate would deal the same card twice in one session.
+ */
+export function sanitizeWordSet(id: string, data: unknown): WordSet {
+  const raw = record(data);
+  return {
+    id,
+    ownerUid: str(raw.ownerUid),
+    name: str(raw.name),
+    description: str(raw.description),
+    entryIds: [...new Set(strings(raw.entryIds))],
+    level: oneOfOptional(raw.level, JLPT_LEVELS),
+    topics: strings(raw.topics),
+    publishedId: str(raw.publishedId) || null,
+    publishedVersion: nonNegativeInt(raw.publishedVersion),
+    copiedFrom: attribution(raw.copiedFrom),
+    createdAt: isoDateTime(raw.createdAt),
+    updatedAt: isoDateTime(raw.updatedAt),
   };
 }

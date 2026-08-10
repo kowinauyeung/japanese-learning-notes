@@ -1,5 +1,7 @@
-import { JLPT_LEVELS } from '@/domain/entry';
+import { JLPT_LEVELS, POS, WORD_ORIGINS } from '@/domain/entry';
 import type { PracticeMode } from '@/domain/practice';
+import type { WordSet } from '@/domain/wordSet';
+import { activeQuickRange, QUICK_RANGES, quickRangeStart } from '@/lib/practice';
 import type { PracticeFilters } from '@/lib/practice';
 
 const MODE_TITLE: Record<PracticeMode, string> = {
@@ -22,12 +24,14 @@ function chipClass(active: boolean) {
   }`;
 }
 
+const selectClass = 'rounded-panel border-line bg-bg text-ink min-h-9 border px-2 text-xs w-full';
+
 /**
  * The screen both practice modes open on.
  *
- * 単語集 chips are in the design and are absent here: `WordSetRepository` has
- * no adapter yet, so there are no sets to show and the design says to hide the
- * row when there are none. They belong with `/wordsets`, not ahead of it.
+ * The 単語集 row hides itself when there are none, which is the design's rule
+ * and, until `/wordsets` exists, its permanent state in the running app: the
+ * read path is real but nothing writes a set yet.
  *
  * `matchCount` is computed by the caller rather than here, because the same
  * filtered list is what 開始する turns into the queue — recomputing it in two
@@ -37,6 +41,8 @@ export function PracticeSetup({
   mode,
   filters,
   allTags,
+  allSets,
+  now,
   matchCount,
   weakCount,
   weakState,
@@ -47,6 +53,10 @@ export function PracticeSetup({
   mode: PracticeMode;
   filters: PracticeFilters;
   allTags: string[];
+  /** Hidden entirely when empty, per the design — see the note above. */
+  allSets: WordSet[];
+  /** What 「直近1ヶ月」 is measured from. An argument so it can be frozen. */
+  now: Date;
   matchCount: number;
   weakCount: number;
   /** 苦手のみ can only be honoured once the progress map has arrived. */
@@ -55,8 +65,20 @@ export function PracticeSetup({
   onStart: () => void;
   onCancel: () => void;
 }) {
-  const set = <K extends keyof PracticeFilters>(key: K, value: PracticeFilters[K]) =>
+  const update = <K extends keyof PracticeFilters>(key: K, value: PracticeFilters[K]) =>
     onChange({ ...filters, [key]: value });
+
+  const active = activeQuickRange(filters, now);
+
+  // A quick range clears any end the learner had set: 「直近1ヶ月」 means
+  // "since that day", and leaving an old end in place would silently produce a
+  // window that is neither what was asked for nor visible as a mistake.
+  const applyQuickRange = (key: (typeof QUICK_RANGES)[number]['key']) =>
+    onChange(
+      active === key
+        ? { ...filters, from: '', to: '' }
+        : { ...filters, from: quickRangeStart(key, now), to: '' },
+    );
 
   return (
     <section className="mx-auto max-w-2xl space-y-5 rounded-card bg-card p-6 shadow-panel">
@@ -64,6 +86,26 @@ export function PracticeSetup({
         <h1 className="font-display text-2xl font-bold">{MODE_TITLE[mode]}</h1>
         <p className="mt-1 text-sm text-muted">{MODE_NOTE[mode]}</p>
       </header>
+
+      {allSets.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-muted">単語集</p>
+          <div className="flex flex-wrap gap-1.5">
+            {allSets.map((set) => (
+              <button
+                key={set.id}
+                type="button"
+                aria-pressed={filters.sets.includes(set.id)}
+                onClick={() => update('sets', toggle(filters.sets, set.id))}
+                className={chipClass(filters.sets.includes(set.id))}
+              >
+                {set.name}
+                <span className="ml-1.5 opacity-70">{set.entryIds.length}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {allTags.length > 0 && (
         <div className="space-y-1.5">
@@ -74,7 +116,7 @@ export function PracticeSetup({
                 key={tag}
                 type="button"
                 aria-pressed={filters.tags.includes(tag)}
-                onClick={() => set('tags', toggle(filters.tags, tag))}
+                onClick={() => update('tags', toggle(filters.tags, tag))}
                 className={chipClass(filters.tags.includes(tag))}
               >
                 #{tag}
@@ -92,12 +134,83 @@ export function PracticeSetup({
               key={level}
               type="button"
               aria-pressed={filters.jlpt.includes(level)}
-              onClick={() => set('jlpt', toggle(filters.jlpt, level))}
+              onClick={() => update('jlpt', toggle(filters.jlpt, level))}
               className={chipClass(filters.jlpt.includes(level))}
             >
               {level}
             </button>
           ))}
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="space-y-1">
+          <span className="text-[11px] text-muted">品詞</span>
+          <select
+            value={filters.pos}
+            onChange={(event) => update('pos', event.target.value)}
+            className={selectClass}
+          >
+            <option value="">すべて</option>
+            {POS.map((part) => (
+              <option key={part} value={part}>
+                {part}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1">
+          <span className="text-[11px] text-muted">語種</span>
+          <select
+            value={filters.origin}
+            onChange={(event) => update('origin', event.target.value)}
+            className={selectClass}
+          >
+            <option value="">すべて</option>
+            {WORD_ORIGINS.map((origin) => (
+              <option key={origin} value={origin}>
+                {origin}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-[11px] text-muted">学習日</p>
+        <div className="flex flex-wrap gap-1.5">
+          {QUICK_RANGES.map((range) => (
+            <button
+              key={range.key}
+              type="button"
+              aria-pressed={active === range.key}
+              onClick={() => applyQuickRange(range.key)}
+              className={chipClass(active === range.key)}
+            >
+              直近{range.label}
+            </button>
+          ))}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="space-y-1">
+            <span className="text-[11px] text-muted">開始日</span>
+            <input
+              type="date"
+              value={filters.from}
+              onChange={(event) => update('from', event.target.value)}
+              className={selectClass}
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-[11px] text-muted">終了日</span>
+            <input
+              type="date"
+              value={filters.to}
+              onChange={(event) => update('to', event.target.value)}
+              className={selectClass}
+            />
+          </label>
         </div>
       </div>
 
@@ -116,7 +229,7 @@ export function PracticeSetup({
           type="checkbox"
           checked={filters.weakOnly}
           disabled={weakState !== 'ready'}
-          onChange={(event) => set('weakOnly', event.target.checked)}
+          onChange={(event) => update('weakOnly', event.target.checked)}
           className="h-5 w-5 accent-[var(--c-accent)]"
         />
       </label>

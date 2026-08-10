@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { seed, seedSignedIn, WORDS } from './fixtures';
+import { seed, seedSignedIn, WORD_SETS, WORDS } from './fixtures';
 
 /**
  * A practice session from the setup screen to the recorded result.
@@ -54,6 +54,42 @@ test.describe('flashcards', () => {
     await expect(page.getByRole('button', { name: 'わかった' })).toBeVisible();
   });
 
+  /**
+   * The shortcuts are covered as DOM events in
+   * tests/component/FlashcardSession.test.tsx. What only a browser shows is
+   * that a real key press reaches a listener bound to `document` when nothing
+   * on the page has focus — which is the state a session starts in.
+   */
+  test('runs a whole card from the keyboard', async ({ page }) => {
+    await page.goto('/practice/flashcards');
+    await page.getByRole('button', { name: '#仕事' }).click();
+    await page.getByRole('button', { name: '開始する' }).click();
+
+    await page.keyboard.press('Space');
+    await expect(page.getByRole('button', { name: /わかった/ })).toBeVisible();
+    await page.keyboard.press('ArrowRight');
+
+    await expect(page.getByText('1 / 1')).toBeVisible();
+  });
+
+  test('asks before throwing a session away, and stays put if refused', async ({ page }) => {
+    await page.goto('/practice/flashcards');
+    await page.getByRole('button', { name: '開始する' }).click();
+
+    await page.keyboard.press('Escape');
+    const dialog = page.getByRole('dialog', { name: '練習を中断しますか？' });
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'キャンセル' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByLabel('進捗')).toBeVisible();
+
+    await page.getByRole('button', { name: '中断' }).click();
+    await page.getByRole('button', { name: '中断する' }).click();
+    // Back on the setup screen, with the session discarded rather than scored.
+    await expect(page.getByRole('button', { name: '開始する' })).toBeVisible();
+  });
+
   test('records the session, and the failed word comes back as 苦手', async ({ page }) => {
     await page.goto('/practice/flashcards');
     await page.getByRole('button', { name: '#仕事' }).click();
@@ -105,6 +141,63 @@ test.describe('the practice setup screen', () => {
 
     await page.getByRole('button', { name: '開始する' }).click();
     await expect(page.getByText('兆候')).toBeVisible();
+  });
+
+  /**
+   * The quick range is the one filter whose value the learner never types, so
+   * it is the one where the control and the count can disagree without anyone
+   * noticing. The clock is frozen at 2026-06-24 by `seed`, which is what makes
+   * 「直近1週間」 a fixed window here rather than a moving one.
+   */
+  test('narrows to the last week from a single chip', async ({ page }) => {
+    await seedSignedIn(page);
+    await page.goto('/practice/flashcards');
+    await expect(page.getByText('3 件が対象')).toBeVisible();
+
+    await page.getByRole('button', { name: '直近1週間' }).click();
+
+    // 2026-06-17 onward: two words are in this week, ちょっと is from January.
+    await expect(page.getByLabel('開始日')).toHaveValue('2026-06-17');
+    await expect(page.getByText('2 件が対象')).toBeVisible();
+  });
+
+  test('filters on 品詞 and 語種', async ({ page }) => {
+    await seedSignedIn(page);
+    await page.goto('/practice/flashcards');
+
+    await page.getByLabel('品詞').selectOption('副詞');
+    await expect(page.getByText('1 件が対象')).toBeVisible();
+
+    await page.getByLabel('品詞').selectOption('');
+    await page.getByLabel('語種').selectOption('漢語');
+    await expect(page.getByText('1 件が対象')).toBeVisible();
+  });
+
+  /**
+   * The 単語集 row is absent whenever there are none, which is the design's
+   * rule and — until `/wordsets` exists — the state of the running app. The
+   * pair of cases is what stops the row being quietly dropped altogether.
+   */
+  test('hides the 単語集 row when the learner has no sets', async ({ page }) => {
+    await seedSignedIn(page);
+    await page.goto('/practice/flashcards');
+
+    // Scoped to main: 単語集 is also a nav link, which is always there.
+    await expect(page.getByRole('main').getByText('JLPTレベル')).toBeVisible();
+    await expect(page.getByRole('main').getByText('単語集')).toBeHidden();
+  });
+
+  test('narrows the drill to the members of a 単語集', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
+    await page.goto('/practice/flashcards');
+    await expect(page.getByText('3 件が対象')).toBeVisible();
+
+    await page.getByRole('button', { name: /仕事セット/ }).click();
+    await expect(page.getByText('2 件が対象')).toBeVisible();
+
+    // And it composes with the other chips rather than replacing them.
+    await page.getByRole('button', { name: 'N1' }).click();
+    await expect(page.getByText('1 件が対象')).toBeVisible();
   });
 
   /** `:mode` is user-editable, and the app has exactly two modes. */

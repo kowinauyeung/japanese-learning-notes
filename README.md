@@ -24,12 +24,14 @@ artefacts and how to replay them.
   senses, example sentences, usage notes and context sections.
 - **Create / edit / delete** — a quick form and a detailed form, plus a JSON
   import path for assistant-generated entries.
-
-- **Practice** — a setup screen (tag and JLPT chips, a 苦手な語のみ toggle, a live
-  match count) that starts either a **flashcard** run or a **dictation** run. Flashcards
-  flip to the meaning before offering もう一度 / わかった; dictation speaks the word
-  through the Web Speech API and marks what you type. A finished session is recorded
-  once, and a word answered wrong turns up under 苦手な語のみ next time.
+- **Practice** — a setup screen (単語集, tag and JLPT chips, 品詞 and 語種, a learning-date
+  range with 直近1週間 / 1ヶ月 / 1年 shortcuts, a 苦手な語のみ toggle and a live match
+  count) that starts either a **flashcard** run or a **dictation** run. Flashcards flip
+  to the meaning before offering もう一度 / わかった, and can be driven entirely from
+  the keyboard — <kbd>Space</kbd> turns the card, <kbd>←</kbd> / <kbd>→</kbd> answer it,
+  <kbd>Esc</kbd> asks to leave. Dictation speaks the word through the Web Speech API and
+  marks what you type. A finished session is recorded once, and a word answered wrong
+  turns up under 苦手な語のみ next time.
 
 ### Planned
 

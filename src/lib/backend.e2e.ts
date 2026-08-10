@@ -6,9 +6,11 @@ import type {
   Page,
   PageQuery,
   ProgressRepository,
+  WordSetRepository,
 } from '@/domain/ports';
 import type { EntryProgress, PracticeSession, PracticeSessionDraft } from '@/domain/practice';
-import { sanitizeEntry } from './sanitize';
+import type { WordSet, WordSetDraft } from '@/domain/wordSet';
+import { sanitizeEntry, sanitizeWordSet } from './sanitize';
 
 /**
  * In-memory adapters for the end-to-end build, and nothing else.
@@ -33,6 +35,8 @@ interface Seed {
   entries?: unknown[];
   /** Entry ids to start marked wrong, so 苦手のみ has something to select. */
   weak?: string[];
+  /** Raw 単語集 documents. Nothing in the app creates one yet. */
+  wordSets?: unknown[];
 }
 
 declare global {
@@ -300,6 +304,110 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
         items,
         cursor: more ? (items[items.length - 1]?.id ?? null) : null,
       });
+    },
+  };
+};
+
+// --------------------------------------------------------------- word sets
+
+/**
+ * Read-only in practice: nothing in the app creates a set yet, so the only
+ * source is the seed. Create, update and remove are still implemented, because
+ * a substitute that threw on half its port would be a different port.
+ */
+const setStores = new Map<string, Map<string, WordSet>>();
+let setSequence = 0;
+
+function setsFor(uid: string): Map<string, WordSet> {
+  const existing = setStores.get(uid);
+  if (existing) return existing;
+
+  const persisted = load<WordSet[] | null>(`wordSets.${uid}`, null);
+  const rows =
+    persisted ??
+    (seed().wordSets ?? []).map((raw, index) => {
+      const record = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<
+        string,
+        unknown
+      >;
+      const id = typeof record.id === 'string' ? record.id : `e2e-set-${index + 1}`;
+      return sanitizeWordSet(id, {
+        createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+        updatedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+        ...record,
+        ownerUid: uid,
+      });
+    });
+
+  for (const row of rows) {
+    const n = Number(/^e2e-set-(\d+)$/.exec(row.id)?.[1]);
+    if (Number.isInteger(n) && n > setSequence) setSequence = n;
+  }
+  const store = new Map(rows.map((row) => [row.id, row]));
+  setStores.set(uid, store);
+  return store;
+}
+
+export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
+  const store = setsFor(uid);
+  const stamp = () => new Date().toISOString();
+  const persist = () => {
+    save(`wordSets.${uid}`, [...store.values()]);
+  };
+
+  return {
+    list({ limit, cursor }: PageQuery): Promise<Page<WordSet>> {
+      const all = [...store.values()].sort(
+        (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+      );
+      const start = cursor ? all.findIndex((item) => item.id === cursor) + 1 : 0;
+      const items = all.slice(start, start + limit);
+      const more = start + items.length < all.length;
+      return Promise.resolve({
+        items,
+        cursor: more ? (items[items.length - 1]?.id ?? null) : null,
+      });
+    },
+
+    get(id: string): Promise<WordSet | null> {
+      return Promise.resolve(store.get(id) ?? null);
+    },
+
+    create(draft: WordSetDraft): Promise<string> {
+      const id = `e2e-set-${++setSequence}`;
+      const now = stamp();
+      store.set(id, {
+        ...draft,
+        entryIds: [...new Set(draft.entryIds)],
+        id,
+        ownerUid: uid,
+        publishedId: null,
+        publishedVersion: 0,
+        copiedFrom: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      persist();
+      return Promise.resolve(id);
+    },
+
+    update(id: string, draft: WordSetDraft): Promise<void> {
+      const existing = store.get(id);
+      if (!existing) return Promise.reject(new Error(`no word set ${id}`));
+      store.set(id, {
+        ...existing,
+        ...draft,
+        entryIds: [...new Set(draft.entryIds)],
+        updatedAt: stamp(),
+      });
+      persist();
+      return Promise.resolve();
+    },
+
+    remove(id: string): Promise<void> {
+      store.delete(id);
+      persist();
+      return Promise.resolve();
     },
   };
 };

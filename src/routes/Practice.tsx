@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DictationSession } from '@/components/practice/DictationSession';
 import { FlashcardSession } from '@/components/practice/FlashcardSession';
 import { PracticeSetup } from '@/components/practice/PracticeSetup';
@@ -12,11 +13,13 @@ import {
   EMPTY_PRACTICE_FILTERS,
   matchesPractice,
   mergeProgress,
+  scopeFor,
   shuffle,
   summariseSession,
 } from '@/lib/practice';
 import type { Answer, PracticeFilters } from '@/lib/practice';
 import { useProgress } from '@/lib/progress';
+import { useWordSets } from '@/lib/wordSets';
 
 /**
  * URL segment to mode, and the two are deliberately not the same word.
@@ -65,12 +68,18 @@ function Practice({ mode }: { mode: PracticeMode }) {
     progress,
     record,
   } = useProgress();
+  const { sets } = useWordSets();
   const navigate = useNavigate();
 
   const [filters, setFilters] = useState<PracticeFilters>(EMPTY_PRACTICE_FILTERS);
   const [session, setSession] = useState<Session | null>(null);
+  const [quitting, setQuitting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Frozen at mount: 「直近1ヶ月」 must not shift under the learner because a
+  // re-render happened to cross midnight.
+  const now = useMemo(() => new Date(), []);
 
   const allTags = useMemo(
     () =>
@@ -78,10 +87,10 @@ function Practice({ mode }: { mode: PracticeMode }) {
     [entries],
   );
 
-  const matches = useMemo(
-    () => entries.filter((entry) => matchesPractice(entry, filters, weakIds)),
-    [entries, filters, weakIds],
-  );
+  const matches = useMemo(() => {
+    const scope = scopeFor(filters, sets, weakIds);
+    return entries.filter((entry) => matchesPractice(entry, filters, scope));
+  }, [entries, filters, sets, weakIds]);
 
   const start = (queue: Entry[], filterLabel: string) => {
     setSaveError(null);
@@ -136,11 +145,13 @@ function Practice({ mode }: { mode: PracticeMode }) {
         mode={mode}
         filters={filters}
         allTags={allTags}
+        allSets={sets}
+        now={now}
         matchCount={matches.length}
         weakCount={weakIds.size}
         weakState={progressError ? 'error' : progressLoading ? 'loading' : 'ready'}
         onChange={setFilters}
-        onStart={() => start(shuffle(matches, Math.random), describeFilters(filters))}
+        onStart={() => start(shuffle(matches, Math.random), describeFilters(filters, sets))}
         onCancel={() => void navigate('/')}
       />
     );
@@ -153,9 +164,31 @@ function Practice({ mode }: { mode: PracticeMode }) {
       index: session.index,
       total: session.queue.length,
       onAnswer: answer,
-      onQuit: () => setSession(null),
+      onQuit: () => setQuitting(true),
     };
-    return mode === 'flashcard' ? <FlashcardSession {...props} /> : <DictationSession {...props} />;
+    return (
+      <>
+        {mode === 'flashcard' ? (
+          <FlashcardSession {...props} keyboard={!quitting} />
+        ) : (
+          <DictationSession {...props} />
+        )}
+        {/* An abandoned session is not recorded, so leaving really does throw
+            the answers away — worth one keystroke of friction, and worth more
+            once Escape can trigger it by accident. */}
+        <ConfirmDialog
+          open={quitting}
+          title="練習を中断しますか？"
+          message={`ここまでの ${session.answers.length} 問は記録されません。`}
+          confirmLabel="中断する"
+          onConfirm={() => {
+            setQuitting(false);
+            setSession(null);
+          }}
+          onClose={() => setQuitting(false)}
+        />
+      </>
+    );
   }
 
   const missedIds = new Set(
@@ -170,7 +203,7 @@ function Practice({ mode }: { mode: PracticeMode }) {
       missed={missed}
       saving={saving}
       saveError={saveError}
-      onRestart={() => start(shuffle(matches, Math.random), describeFilters(filters))}
+      onRestart={() => start(shuffle(matches, Math.random), describeFilters(filters, sets))}
       onRetryMissed={() => start(shuffle(missed, Math.random), `${session.filterLabel} / 復習`)}
     />
   );

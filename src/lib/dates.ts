@@ -55,3 +55,22 @@ export function fullDate(key: string): string {
   const date = parseLocalDate(key);
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
 }
+
+/**
+ * The same calendar day N months earlier, clamped to the end of a shorter month.
+ *
+ * `setMonth` on its own rolls forward instead of clamping: 3月31日 minus one
+ * month is 2月31日, which `Date` reads as 3月3日 — so "the last month" would
+ * start three days *after* it was asked for, and a range meant to widen would
+ * quietly narrow. Moving to the 1st before shifting is what avoids landing on a
+ * day the target month does not have.
+ */
+export function subtractMonths(date: Date, months: number): Date {
+  const day = date.getDate();
+  const shifted = new Date(date);
+  shifted.setDate(1);
+  shifted.setMonth(shifted.getMonth() - months);
+  const lastDayOfTarget = new Date(shifted.getFullYear(), shifted.getMonth() + 1, 0).getDate();
+  shifted.setDate(Math.min(day, lastDayOfTarget));
+  return shifted;
+}
