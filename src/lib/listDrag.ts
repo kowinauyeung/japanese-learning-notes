@@ -293,6 +293,28 @@ export function useListDrag(onDrop: (source: DragSource, at: DropAt) => void): L
   }, [dragging]);
 
   /**
+   * The cursor, and the text under it, for as long as the drag lasts.
+   *
+   * Set on `document.body` rather than on the row, because the pointer spends
+   * the drag over everything *except* the row it started on — over the other
+   * panel, over the gaps, over the page. A grab cursor that reverts to a text
+   * caret the moment the pointer leaves the row reads as the drag having been
+   * dropped. `user-select` goes with it: a pointer held down and moved is a
+   * text selection to the browser, and a half-selected list is the visible
+   * evidence of that fight.
+   */
+  useEffect(() => {
+    if (!dragging) return;
+    const { cursor: hadCursor, userSelect: hadSelect } = document.body.style;
+    document.body.style.cursor = 'grabbing';
+    document.body.style.userSelect = 'none';
+    return () => {
+      document.body.style.cursor = hadCursor;
+      document.body.style.userSelect = hadSelect;
+    };
+  }, [dragging]);
+
+  /**
    * Scrolling the panel under the pointer while a drag is held near its edge.
    *
    * A frame loop rather than work done inside `pointermove`, because a pointer

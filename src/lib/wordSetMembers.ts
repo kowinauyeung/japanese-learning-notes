@@ -84,6 +84,21 @@ export function withoutMember(entryIds: readonly string[], entryId: string): str
 }
 
 /**
+ * Drop several at once — the ones a screen was showing, and only those.
+ *
+ * Not "empty the set": an id whose word has been deleted is not on that screen,
+ * so it is not among the ids handed in, and it stays. Clearing it as well would
+ * be this control quietly doing something nobody asked it to.
+ */
+export function withoutMembers(
+  entryIds: readonly string[],
+  entryIdsToDrop: readonly string[],
+): string[] {
+  const dropping = new Set(entryIdsToDrop);
+  return entryIds.filter((id) => !dropping.has(id));
+}
+
+/**
  * Move the member at `from` so that it lands at insertion point `to`.
  *
  * `to` is an insertion index in the *original* array's coordinates — the gap

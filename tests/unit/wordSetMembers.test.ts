@@ -8,6 +8,7 @@ import {
   toDraft,
   withMember,
   withoutMember,
+  withoutMembers,
 } from '@/lib/wordSetMembers';
 import { makeEntry } from '../fixtures/entry';
 import { makeWordSet } from '../fixtures/wordSet';
@@ -134,6 +135,22 @@ describe('withMember', () => {
 describe('withoutMember', () => {
   it('removes only the word asked for, in place', () => {
     expect(withoutMember(['w1', 'w2', 'w3'], 'w2')).toEqual(['w1', 'w3']);
+  });
+});
+
+describe('withoutMembers', () => {
+  it('removes several at once and keeps the rest in order', () => {
+    expect(withoutMembers(['w1', 'w2', 'w3', 'w4'], ['w3', 'w1'])).toEqual(['w2', 'w4']);
+  });
+
+  /**
+   * 表示中の N 語を削除 hands over the rows it was showing, and an id whose word
+   * has been deleted is not one of them. Emptying the array instead would be
+   * that button doing more than it says — and there is nothing on screen for
+   * the extra removal to have come from.
+   */
+  it('leaves behind an id that was not on screen to be removed', () => {
+    expect(withoutMembers(['w1', 'gone', 'w2'], ['w1', 'w2'])).toEqual(['gone']);
   });
 });
 

@@ -80,7 +80,7 @@ test.describe('word sets', () => {
     await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill('ちょうこう');
     await page.getByRole('button', { name: '＋ 追加' }).click();
 
-    await expect(page.getByRole('heading', { name: /1 語/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /1 語/ })).toBeVisible();
     // Matched on href rather than on the name: furigana splits a headword into
     // separate <ruby> elements, so its accessible name interleaves the readings.
     await expect(page.locator('a[href="/vocabulary/w-choukou"]')).toBeVisible();
@@ -96,14 +96,14 @@ test.describe('word sets', () => {
     await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
     await page.goto('/wordsets');
     await page.getByRole('link', { name: /仕事セット/ }).click();
-    await expect(page.getByRole('heading', { name: /2 語/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /2 語/ })).toBeVisible();
 
     await page
       .locator('li', { has: page.locator('a[href="/vocabulary/w-choukou"]') })
       .getByRole('button', { name: '削除' })
       .click();
 
-    await expect(page.getByRole('heading', { name: /1 語/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /1 語/ })).toBeVisible();
     await page.goto('/vocabulary');
     await expect(page.getByText('3 語')).toBeVisible();
   });
@@ -122,7 +122,7 @@ test.describe('word sets', () => {
     await page.getByRole('button', { name: '作成' }).click();
     await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill('ちょうこう');
     await page.getByRole('button', { name: '＋ 追加' }).click();
-    await expect(page.getByRole('heading', { name: /1 語/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /1 語/ })).toBeVisible();
 
     await page.goto('/wordsets');
     await expect(page.getByRole('link', { name: /仕事セット/ })).toContainText('2 語');
@@ -243,6 +243,27 @@ test.describe('word sets', () => {
       .toEqual(['/vocabulary/w-kiriwake', '/vocabulary/w-choukou', '/vocabulary/w-chotto']);
     // And the picker is empty afterwards, because it excludes what the set holds.
     await expect(page.getByText('条件に合う単語がありません')).toBeVisible();
+  });
+
+  /**
+   * Emptying a set confirms first, unlike removing one row. What it destroys is
+   * the study order, which took dragging to build and is recorded nowhere else,
+   * so a mis-press costs the arrangement rather than one word.
+   */
+  test('empties the set only after confirming, and keeps the words', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
+    await page.goto('/wordsets/set-work');
+
+    await page.getByRole('button', { name: '表示中の 2 語を削除' }).click();
+    await page.getByRole('button', { name: 'キャンセル' }).click();
+    await expect(memberOrder(page)).toHaveCount(2);
+
+    await page.getByRole('button', { name: '表示中の 2 語を削除' }).click();
+    await page.getByRole('button', { name: '外す' }).click();
+
+    await expect.poll(() => memberHrefs(page)).toEqual([]);
+    await page.goto('/vocabulary');
+    await expect(page.getByText('3 語')).toBeVisible();
   });
 
   /**

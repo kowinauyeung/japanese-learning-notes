@@ -51,7 +51,11 @@ export function DragHandle({
       }}
       // 44px square: on touch this is the only way into a drag, because a row
       // that claimed the gesture could no longer scroll the panel it sits in.
-      className="grid h-11 w-11 shrink-0 cursor-grab touch-none place-items-center rounded-panel text-muted select-none hover:bg-bg-alt active:cursor-grabbing aria-disabled:cursor-default aria-disabled:opacity-40"
+      // Half-visible until the row is pointed at, then full. Present enough to
+      // be found, quiet enough that a list of twenty does not read as a column
+      // of dots — and the row it belongs to is what makes it come forward, so
+      // the grip is what teaches that the row itself is draggable.
+      className="grid h-11 w-11 shrink-0 cursor-grab touch-none place-items-center rounded-panel text-muted opacity-50 transition select-none group-hover:opacity-100 hover:bg-bg-alt hover:text-ink focus-visible:opacity-100 active:cursor-grabbing aria-disabled:cursor-default aria-disabled:opacity-30"
     >
       ⠿
     </button>

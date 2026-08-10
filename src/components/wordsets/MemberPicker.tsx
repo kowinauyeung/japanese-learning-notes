@@ -60,6 +60,8 @@ export function MemberPicker({
       <ul
         data-drop-list={list}
         data-drop-count={shown.length}
+        // No `data-drop-state`: this list is a source and refuses drops, so it
+        // must not offer the outline that says otherwise. See `MemberList`.
         className="min-h-0 flex-1 overflow-y-auto px-4 py-2"
       >
         {shown.map((entry, index) => (
@@ -67,8 +69,10 @@ export function MemberPicker({
             key={entry.id}
             data-drop-index={index}
             {...drag.rowProps({ list, id: entry.id, index })}
-            className={`flex touch-pan-y items-center gap-2 border-y-2 border-transparent py-1.5 ${
-              drag.dragging?.list === list && drag.dragging.id === entry.id ? 'opacity-40' : ''
+            className={`group flex cursor-grab touch-pan-y items-center gap-2 rounded-panel border-y-2 border-transparent py-1.5 select-none hover:bg-bg-alt ${
+              drag.dragging?.list === list && drag.dragging.id === entry.id
+                ? 'cursor-grabbing opacity-40'
+                : ''
             }`}
           >
             <DragHandle

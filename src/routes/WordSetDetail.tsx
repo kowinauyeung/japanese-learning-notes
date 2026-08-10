@@ -19,6 +19,7 @@ import {
   toDraft,
   withMember,
   withoutMember,
+  withoutMembers,
 } from '@/lib/wordSetMembers';
 import { useWordSets } from '@/lib/wordSets';
 
@@ -45,6 +46,16 @@ export function Component() {
   const [writeError, setWriteError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  /**
+   * The words 表示中の N 語を削除 is asking about, or null when it has not been
+   * pressed.
+   *
+   * It confirms and 削除 on a single row does not, because they are different
+   * sizes of mistake: one row is one press to put back, and the whole list
+   * takes the study order with it — an order that took dragging to build and
+   * that nothing records anywhere else.
+   */
+  const [clearing, setClearing] = useState<string[] | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
 
@@ -223,6 +234,7 @@ export function Component() {
             onRemove={(entryId) =>
               void write({ ...toDraft(set), entryIds: withoutMember(entryIds, entryId) })
             }
+            onRemoveAll={setClearing}
             onMoveBy={(index, delta) =>
               applyOrder(reorderMembers(entryIds, index, delta < 0 ? index - 1 : index + 2))
             }
@@ -248,6 +260,20 @@ export function Component() {
           void write({ ...toDraft(set), ...fields }).then((ok) => {
             if (ok) setEditing(false);
           });
+        }}
+      />
+
+      <ConfirmDialog
+        open={clearing !== null}
+        title="表示中の単語を削除"
+        message={`この単語集から ${clearing?.length ?? 0} 語を外しますか？\n単語そのものは削除されません。`}
+        confirmLabel="外す"
+        busy={busy}
+        error={writeError}
+        onClose={() => setClearing(null)}
+        onConfirm={() => {
+          if (clearing) applyOrder(withoutMembers(entryIds, clearing));
+          setClearing(null);
         }}
       />
 
