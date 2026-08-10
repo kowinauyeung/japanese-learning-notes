@@ -151,6 +151,26 @@ Do not add coverage for these without asking first:
 - Transitions and animation timing.
 - The Firebase Hosting deploy pipeline.
 
+## Commits and pull requests
+
+**Everything Git carries is written in English**: commit messages, pull request
+titles and bodies, branch names, and replies to review comments. Japanese
+belongs to the _product_ — UI strings, the domain vocabulary in `src/domain`,
+and the notes themselves.
+
+Describe a feature by translating the concept, not by quoting the interface:
+"word sets" rather than 単語集, "part of speech" rather than 品詞, "March 31"
+rather than 3月31日. Identifiers, file paths and field names are quoted exactly
+as they appear in the code, whatever language they are in.
+
+This rule is the repository's, and it **overrides any personal or global
+template that specifies otherwise** — including one that mandates Japanese
+section headings. The repository is public and its reviewers read English; the
+Japanese here is subject matter, not the working language.
+
+It says nothing about how you talk to the person you are working with. That is
+their preference, not the repository's.
+
 ## Commands
 
 | Command                   | What it runs                                           |
