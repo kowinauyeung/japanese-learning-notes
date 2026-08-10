@@ -157,16 +157,13 @@ describe('DictationSession — why the sound did not come out', () => {
   });
 
   /**
-   * The card is silent until asked. Speaking from an effect was refused by
-   * Chrome for want of a user gesture, and left the engine wedged — see
-   * `DictationSession` for the measurement.
+   * Autoplay is the drill's whole opening move, and it works in Safari on the
+   * machine where Chrome would not — so it stays, and Chrome is worked around.
    */
-  it('does not speak until the learner presses the button', () => {
+  it('speaks on arrival, naming the voice rather than leaving Chrome to match it', () => {
     const { spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
     setup();
-    expect(spoken).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
     expect(spoken.at(-1)?.text).toBe('ちょっと');
     expect(spoken.at(-1)?.voice?.name).toBe('Kyoko');
     expect(spoken.at(-1)?.lang).toBe('ja-JP');
@@ -187,7 +184,6 @@ describe('DictationSession — why the sound did not come out', () => {
   it('speaks synchronously on a second press while the first word is playing', () => {
     const { engine, spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
     setup();
-    fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
     expect(spoken).toHaveLength(1);
 
     engine.speaking = true;
@@ -203,7 +199,6 @@ describe('DictationSession — why the sound did not come out', () => {
   it('surfaces an engine error rather than leaving the learner guessing', () => {
     const { spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
     setup();
-    fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
 
     act(() => {
       spoken.at(-1)?.onerror?.({ error: 'not-allowed' });
@@ -248,8 +243,6 @@ describe('DictationSession — silence that reports nothing', () => {
       voice('ja-JP', 'Google 日本語', false),
     ]);
     setup();
-
-    press();
     expect(spoken[0]?.voice?.name).toBe('Kyoko');
 
     await act(async () => {
@@ -271,13 +264,14 @@ describe('DictationSession — silence that reports nothing', () => {
     ]);
     setup();
 
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      press();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2_500);
       });
+      press();
     }
 
+    // Kyoko on arrival, then one per press, ending stuck on the default.
     expect(spoken.map((item) => item.voice?.name ?? null)).toEqual([
       'Kyoko',
       'Google 日本語',
@@ -290,7 +284,6 @@ describe('DictationSession — silence that reports nothing', () => {
     vi.useFakeTimers();
     const { spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
     setup();
-    fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
@@ -308,7 +301,88 @@ describe('DictationSession — silence that reports nothing', () => {
   it('resumes the engine before speaking, in case it is stuck paused', () => {
     const { engine } = installEngine([voice('ja-JP', 'Kyoko')]);
     setup();
-    fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
     expect(engine.resume).toHaveBeenCalled();
+  });
+});
+
+describe('DictationSession — replaying the word', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * Enter on an empty field can only mean "I did not catch that". Marking a
+   * blank answer wrong is a guaranteed failure the learner never chose, and it
+   * is unrecoverable — the card is scored and gone.
+   */
+  it('replays the word on Enter instead of marking an empty answer wrong', () => {
+    const { spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
+    const { input, onAnswer } = setup();
+    expect(spoken).toHaveLength(1);
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(spoken).toHaveLength(2);
+    expect(screen.queryByText(/正解/)).not.toBeInTheDocument();
+    expect(onAnswer).not.toHaveBeenCalled();
+  });
+
+  /** Whitespace is not an answer either — an IME leaves plenty of it around. */
+  it('treats a field of spaces as empty', () => {
+    const { spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
+    const { input } = setup();
+
+    fireEvent.change(input, { target: { value: '  ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(spoken).toHaveLength(2);
+    expect(screen.queryByText(/正解/)).not.toBeInTheDocument();
+  });
+
+  it('still marks a real answer', () => {
+    installEngine([voice('ja-JP', 'Kyoko')]);
+    const { input } = setup();
+
+    fireEvent.change(input, { target: { value: 'ちょっと' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(screen.getByText('✅ 正解')).toBeInTheDocument();
+  });
+
+  /**
+   * The button and the arrival utterance must not stack, and the only way they
+   * can is *after a failure*: pressing 単語を聞く clears the failed state,
+   * which puts `status` back to `ready`, which re-runs the arrival effect. A
+   * press on a healthy engine changes no dependency and could never show this,
+   * so the timeout has to be walked through first.
+   */
+  it('speaks once per press after a failure, not twice', async () => {
+    vi.useFakeTimers();
+    try {
+      const { spoken } = installEngine([voice('ja-JP', 'Kyoko')]);
+      setup();
+      expect(spoken).toHaveLength(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_500);
+      });
+      expect(screen.getByText(/音声を再生できませんでした/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /単語を聞く/ }));
+      expect(spoken).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * Chrome's synthesiser outlives the document. A page that inherits a queue
+   * left mid-utterance by the previous one sees `speaking: true` forever and
+   * every later `speak()` joins a queue that never drains.
+   */
+  it('clears a queue inherited from the previous page before speaking', () => {
+    const { engine } = installEngine([voice('ja-JP', 'Kyoko')]);
+    setup();
+    expect(engine.cancel).toHaveBeenCalled();
   });
 });

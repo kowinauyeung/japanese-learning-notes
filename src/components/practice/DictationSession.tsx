@@ -41,26 +41,30 @@ export function DictationSession({
   const { status, speak } = useJapaneseSpeech();
 
   /**
-   * The card does **not** speak on arrival, and that is not an omission.
+   * Speak on arrival, so the drill starts by playing rather than by asking to.
    *
-   * It used to. Chrome has refused `speechSynthesis.speak()` outside a user
-   * gesture since M71, and an effect is one render removed from the click that
-   * caused it — so that call was always refused. Worse than refused: it left
-   * the engine reporting `speaking: true` with nothing playing, permanently,
-   * and `cancel()` could not clear it. Every later press of 単語を聞く then
-   * went into a queue that was already wedged, which is why the button was
-   * silent on a machine where `say -v Kyoko` worked perfectly.
+   * This was removed once, on the theory that Chrome's user-activation rule
+   * made it unworkable, and putting it back is deliberate: Safari on the same
+   * machine autoplays it correctly, so the feature is sound and Chrome is the
+   * thing to work around — not the reason to drop it. The workaround lives in
+   * `lib/speech.ts`, which clears the queue Chrome inherits from the previous
+   * page before this one speaks.
    *
-   * Measured, not deduced: on the affected page `speechSynthesis.speaking` read
-   * `true` before any test ran; on another site in the same browser it read
-   * `false` and spoke.
-   *
-   * Autoplay is not worth a wedged engine. The button is one press and it
-   * always works, because it is a gesture.
+   * If it is refused anyway the utterance reports `not-allowed`, the hook shows
+   * a message, and 単語を聞く still works because a click is a gesture.
    */
+  const autoSpokenFor = useRef<string | null>(null);
   useEffect(() => {
+    // Keyed on the card, not on the effect running. `status` is part of the
+    // dependencies because arrival can precede the voice list, and it also
+    // flips back to `ready` whenever the learner presses the button — without
+    // this guard that press would be answered by two overlapping utterances.
+    if (status === 'ready' && autoSpokenFor.current !== entry.id) {
+      autoSpokenFor.current = entry.id;
+      speak(spokenForm(entry));
+    }
     inputRef.current?.focus();
-  }, [entry]);
+  }, [entry, speak, status]);
 
   const check = () => {
     if (result !== null) return;
@@ -75,19 +79,27 @@ export function DictationSession({
   };
 
   /**
-   * Enter means 答え合わせ, except while the IME owns it.
+   * Enter means 答え合わせ, except while the IME owns it, and except on an
+   * empty field.
    *
    * Pressing Enter to accept a conversion candidate is the single most common
    * keystroke in typing Japanese. Treating it as a submission marks the answer
    * against whatever was on screen mid-conversion — usually the kana — and the
    * learner never gets to type the word they were converting.
+   *
+   * On an empty field it replays the word instead. Enter there can only mean
+   * "I did not catch that" — marking a blank answer wrong is a guaranteed
+   * failure the learner never chose, and replaying is what they were reaching
+   * for the mouse to do. It also keeps the whole drill on the keyboard, and the
+   * keypress is a gesture, so this path can speak even where autoplay cannot.
    */
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== 'Enter') return;
     if (composing.current || event.nativeEvent.isComposing) return;
     event.preventDefault();
-    if (result === null) check();
-    else next();
+    if (result !== null) next();
+    else if (typed.trim() === '') speak(spokenForm(entry));
+    else check();
   };
 
   const speakable = status === 'ready' || status === 'loading' || status === 'failed';

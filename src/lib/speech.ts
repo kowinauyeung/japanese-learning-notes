@@ -108,6 +108,21 @@ export function useJapaneseSpeech(): { status: SpeechStatus; speak: (text: strin
     const engine = synth();
     if (!engine) return;
 
+    /**
+     * **Failure 10: a queue inherited from the previous page.**
+     *
+     * Chrome's synthesiser outlives the document that filled it. Navigating
+     * away mid-utterance — or reloading during one — leaves the next page in
+     * the same renderer looking at `speaking: true` with nothing playing, and
+     * every `speak()` from then on joins a queue that never drains. It is why
+     * the same build was mute on one tab and fine on another site in the same
+     * browser, and why quitting Chrome outright appears to "fix" it.
+     *
+     * One `cancel()` before this page has queued anything of its own clears
+     * whatever it inherited. It is a no-op on a clean engine.
+     */
+    engine.cancel();
+
     const read = () => setVoices(engine.getVoices());
     read();
     engine.addEventListener('voiceschanged', read);
