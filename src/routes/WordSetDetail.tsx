@@ -16,6 +16,7 @@ import {
   insertMemberAt,
   membersOf,
   reorderMembers,
+  storedIndexFor,
   toDraft,
   withMember,
   withoutMember,
@@ -40,7 +41,7 @@ export function Component() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { sets, loading, error, refresh, repository } = useWordSets();
-  const { entries, loading: entriesLoading } = useEntries();
+  const { entries, loading: entriesLoading, error: entriesError } = useEntries();
 
   const [busy, setBusy] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
@@ -85,9 +86,11 @@ export function Component() {
       return false;
     } finally {
       setBusy(false);
-      // Cleared whether or not it worked: the refresh above has already put the
-      // stored order back in hand, and on a failure that stored order is the
-      // honest thing to show.
+      // Cleared whether or not it worked, and correct either way for the same
+      // reason: `set.entryIds` was never mutated locally, so dropping `pending`
+      // falls back to what is stored. On the failing path the refresh above did
+      // not run at all -- it is the absence of a local mutation that saves this,
+      // not the refresh.
       setPending(null);
     }
   };
@@ -123,6 +126,18 @@ export function Component() {
   const entryIds =
     pending && set && pending.setId === set.id ? pending.entryIds : (set?.entryIds ?? []);
 
+  const members = set ? membersOf({ ...set, entryIds }, entries) : [];
+
+  /**
+   * A row index from either list, in the coordinates the stored array uses.
+   *
+   * Every index arriving from the DOM counts rendered rows, and `members` is
+   * shorter than `entryIds` whenever the set holds a word that has since been
+   * deleted. See `storedIndexFor` — untranslated, a drag moves the wrong id.
+   */
+  const visibleIds = members.map((entry) => entry.id);
+  const stored = (visible: number) => storedIndexFor(entryIds, visibleIds, visible);
+
   /**
    * Send an order, unless it is the one already showing.
    *
@@ -145,14 +160,21 @@ export function Component() {
     if (at.list !== MEMBERS) return;
     applyOrder(
       source.list === MEMBERS
-        ? reorderMembers(entryIds, source.index, at.index)
-        : insertMemberAt(entryIds, source.id, at.index),
+        ? reorderMembers(entryIds, stored(source.index), stored(at.index))
+        : insertMemberAt(entryIds, source.id, stored(at.index)),
     );
   });
 
   if (loading || entriesLoading)
     return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
-  if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
+  /**
+   * The notebook's error counts as much as the set's. Every count and every row
+   * on this page is derived from `entries` rather than from the set, so a failed
+   * notebook load with only `error` surfaced renders a set that looks empty
+   * instead of a page that says it could not load.
+   */
+  if (error || entriesError)
+    return <p className="py-16 text-center text-sm text-danger">{error ?? entriesError}</p>;
 
   if (!set) {
     return (
@@ -165,7 +187,6 @@ export function Component() {
     );
   }
 
-  const members = membersOf({ ...set, entryIds }, entries);
   // Against the order on screen, not the stored one, so a word just dropped in
   // leaves the list it was dragged from in the same render.
   const candidates = candidatesFor({ ...set, entryIds }, entries, filters);
@@ -236,7 +257,9 @@ export function Component() {
             }
             onRemoveAll={setClearing}
             onMoveBy={(index, delta) =>
-              applyOrder(reorderMembers(entryIds, index, delta < 0 ? index - 1 : index + 2))
+              applyOrder(
+                reorderMembers(entryIds, stored(index), stored(delta < 0 ? index - 1 : index + 2)),
+              )
             }
           />
         </div>

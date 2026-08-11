@@ -29,6 +29,12 @@ export function MemberList({
   /** This list's name in the drag protocol; see `useListDrag`. */
   list: string;
   drag: ListDrag;
+  /**
+   * True while a write is in flight. It gates the rows as well as the buttons:
+   * `applyOrder` refuses a write during one, so an ungated row would let a drag
+   * run its whole course — ghost, drop indicator, release — and then decline it
+   * silently. The affordances have to agree with the guard.
+   */
   busy: boolean;
   onRemove: (entryId: string) => void;
   /** Asks; it does not do it. The route confirms first — see `WordSetDetail`. */
@@ -78,7 +84,7 @@ export function MemberList({
           <li
             key={entry.id}
             data-drop-index={index}
-            {...drag.rowProps({ list, id: entry.id, index })}
+            {...(busy ? {} : drag.rowProps({ list, id: entry.id, index }))}
             /**
              * `touch-pan-y`, not `touch-none`: a finger on a row scrolls the
              * panel, because a bounded panel whose rows cannot be scrolled from

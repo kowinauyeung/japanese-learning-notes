@@ -125,20 +125,6 @@ test.describe('editing and deleting', () => {
   });
 
   /**
-   * The date guard, tested for what it can actually be given.
-   *
-   * An impossible day like 2026-02-31 cannot be typed at all: the field is
-   * <input type="date">, and the browser refuses the value before any of our
-   * code runs. Nor can it arrive through JSON import, where sanitizeDraft has
-   * already coerced it. So in the running app this guard exists for exactly one
-   * input — a cleared field — and that is what is asserted here.
-   *
-   * The impossible-date rule itself is covered where it is reachable, over
-   * isValidIsoDate in tests/unit/sanitize.test.ts, against the Firestore
-   * documents in tests/unit/migrationOutput.test.ts, and it stays in the form
-   * because a stored document is not obliged to have come from this field.
-   */
-  /**
    * The same defect as on `/wordsets`, and the reason the fix went into both
    * providers rather than one: saving ends in `refresh()`, and a refresh that
    * reports itself as loading replaces the whole page with 読み込み中…. Editing
@@ -159,6 +145,20 @@ test.describe('editing and deleting', () => {
     expect(await blanked()).toBe(false);
   });
 
+  /**
+   * The date guard, tested for what it can actually be given.
+   *
+   * An impossible day like 2026-02-31 cannot be typed at all: the field is
+   * <input type="date">, and the browser refuses the value before any of our
+   * code runs. Nor can it arrive through JSON import, where sanitizeDraft has
+   * already coerced it. So in the running app this guard exists for exactly one
+   * input — a cleared field — and that is what is asserted here.
+   *
+   * The impossible-date rule itself is covered where it is reachable, over
+   * isValidIsoDate in tests/unit/sanitize.test.ts, against the Firestore
+   * documents in tests/unit/migrationOutput.test.ts, and it stays in the form
+   * because a stored document is not obliged to have come from this field.
+   */
   test('refuses to save with the learning date cleared', async ({ page }) => {
     await page.goto('/vocabulary/w-choukou');
     await page.getByRole('button', { name: '編集' }).click();

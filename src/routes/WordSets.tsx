@@ -14,7 +14,7 @@ import { useWordSets } from '@/lib/wordSets';
  */
 export function Component() {
   const { sets, loading, error, refresh, repository } = useWordSets();
-  const { entries, loading: entriesLoading } = useEntries();
+  const { entries, loading: entriesLoading, error: entriesError } = useEntries();
   const navigate = useNavigate();
 
   const [name, setName] = useState('');
@@ -58,7 +58,11 @@ export function Component() {
 
   if (loading || entriesLoading)
     return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
-  if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
+  // The notebook's error counts as much as the list's: every card's count is
+  // resolved against `entries`, so a failed load with only `error` surfaced
+  // renders each set as 0 語 rather than saying it could not be read.
+  if (error || entriesError)
+    return <p className="py-16 text-center text-sm text-danger">{error ?? entriesError}</p>;
 
   return (
     <div className="space-y-4">

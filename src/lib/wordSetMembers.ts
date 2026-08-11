@@ -99,6 +99,36 @@ export function withoutMembers(
 }
 
 /**
+ * Where a row on screen sits in the stored array.
+ *
+ * The two are not the same list. `membersOf` drops an id whose word has been
+ * deleted, so 収録語 can be shorter than `entryIds`, and every position after
+ * the missing one is off by one. Handing a visible index straight to
+ * `reorderMembers` then moves whichever id happens to occupy that slot — often
+ * the stale one, which changes nothing on screen and still costs a write, so
+ * the gesture reads as broken rather than as refused.
+ *
+ * Two edges are deliberate. A visible index past the last row is the trailing
+ * gap and answers `entryIds.length`, which is where an append belongs. A
+ * negative one is passed through rather than clamped, because that is how
+ * ArrowUp on the first row says "before everything", and `reorderMembers` is
+ * what decides that means stay put.
+ */
+export function storedIndexFor(
+  entryIds: readonly string[],
+  visibleIds: readonly string[],
+  visible: number,
+): number {
+  if (visible < 0) return -1;
+
+  const id = visibleIds[visible];
+  if (id === undefined) return entryIds.length;
+
+  const found = entryIds.indexOf(id);
+  return found === -1 ? entryIds.length : found;
+}
+
+/**
  * Move the member at `from` so that it lands at insertion point `to`.
  *
  * `to` is an insertion index in the *original* array's coordinates — the gap

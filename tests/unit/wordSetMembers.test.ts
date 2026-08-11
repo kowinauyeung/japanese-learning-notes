@@ -5,6 +5,7 @@ import {
   insertMemberAt,
   membersOf,
   reorderMembers,
+  storedIndexFor,
   toDraft,
   withMember,
   withoutMember,
@@ -151,6 +152,66 @@ describe('withoutMembers', () => {
    */
   it('leaves behind an id that was not on screen to be removed', () => {
     expect(withoutMembers(['w1', 'gone', 'w2'], ['w1', 'w2'])).toEqual(['gone']);
+  });
+});
+
+/**
+ * Translating a row on screen into a position in the stored array.
+ *
+ * The bug this exists for: every index reaching `reorderMembers` and
+ * `insertMemberAt` counted *rendered* rows, and `membersOf` drops an id whose
+ * word has been deleted — so as soon as a set held one, the two lists were
+ * different lengths and every index after the gap pointed at the wrong id.
+ *
+ * Nothing caught it because every other case in this file resolves cleanly.
+ * `['w1', 'gone', 'w2']` is the shape that separates them.
+ */
+describe('storedIndexFor', () => {
+  const STORED = ['w1', 'gone', 'w2'];
+  const VISIBLE = ['w1', 'w2'];
+
+  it('finds the row that a visible index actually names', () => {
+    expect(storedIndexFor(STORED, VISIBLE, 0)).toBe(0);
+    // The one that mattered: visible row 1 is w2, stored at 2, not at 1.
+    expect(storedIndexFor(STORED, VISIBLE, 1)).toBe(2);
+  });
+
+  /** The gap after the last row, which is where an append belongs. */
+  it('answers the end of the stored array for a gap past the last row', () => {
+    expect(storedIndexFor(STORED, VISIBLE, 2)).toBe(3);
+  });
+
+  /**
+   * ArrowUp on the first row asks for the gap before everything. Clamping it to
+   * 0 here would be indistinguishable from "move to the front", and
+   * `reorderMembers` is what decides a negative gap means stay put.
+   */
+  it('passes a negative index through rather than clamping it', () => {
+    expect(storedIndexFor(STORED, VISIBLE, -1)).toBe(-1);
+  });
+});
+
+/**
+ * The two defects the translation fixes, stated as the gestures that produce
+ * them. Both are reachable through the UI: a set that holds a word which has
+ * since been deleted is a supported state.
+ */
+describe('reordering a set that holds a deleted word', () => {
+  const STORED = ['w1', 'gone', 'w2'];
+  const VISIBLE = ['w1', 'w2'];
+  const at = (visible: number) => storedIndexFor(STORED, VISIBLE, visible);
+
+  /** Untranslated this moved `gone` instead, so nothing on screen changed. */
+  it('moves the word the learner dragged, not the stale id beside it', () => {
+    expect(reorderMembers(STORED, at(1), at(0))).toEqual(['w2', 'w1', 'gone']);
+  });
+
+  /** Untranslated this landed the word above the row it was dropped below. */
+  it('lands a new word in the gap it was released in', () => {
+    const stored = ['gone', 'w1'];
+    const visible = ['w1'];
+    const after = storedIndexFor(stored, visible, 1);
+    expect(insertMemberAt(stored, 'w2', after)).toEqual(['gone', 'w1', 'w2']);
   });
 });
 

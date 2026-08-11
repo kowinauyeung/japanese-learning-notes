@@ -134,6 +134,21 @@ export const WORD_SETS: Record<string, unknown>[] = [
 ];
 
 /**
+ * One 単語集 holding all three words.
+ *
+ * Deleting one of them leaves a set whose stored `entryIds` is longer than the
+ * rows it renders — the state in which a visible row index and a stored index
+ * stop agreeing, and the only shape that can see it.
+ */
+export const FULL_SET: Record<string, unknown>[] = [
+  {
+    id: 'set-all',
+    name: '全部セット',
+    entryIds: ['w-kiriwake', 'w-choukou', 'w-chotto'],
+  },
+];
+
+/**
  * Two 単語集 that both claim 兆候.
  *
  * A word belongs to as many sets as it is put in — membership is a list on each

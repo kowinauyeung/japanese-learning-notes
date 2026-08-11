@@ -31,6 +31,9 @@ export function MemberPicker({
    * `entryIds` array built from the set in hand, so a second gesture before the
    * first has been read back would send a list that never contained the first
    * word.
+   *
+   * It gates the rows too, not only the buttons: an ungated row would let a
+   * drag run its whole course and then have `applyOrder` decline it silently.
    */
   busy: boolean;
   onAdd: (entryId: string) => void;
@@ -68,7 +71,7 @@ export function MemberPicker({
           <li
             key={entry.id}
             data-drop-index={index}
-            {...drag.rowProps({ list, id: entry.id, index })}
+            {...(busy ? {} : drag.rowProps({ list, id: entry.id, index }))}
             className={`group flex cursor-grab touch-pan-y items-center gap-2 rounded-panel border-y-2 border-transparent py-1.5 select-none hover:bg-bg-alt ${
               drag.dragging?.list === list && drag.dragging.id === entry.id
                 ? 'cursor-grabbing opacity-40'

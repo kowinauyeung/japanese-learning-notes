@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 import {
+  FULL_SET,
   OVERLAPPING_SETS,
   seed,
   seedSignedIn,
@@ -243,6 +244,82 @@ test.describe('word sets', () => {
       .toEqual(['/vocabulary/w-kiriwake', '/vocabulary/w-choukou', '/vocabulary/w-chotto']);
     // And the picker is empty afterwards, because it excludes what the set holds.
     await expect(page.getByText('条件に合う単語がありません')).toBeVisible();
+  });
+
+  /**
+   * A set holding a word that has since been deleted renders fewer rows than it
+   * stores, and every index arriving from the DOM counts rendered rows. Passing
+   * one straight to `reorderMembers` moved whichever id occupied that slot —
+   * here the stale one, so the write went out and nothing on screen changed.
+   *
+   * Both entry points are covered because they are separate code paths, and the
+   * keyboard one is the only way to reorder without a pointer.
+   */
+  test('reorders by drag around a member whose word was deleted', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: FULL_SET });
+    await page.goto('/vocabulary/w-kiriwake');
+    await page.getByRole('button', { name: '削除' }).click();
+    await page.getByRole('button', { name: '削除する' }).click();
+
+    await page.goto('/wordsets/set-all');
+    await expect
+      .poll(() => memberHrefs(page))
+      .toEqual(['/vocabulary/w-choukou', '/vocabulary/w-chotto']);
+
+    await dragOnto(
+      page,
+      page.getByRole('button', { name: 'ちょっとを並び替え' }),
+      memberOrder(page).first(),
+    );
+
+    await expect
+      .poll(() => memberHrefs(page))
+      .toEqual(['/vocabulary/w-chotto', '/vocabulary/w-choukou']);
+  });
+
+  test('reorders by keyboard around a member whose word was deleted', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: FULL_SET });
+    await page.goto('/vocabulary/w-kiriwake');
+    await page.getByRole('button', { name: '削除' }).click();
+    await page.getByRole('button', { name: '削除する' }).click();
+
+    await page.goto('/wordsets/set-all');
+    await expect
+      .poll(() => memberHrefs(page))
+      .toEqual(['/vocabulary/w-choukou', '/vocabulary/w-chotto']);
+
+    await page.getByRole('button', { name: 'ちょっとを並び替え' }).press('ArrowUp');
+
+    await expect
+      .poll(() => memberHrefs(page))
+      .toEqual(['/vocabulary/w-chotto', '/vocabulary/w-choukou']);
+  });
+
+  /**
+   * A press that begins on a control belongs to that control. `pointerdown` on
+   * 削除 bubbles to the row, so without a bail-out a hand that drifts past the
+   * threshold turns it into a drag — and the click that would have removed the
+   * word is swallowed as the drag's own. The failure is not "the button did
+   * nothing", it is "the button did something else".
+   */
+  test('removes the word when the press on 削除 drifts', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
+    await page.goto('/wordsets/set-work');
+
+    const remove = page
+      .locator('li', { has: page.locator('a[href="/vocabulary/w-choukou"]') })
+      .getByRole('button', { name: '削除' });
+    const box = await remove.boundingBox();
+    if (!box) throw new Error('the 削除 button is not laid out');
+
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 6, y + 3, { steps: 3 });
+    await page.mouse.up();
+
+    await expect.poll(() => memberHrefs(page)).toEqual(['/vocabulary/w-kiriwake']);
   });
 
   /**

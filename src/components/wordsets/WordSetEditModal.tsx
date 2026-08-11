@@ -30,13 +30,21 @@ export function WordSetEditModal({
   const [description, setDescription] = useState(set.description);
   const [invalid, setInvalid] = useState(false);
 
-  // Reopening after a cancel must show what is stored, not what was abandoned.
+  /**
+   * Reopening after a cancel must show what is stored, not what was abandoned.
+   *
+   * Keyed on the id rather than the object: `refresh()` rebuilds every `WordSet`,
+   * so any refresh landing while this is open would otherwise re-run the reset
+   * and discard what has been typed. Unreachable today — this page is the only
+   * writer and 保存する is `busy`-gated — and the key is what keeps it that way
+   * without depending on that argument holding.
+   */
   useEffect(() => {
     if (!open) return;
     setName(set.name);
     setDescription(set.description);
     setInvalid(false);
-  }, [open, set]);
+  }, [open, set.id, set.name, set.description]);
 
   const save = () => {
     if (!name.trim()) return setInvalid(true);

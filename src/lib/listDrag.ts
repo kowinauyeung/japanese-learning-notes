@@ -172,6 +172,19 @@ export function useListDrag(onDrop: (source: DragSource, at: DropAt) => void): L
   const target = useRef<DropAt | null>(null);
 
   /**
+   * Whether a drag is actually running, for the same reason `target` is a ref.
+   *
+   * The listeners below are captured with the render's value of `dragging`, and
+   * the update that sets it comes from `pointermove` — not a discrete event, so
+   * React is under no obligation to have flushed it before the `pointerup` that
+   * follows on a fast flick. The old listener then reads `null`, discards a drop
+   * whose target the ref had recorded perfectly well, and does not arm the
+   * click-swallow either. Guarding the target and leaving the gate in front of
+   * it stale protects nothing.
+   */
+  const active = useRef<DragSource | null>(null);
+
+  /**
    * The drop handler, held by reference.
    *
    * It closes over the current order, so the caller rebuilds it every render —
@@ -202,6 +215,16 @@ export function useListDrag(onDrop: (source: DragSource, at: DropAt) => void): L
     (source: DragSource) => ({
       onPointerDown: (event: ReactPointerEvent) => {
         if (event.pointerType === 'touch') return;
+        /**
+         * A press that began on a control is that control's. Without this,
+         * `pointerdown` on 削除 or ＋追加 bubbles here and arms a drag, so a
+         * hand that drifts past the slop turns the press into a drop and the
+         * click that would have removed the word is swallowed as the drag's
+         * own. The failure is not "the button did nothing" — it is "the button
+         * did something else". The grip is unaffected: it arms through
+         * `handleProps`, on the way down, before this ever runs.
+         */
+        if (event.target instanceof Element && event.target.closest('button')) return;
         arm(source, event);
       },
     }),
@@ -213,6 +236,7 @@ export function useListDrag(onDrop: (source: DragSource, at: DropAt) => void): L
     const stop = () => {
       press.current = null;
       cursor.current = null;
+      active.current = null;
       setDragging(null);
       setAt(null);
       setPoint(null);
@@ -223,10 +247,11 @@ export function useListDrag(onDrop: (source: DragSource, at: DropAt) => void): L
       if (!armed) return;
       cursor.current = { x: event.clientX, y: event.clientY };
 
-      if (!dragging) {
+      if (!active.current) {
         if (!beyondSlop(armed, { x: event.clientX, y: event.clientY })) return;
         // Committed: the text the press started selecting is not wanted.
         document.getSelection()?.removeAllRanges();
+        active.current = armed.source;
         setDragging(armed.source);
       }
 
@@ -237,12 +262,12 @@ export function useListDrag(onDrop: (source: DragSource, at: DropAt) => void): L
     };
 
     const up = () => {
-      const dropped = dragging ? target.current : null;
-      const wasDragging = dragging !== null;
+      const dragged = active.current;
+      const dropped = dragged ? target.current : null;
       target.current = null;
       stop();
 
-      if (wasDragging) {
+      if (dragged) {
         /**
          * The click that would follow this release is not a click on the row —
          * the pointer has moved across the screen since it went down — and a
@@ -266,7 +291,7 @@ export function useListDrag(onDrop: (source: DragSource, at: DropAt) => void): L
         window.addEventListener('click', swallow, true);
         setTimeout(() => window.removeEventListener('click', swallow, true), 0);
       }
-      if (dropped) handler.current(dragging!, dropped);
+      if (dragged && dropped) handler.current(dragged, dropped);
     };
 
     const abandon = () => {
