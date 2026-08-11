@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 import type { Entry } from '@/domain/entry';
 import type { EntryRepository } from '@/domain/ports';
@@ -54,8 +62,35 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
   // into the repository can never outlive the session it belongs to.
   const repository = useMemo(() => entryRepositoryFor(uid), [uid]);
 
+  /**
+   * Which walk is allowed to publish its result.
+   *
+   * The loop below awaits a page at a time, so a `uid` change part-way through
+   * would otherwise finish by calling `setEntries` with the previous account's
+   * notebook. `WordSetsProvider` has carried this since #15; it matters more
+   * here now that `refresh` is the routine tail of every write and no longer
+   * raises `loading`, which makes overlapping walks ordinary rather than
+   * exceptional and leaves the page interactive throughout one — exactly the
+   * window in which a second write can start.
+   *
+   * Untested: no layer available can reach it. A component test may not import
+   * `@/infra/*`, and this provider resolves its repository through
+   * `@/lib/backend`.
+   */
+  const walk = useRef(0);
+
+  /**
+   * Re-read the notebook. **Deliberately does not raise `loading`.**
+   *
+   * Saving a word and deleting one both end here, and every route treats
+   * `loading` as "replace the page with 読み込み中…" — so raising it blanked
+   * Browse behind the add sheet on every save, losing the scroll position with
+   * it. The entries in hand are one write out of date, not invalid.
+   *
+   * The gate goes up on mount and on an account change, in the effect below.
+   */
   const refresh = useCallback(async () => {
-    setLoading(true);
+    const mine = (walk.current += 1);
     setError(null);
     try {
       const all: Entry[] = [];
@@ -65,16 +100,17 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
         all.push(...page.items);
         cursor = page.cursor;
       } while (cursor);
-      setEntries(all);
+      if (walk.current === mine) setEntries(all);
     } catch (cause) {
       console.error(cause);
-      setError('単語を読み込めませんでした。');
+      if (walk.current === mine) setError('単語を読み込めませんでした。');
     } finally {
-      setLoading(false);
+      if (walk.current === mine) setLoading(false);
     }
   }, [repository]);
 
   useEffect(() => {
+    setLoading(true);
     void refresh();
   }, [refresh]);
 

@@ -98,12 +98,64 @@ export async function seed(page: Page, data: E2ESeed = {}): Promise<void> {
 export const seedSignedIn = (page: Page) => seed(page, { signedIn: true, entries: WORDS });
 
 /**
+ * Start recording whether the full-page 読み込み中… placeholder ever replaces the
+ * screen, and return a way to ask afterwards.
+ *
+ * A flash cannot be caught by looking for it: by the time an assertion runs, the
+ * render that caused it has already been undone. It has to be recorded as it
+ * happens, which is what the observer is for.
+ *
+ * The thing it exists to catch: every write ends in its provider's `refresh()`,
+ * and every route treats `loading` as "replace the page with 読み込み中…". A
+ * refresh that raises that flag therefore takes the whole screen down and puts
+ * it back on every single save.
+ */
+export async function watchForBlanking(page: Page): Promise<() => Promise<boolean>> {
+  await page.evaluate(() => {
+    const seen = { it: false };
+    (window as unknown as { __blanked: { it: boolean } }).__blanked = seen;
+    new MutationObserver(() => {
+      if (document.body.textContent?.includes('読み込み中')) seen.it = true;
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
+  return () =>
+    page.evaluate(() => (window as unknown as { __blanked: { it: boolean } }).__blanked.it);
+}
+
+/**
  * One 単語集 over two of the three words.
  *
- * Seeded rather than created through the app, because nothing creates one yet:
- * `/wordsets` is still a placeholder. The read path is real, so this is what
- * the practice filter will see the day the first set is written for real.
+ * Seeded rather than built through `/wordsets` in every spec that needs one:
+ * the specs about what a set *does* should not each pay for the four clicks
+ * that make it. `wordsets.spec.ts` covers those clicks once.
  */
 export const WORD_SETS: Record<string, unknown>[] = [
   { id: 'set-work', name: '仕事セット', entryIds: ['w-kiriwake', 'w-choukou'] },
+];
+
+/**
+ * One 単語集 holding all three words.
+ *
+ * Deleting one of them leaves a set whose stored `entryIds` is longer than the
+ * rows it renders — the state in which a visible row index and a stored index
+ * stop agreeing, and the only shape that can see it.
+ */
+export const FULL_SET: Record<string, unknown>[] = [
+  {
+    id: 'set-all',
+    name: '全部セット',
+    entryIds: ['w-kiriwake', 'w-choukou', 'w-chotto'],
+  },
+];
+
+/**
+ * Two 単語集 that both claim 兆候.
+ *
+ * A word belongs to as many sets as it is put in — membership is a list on each
+ * set, and nothing on the entry records which of them claimed it. That is what
+ * makes deleting the word a question about several documents at once.
+ */
+export const OVERLAPPING_SETS: Record<string, unknown>[] = [
+  { id: 'set-work', name: '仕事セット', entryIds: ['w-kiriwake', 'w-choukou'] },
+  { id: 'set-news', name: 'ニュースセット', entryIds: ['w-choukou'] },
 ];

@@ -1,7 +1,7 @@
 /**
- * The two Phase 2 destinations still to be built. They exist so the nav from
- * the handoff is complete and no link dead-ends on a 404. Practice is no longer
- * among them — see `routes/Practice.tsx`.
+ * The one Phase 2 destination still to be built. It exists so the nav from the
+ * handoff is complete and no link dead-ends on a 404. Practice and 単語集 are no
+ * longer among them — see `routes/Practice.tsx` and `routes/WordSets.tsx`.
  */
 function Placeholder({ title, note }: { title: string; note: string }) {
   return (
@@ -10,10 +10,6 @@ function Placeholder({ title, note }: { title: string; note: string }) {
       <p className="mt-2 text-sm text-muted">{note}</p>
     </section>
   );
-}
-
-export function WordSets() {
-  return <Placeholder title="単語集" note="単語集は次のフェーズで実装します。" />;
 }
 
 export function History() {

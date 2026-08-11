@@ -1,8 +1,21 @@
 import { JLPT_LEVELS, POS, WORD_ORIGINS } from '@/domain/entry';
 import type { PracticeMode } from '@/domain/practice';
-import type { WordSet } from '@/domain/wordSet';
 import { activeQuickRange, QUICK_RANGES, quickRangeStart } from '@/lib/practice';
 import type { PracticeFilters } from '@/lib/practice';
+
+/**
+ * A 単語集 chip, already counted.
+ *
+ * `count` is the number of words the set still has in the notebook, not
+ * `entryIds.length`: deleting a word does not visit the sets that named it, so
+ * the stored array can outlive its members and the badge would promise cards
+ * the queue cannot deal.
+ */
+export interface SetChip {
+  id: string;
+  name: string;
+  count: number;
+}
 
 const MODE_TITLE: Record<PracticeMode, string> = {
   flashcard: 'フラッシュカード',
@@ -30,8 +43,7 @@ const selectClass = 'rounded-panel border-line bg-bg text-ink min-h-9 border px-
  * The screen both practice modes open on.
  *
  * The 単語集 row hides itself when there are none, which is the design's rule
- * and, until `/wordsets` exists, its permanent state in the running app: the
- * read path is real but nothing writes a set yet.
+ * for a notebook that has not organised anything yet.
  *
  * `matchCount` is computed by the caller rather than here, because the same
  * filtered list is what 開始する turns into the queue — recomputing it in two
@@ -54,7 +66,7 @@ export function PracticeSetup({
   filters: PracticeFilters;
   allTags: string[];
   /** Hidden entirely when empty, per the design — see the note above. */
-  allSets: WordSet[];
+  allSets: SetChip[];
   /** What 「直近1ヶ月」 is measured from. An argument so it can be frozen. */
   now: Date;
   matchCount: number;
@@ -100,7 +112,7 @@ export function PracticeSetup({
                 className={chipClass(filters.sets.includes(set.id))}
               >
                 {set.name}
-                <span className="ml-1.5 opacity-70">{set.entryIds.length}</span>
+                <span className="ml-1.5 opacity-70">{set.count}</span>
               </button>
             ))}
           </div>
