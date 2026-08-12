@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 
 /**
@@ -18,6 +18,9 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  /** Whether the gesture in progress started on the backdrop. See below. */
+  const pressedOnBackdrop = useRef(false);
+
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -38,14 +41,41 @@ export function Modal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 nav:items-center"
-      onClick={onClose}
+      /**
+       * Dismissing needs a press *and* a release on the backdrop, not just a
+       * release.
+       *
+       * A `click` is dispatched on the nearest common ancestor of where the
+       * button went down and where it came up. Press inside the card, drag out
+       * — selecting text, or overshooting a control — and release over the
+       * backdrop, and the browser fires the click on this element: the card's
+       * own handler never sees it, and the dialog closes on a gesture that was
+       * never a click on the backdrop at all. On the add-word sheet that
+       * discards whatever had been typed.
+       *
+       * Both halves are checked. `pressed` says the gesture started here, and
+       * `target === currentTarget` says it did not merely bubble up from the
+       * card. That second check is why the card no longer needs to stop
+       * propagation: a click on it is a click whose target is not this element.
+       *
+       * The flag is never cleared after use, because it never needs to be:
+       * every click is preceded by a `pointerdown` that sets it afresh. Adding
+       * a reset here was tried and no test could be made to fail on it.
+       */
+      onPointerDown={(event) => {
+        pressedOnBackdrop.current = event.target === event.currentTarget;
+      }}
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (!pressedOnBackdrop.current) return;
+        onClose();
+      }}
       role="presentation"
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        onClick={(event) => event.stopPropagation()}
         className="flex max-h-[88vh] w-full flex-col rounded-t-3xl bg-card shadow-panel nav:max-h-[86vh] nav:max-w-2xl nav:rounded-3xl"
       >
         <div className="shrink-0 px-5 pt-3 nav:pt-5">
