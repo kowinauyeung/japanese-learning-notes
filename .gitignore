@@ -48,3 +48,4 @@ migration/service-account-*.json
 coverage/
 playwright-report/
 test-results/
+migration/accents.prompt.txt
