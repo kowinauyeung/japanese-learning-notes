@@ -21,18 +21,54 @@ export function Modal({
   /** Whether the gesture in progress started on the backdrop. See below. */
   const pressedOnBackdrop = useRef(false);
 
+  /**
+   * True while an IME is mid-conversion anywhere inside the dialog.
+   *
+   * Escape has two meanings on a Japanese keyboard, and the narrower one wins:
+   * while a conversion is open it abandons the candidate and leaves the kana,
+   * and only outside one does it mean "close this". Without the distinction,
+   * backing out of a mistyped conversion in the add-word sheet also threw the
+   * form away — one keystroke, two undos, and the second unasked for.
+   *
+   * `KeyboardEvent.isComposing` alone is not enough: it has been unreliable in
+   * WebKit, which is why `DictationSession` guards its own Enter with both
+   * signals. This is the same guard at the level Escape is listened on.
+   */
+  const composing = useRef(false);
+
   useEffect(() => {
     if (!open) return;
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key !== 'Escape') return;
+      if (composing.current || event.isComposing) return;
+      onClose();
     };
+    // Composition events bubble, so one pair here covers every field the
+    // dialog contains, including any a caller renders that this does not know
+    // about.
+    const onCompositionStart = () => {
+      composing.current = true;
+    };
+    const onCompositionEnd = () => {
+      composing.current = false;
+    };
+
     document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('compositionstart', onCompositionStart);
+    document.addEventListener('compositionend', onCompositionEnd);
     // Stop the page behind the sheet from scrolling with it.
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('compositionstart', onCompositionStart);
+      document.removeEventListener('compositionend', onCompositionEnd);
       document.body.style.overflow = previous;
+      // A dialog closed mid-conversion must not leave the next one deaf to
+      // Escape: the compositionend that would have cleared this is delivered
+      // to a field that no longer exists.
+      composing.current = false;
     };
   }, [open, onClose]);
 

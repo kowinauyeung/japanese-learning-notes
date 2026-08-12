@@ -20,7 +20,7 @@ const setup = () => {
   const onClose = vi.fn();
   const { container } = render(
     <Modal open title="単語" onClose={onClose}>
-      <p>中身</p>
+      <input aria-label="見出し語" />
     </Modal>,
   );
   const backdrop = container.querySelector('[role="presentation"]');
@@ -70,6 +70,57 @@ describe('Modal — dismissing by backdrop', () => {
     fireEvent.click(backdrop);
     fireEvent.pointerDown(card);
     fireEvent.click(backdrop);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Escape has two meanings on a Japanese keyboard, and the narrower one wins:
+ * while an IME conversion is open it abandons the candidate and leaves the
+ * kana. Closing the dialog as well is one keystroke doing two undos, the second
+ * unasked for — on the add-word sheet it threw the whole form away.
+ *
+ * Both signals are exercised because the guard reads both: `isComposing` on the
+ * event, and a flag kept from the composition events, which is the backstop for
+ * WebKit reporting the first unreliably.
+ */
+describe('Modal — Escape while an IME is converting', () => {
+  it('stays open when the key event says a conversion is in progress', () => {
+    const { onClose } = setup();
+
+    fireEvent.keyDown(document, { key: 'Escape', isComposing: true });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('stays open between compositionstart and compositionend', () => {
+    const { onClose } = setup();
+    const field = screen.getByLabelText('見出し語');
+
+    fireEvent.compositionStart(field);
+    // Deliberately without `isComposing`: this is the WebKit case, where the
+    // flag is the only thing left saying a conversion is open.
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes once the conversion has been committed', () => {
+    const { onClose } = setup();
+    const field = screen.getByLabelText('見出し語');
+
+    fireEvent.compositionStart(field);
+    fireEvent.compositionEnd(field);
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes on Escape when nothing is being converted', () => {
+    const { onClose } = setup();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
