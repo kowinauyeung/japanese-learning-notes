@@ -1,3 +1,4 @@
+import { JLPT_LEVELS, POS, WORD_ORIGINS } from '@/domain/entry';
 import type { Entry } from '@/domain/entry';
 import type { EntryProgress, PracticeMode, PracticeSessionDraft } from '@/domain/practice';
 import type { WordSet } from '@/domain/wordSet';
@@ -37,6 +38,55 @@ export const EMPTY_PRACTICE_FILTERS: PracticeFilters = {
   to: '',
   weakOnly: false,
 };
+
+/** A value from a query string, or `''` when it is not one this app knows. */
+function oneOf(value: string | null, allowed: readonly string[]): string {
+  return value !== null && allowed.includes(value) ? value : '';
+}
+
+/**
+ * Practice filters in a query string, so a drill can be linked to.
+ *
+ * The one caller that needs it today is 履歴's 復習 button, which has to hand
+ * the next screen a scope — but the shape is the whole filter rather than a
+ * single `weak` flag, because a link to "N2 verbs I got wrong" is the same
+ * feature and a bespoke parameter would have to be replaced to get it.
+ *
+ * Unknown values are dropped rather than trusted. A query string is user input:
+ * `?pos=nonsense` has to leave the setup screen showing 品詞（すべて）, not a
+ * select with no matching option and a filter nothing can satisfy.
+ *
+ * `sets` and `tags` pass through unvalidated because both are user-defined —
+ * an id that names no set resolves to an empty scope, which `scopeFor` already
+ * distinguishes from "no set selected".
+ */
+export function practiceFiltersFromParams(params: URLSearchParams): PracticeFilters {
+  return {
+    sets: params.getAll('set'),
+    tags: params.getAll('tag'),
+    jlpt: params
+      .getAll('jlpt')
+      .filter((level) => (JLPT_LEVELS as readonly string[]).includes(level)),
+    pos: oneOf(params.get('pos'), POS),
+    origin: oneOf(params.get('origin'), WORD_ORIGINS),
+    from: params.get('from') ?? '',
+    to: params.get('to') ?? '',
+    weakOnly: params.get('weak') === '1',
+  };
+}
+
+export function practiceFiltersToParams(filters: PracticeFilters): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const id of filters.sets) params.append('set', id);
+  for (const tag of filters.tags) params.append('tag', tag);
+  for (const level of filters.jlpt) params.append('jlpt', level);
+  if (filters.pos) params.set('pos', filters.pos);
+  if (filters.origin) params.set('origin', filters.origin);
+  if (filters.from) params.set('from', filters.from);
+  if (filters.to) params.set('to', filters.to);
+  if (filters.weakOnly) params.set('weak', '1');
+  return params;
+}
 
 export type QuickRangeKey = 'week' | 'month' | 'year';
 

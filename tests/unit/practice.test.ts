@@ -6,6 +6,8 @@ import {
   describeFilters,
   EMPTY_PRACTICE_FILTERS,
   matchesPractice,
+  practiceFiltersFromParams,
+  practiceFiltersToParams,
   mergeProgress,
   quickRangeStart,
   scopeFor,
@@ -13,6 +15,7 @@ import {
   summariseSession,
   weakIdsOf,
 } from '@/lib/practice';
+import type { PracticeFilters } from '@/lib/practice';
 import { makeEntry } from '../fixtures/entry';
 
 const makeSet = (id: string, name: string, entryIds: string[]): WordSet => ({
@@ -326,5 +329,59 @@ describe('summariseSession', () => {
       missed: ['b', 'c'],
       startedAt: '2026-06-24T09:59:00.000Z',
     });
+  });
+});
+
+/**
+ * Practice filters in a query string — what 履歴's 復習 button hands the drill.
+ *
+ * A query string is user input, so the read side has to refuse what it does not
+ * recognise: a filter nothing can satisfy leaves the setup screen showing
+ * 「0 件が対象」 with no visible reason why.
+ */
+describe('practice filters in the URL', () => {
+  it('round-trips everything the setup screen can express', () => {
+    const filters: PracticeFilters = {
+      sets: ['set-work', 'set-news'],
+      tags: ['仕事'],
+      jlpt: ['N1', 'N2'],
+      pos: '名詞',
+      origin: '漢語',
+      from: '2026-01-01',
+      to: '2026-06-30',
+      weakOnly: true,
+    };
+    expect(practiceFiltersFromParams(practiceFiltersToParams(filters))).toEqual(filters);
+  });
+
+  it('reads an empty query string as no filter at all', () => {
+    expect(practiceFiltersFromParams(new URLSearchParams())).toEqual(EMPTY_PRACTICE_FILTERS);
+  });
+
+  /** The 復習 link's whole payload, and the only parameter it needs. */
+  it('turns weak=1 into 苦手のみ', () => {
+    expect(practiceFiltersFromParams(new URLSearchParams('weak=1')).weakOnly).toBe(true);
+    expect(practiceFiltersFromParams(new URLSearchParams('weak=yes')).weakOnly).toBe(false);
+  });
+
+  it('drops a 品詞 or a level the app does not have', () => {
+    const params = new URLSearchParams('pos=nonsense&jlpt=N2&jlpt=N9&origin=nonsense');
+    const filters = practiceFiltersFromParams(params);
+    expect(filters.pos).toBe('');
+    expect(filters.origin).toBe('');
+    expect(filters.jlpt).toEqual(['N2']);
+  });
+
+  /**
+   * Set ids and tags are user-defined, so there is nothing to validate them
+   * against. An id naming no set resolves to an empty scope, which `scopeFor`
+   * already keeps distinct from "no set selected".
+   */
+  it('passes through a set id it cannot know is real', () => {
+    expect(practiceFiltersFromParams(new URLSearchParams('set=gone')).sets).toEqual(['gone']);
+  });
+
+  it('leaves a default out of the query string entirely', () => {
+    expect(practiceFiltersToParams(EMPTY_PRACTICE_FILTERS).toString()).toBe('');
   });
 });

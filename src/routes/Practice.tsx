@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DictationSession } from '@/components/practice/DictationSession';
 import { FlashcardSession } from '@/components/practice/FlashcardSession';
@@ -10,7 +10,7 @@ import type { PracticeMode } from '@/domain/practice';
 import { useEntries } from '@/lib/entries';
 import {
   describeFilters,
-  EMPTY_PRACTICE_FILTERS,
+  practiceFiltersFromParams,
   matchesPractice,
   mergeProgress,
   scopeFor,
@@ -71,8 +71,20 @@ function Practice({ mode }: { mode: PracticeMode }) {
   } = useProgress();
   const { sets } = useWordSets();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const [filters, setFilters] = useState<PracticeFilters>(EMPTY_PRACTICE_FILTERS);
+  /**
+   * Seeded from the query string, then owned by this screen.
+   *
+   * Read once rather than kept in sync, which is the opposite of what Browse
+   * does — and deliberately. A Browse URL *is* the view, and stepping back
+   * through refinements is the point. A practice URL is a way in: 履歴's 復習
+   * button hands over a scope, and from that moment the setup screen is being
+   * edited towards a session, not towards a link worth keeping.
+   */
+  const [filters, setFilters] = useState<PracticeFilters>(() =>
+    practiceFiltersFromParams(searchParams),
+  );
   const [session, setSession] = useState<Session | null>(null);
   const [quitting, setQuitting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -119,6 +131,36 @@ function Practice({ mode }: { mode: PracticeMode }) {
     setSaveError(null);
     setSession({ queue, index: 0, answers: [], startedAt: new Date().toISOString(), filterLabel });
   };
+
+  /**
+   * `?start=1` — deal the cards without stopping at the setup screen.
+   *
+   * Waits for both loads before deciding, because the scope it was handed may
+   * be 苦手のみ, and that is answered by the progress map rather than by the
+   * entry. Firing while the map is still arriving would see no weak words, take
+   * the empty-scope branch below, and never start at all — the ref makes that
+   * permanent for the visit.
+   *
+   * **The `progressLoading` half of that is unverified.** Against the in-memory
+   * adapter both loads resolve in the same tick, so removing it fails nothing;
+   * against Firestore they are two independent round trips. Reasoned, not
+   * measured — do not read the green suite as cover for it.
+   *
+   * A scope that matches nothing falls through to the setup screen instead,
+   * where 「0 件が対象」 already says so and 開始する is already blocked. The ref
+   * makes it a one-shot: the learner may then edit the filters, and re-firing
+   * would take the screen away from them mid-edit.
+   */
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStarted.current || searchParams.get('start') !== '1') return;
+    if (loading || progressLoading) return;
+    autoStarted.current = true;
+    if (matches.length > 0) start(shuffle(matches, Math.random), describeFilters(filters, sets));
+    // `start` and `filters` are read at the moment this fires and are not what
+    // decides whether it should; listing them would re-run it on every edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, progressLoading, matches, searchParams]);
 
   const finish = (finished: Session, answers: Answer[]) => {
     const at = new Date().toISOString();

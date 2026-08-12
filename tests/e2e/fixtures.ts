@@ -17,6 +17,8 @@ export interface E2ESeed {
   /** Entry ids to start marked wrong, so 苦手のみ has something to select. */
   weak?: string[];
   wordSets?: Record<string, unknown>[];
+  /** Finished sessions, so 履歴 can be reached without drilling first. */
+  sessions?: Record<string, unknown>[];
 }
 
 /** Fixed instant every spec runs at. A Wednesday; its ISO week starts on the 22nd. */
@@ -159,3 +161,23 @@ export const OVERLAPPING_SETS: Record<string, unknown>[] = [
   { id: 'set-work', name: '仕事セット', entryIds: ['w-kiriwake', 'w-choukou'] },
   { id: 'set-news', name: 'ニュースセット', entryIds: ['w-choukou'] },
 ];
+
+/**
+ * `count` finished sessions, newest last, an hour apart.
+ *
+ * Built rather than written out because the only thing being tested with more
+ * than a couple of them is the cursor, and a page boundary needs more rows than
+ * anybody wants to read in a fixture.
+ */
+export function makeSessions(count: number): Record<string, unknown>[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `e2e-session-${index + 1}`,
+    mode: index % 2 === 0 ? 'flashcard' : 'dictation',
+    filterLabel: `記録 ${index + 1}`,
+    total: 3,
+    correct: index % 3,
+    missed: [],
+    startedAt: new Date(Date.UTC(2026, 5, 1, index)).toISOString(),
+    finishedAt: new Date(Date.UTC(2026, 5, 1, index, 5)).toISOString(),
+  }));
+}

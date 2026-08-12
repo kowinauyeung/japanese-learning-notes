@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import type { ProgressRepository } from '@/domain/ports';
 import type { EntryProgress, PracticeSessionDraft } from '@/domain/practice';
 import { progressRepositoryFor } from '@/lib/backend';
 import { weakIdsOf } from '@/lib/practice';
@@ -12,6 +13,16 @@ interface ProgressValue {
   error: string | null;
   /** Writes a finished session and folds its rows into the state in memory. */
   record: (session: PracticeSessionDraft, rows: EntryProgress[]) => Promise<void>;
+  /**
+   * Exposed for 履歴, which pages `listSessions` itself.
+   *
+   * Sessions are not held here: this provider keeps the one document every
+   * screen needs, and the session log is an unbounded collection only one route
+   * reads. Loading it on sign-in would be a read nobody asked for, and holding
+   * a page cursor in a provider would put one screen's scroll position in
+   * global state.
+   */
+  repository: ProgressRepository;
 }
 
 const ProgressContext = createContext<ProgressValue | null>(null);
@@ -72,8 +83,8 @@ export function ProgressProvider({ uid, children }: { uid: string; children: Rea
   );
 
   const value = useMemo(
-    () => ({ progress, weakIds: weakIdsOf(progress), loading, error, record }),
-    [progress, loading, error, record],
+    () => ({ progress, weakIds: weakIdsOf(progress), loading, error, record, repository }),
+    [progress, loading, error, record, repository],
   );
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;
 }
