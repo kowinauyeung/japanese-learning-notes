@@ -3,6 +3,7 @@ import type { Entry } from '@/domain/entry';
 import type { EntryProgress, PracticeMode, PracticeSessionDraft } from '@/domain/practice';
 import type { WordSet } from '@/domain/wordSet';
 import { addDays, dateKey, subtractMonths } from '@/lib/dates';
+import { isValidIsoDate } from '@/lib/sanitize';
 
 /**
  * Everything a practice session is decided by, before any of it is rendered.
@@ -45,6 +46,19 @@ function oneOf(value: string | null, allowed: readonly string[]): string {
 }
 
 /**
+ * A `learnedOn` bound, or `''` when what arrived is not a date.
+ *
+ * The bounds are compared as plain strings, so anything sorting above a real
+ * date — `?from=zzz` — excludes every entry at once. The learner then sees a
+ * blank date field, 「0 件が対象」 and nothing on screen accounting for either,
+ * which is exactly the filter the note above refuses to allow. `isValidIsoDate`
+ * is the same check the entry form already applies to this field.
+ */
+function isoBound(value: string | null): string {
+  return isValidIsoDate(value) ? (value as string) : '';
+}
+
+/**
  * Practice filters in a query string, so a drill can be linked to.
  *
  * The one caller that needs it today is 履歴's 復習 button, which has to hand
@@ -69,8 +83,8 @@ export function practiceFiltersFromParams(params: URLSearchParams): PracticeFilt
       .filter((level) => (JLPT_LEVELS as readonly string[]).includes(level)),
     pos: oneOf(params.get('pos'), POS),
     origin: oneOf(params.get('origin'), WORD_ORIGINS),
-    from: params.get('from') ?? '',
-    to: params.get('to') ?? '',
+    from: isoBound(params.get('from')),
+    to: isoBound(params.get('to')),
     weakOnly: params.get('weak') === '1',
   };
 }

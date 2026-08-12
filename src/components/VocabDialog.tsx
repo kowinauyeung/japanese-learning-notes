@@ -43,6 +43,14 @@ export function VocabDialog() {
       footer={
         <Link
           to={`/vocabulary/${entry.id}`}
+          /**
+           * `replace`, because the address bar already reads this URL — the
+           * dialog pushed it by hand when it opened. Pushing it a second time
+           * leaves a duplicate entry the reader cannot see, so returning to the
+           * page the dialog was opened over takes two presses of Back, the
+           * first of which appears to do nothing.
+           */
+          replace
           className="grid min-h-10 w-full place-items-center rounded-pill bg-accent text-sm font-semibold text-on-accent"
         >
           詳細を見る

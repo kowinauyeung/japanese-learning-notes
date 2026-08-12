@@ -69,7 +69,7 @@ function Practice({ mode }: { mode: PracticeMode }) {
     progress,
     record,
   } = useProgress();
-  const { sets } = useWordSets();
+  const { sets, loading: setsLoading } = useWordSets();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -141,10 +141,17 @@ function Practice({ mode }: { mode: PracticeMode }) {
    * the empty-scope branch below, and never start at all — the ref makes that
    * permanent for the visit.
    *
-   * **The `progressLoading` half of that is unverified.** Against the in-memory
-   * adapter both loads resolve in the same tick, so removing it fails nothing;
-   * against Firestore they are two independent round trips. Reasoned, not
-   * measured — do not read the green suite as cover for it.
+   * All three loads, because `matches` is computed through `scopeFor(filters,
+   * sets, weakIds)`: a `?set=…&start=1` link whose sets have not arrived yet
+   * resolves the id against an empty array, sees no matches, and latches this
+   * permanently — the sets landing a moment later cannot un-latch it. Latent
+   * rather than live, since nothing generates a `set=` link today, but
+   * `practiceFiltersToParams` serialises `sets` deliberately.
+   *
+   * **None of the three waits is verified.** Against the in-memory adapter all
+   * of them settle in the same tick, so removing any one fails nothing; against
+   * Firestore they are independent round trips. Reasoned, not measured — do not
+   * read the green suite as cover for them.
    *
    * A scope that matches nothing falls through to the setup screen instead,
    * where 「0 件が対象」 already says so and 開始する is already blocked. The ref
@@ -154,13 +161,13 @@ function Practice({ mode }: { mode: PracticeMode }) {
   const autoStarted = useRef(false);
   useEffect(() => {
     if (autoStarted.current || searchParams.get('start') !== '1') return;
-    if (loading || progressLoading) return;
+    if (loading || progressLoading || setsLoading) return;
     autoStarted.current = true;
     if (matches.length > 0) start(shuffle(matches, Math.random), describeFilters(filters, sets));
     // `start` and `filters` are read at the moment this fires and are not what
     // decides whether it should; listing them would re-run it on every edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, progressLoading, matches, searchParams]);
+  }, [loading, progressLoading, setsLoading, matches, searchParams]);
 
   const finish = (finished: Session, answers: Answer[]) => {
     const at = new Date().toISOString();

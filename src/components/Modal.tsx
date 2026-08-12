@@ -18,8 +18,9 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
 }) {
-  /** Whether the gesture in progress started on the backdrop. See below. */
+  /** Whether the gesture in progress started, and ended, on the backdrop. */
   const pressedOnBackdrop = useRef(false);
+  const releasedOnBackdrop = useRef(false);
 
   /**
    * True while an IME is mid-conversion anywhere inside the dialog.
@@ -89,21 +90,25 @@ export function Modal({
        * never a click on the backdrop at all. On the add-word sheet that
        * discards whatever had been typed.
        *
-       * Both halves are checked. `pressed` says the gesture started here, and
-       * `target === currentTarget` says it did not merely bubble up from the
-       * card. That second check is why the card no longer needs to stop
-       * propagation: a click on it is a click whose target is not this element.
+       * **Both ends of the gesture are checked, not just one.** A first pass
+       * tracked only where the press began, which left the mirror case wide
+       * open: press on the backdrop, drag into the card, release. The click is
+       * still dispatched here, the press really did start here, and the dialog
+       * closed on a gesture that ended inside it — the same defect, with the
+       * same worst case, in the other direction.
        *
-       * The flag is never cleared after use, because it never needs to be:
-       * every click is preceded by a `pointerdown` that sets it afresh. Adding
-       * a reset here was tried and no test could be made to fail on it.
+       * Neither flag is cleared after use, because neither needs to be: every
+       * click is preceded by the pair of pointer events that set them afresh.
+       * Adding a reset was tried and no test could be made to fail on it.
        */
       onPointerDown={(event) => {
         pressedOnBackdrop.current = event.target === event.currentTarget;
       }}
-      onClick={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (!pressedOnBackdrop.current) return;
+      onPointerUp={(event) => {
+        releasedOnBackdrop.current = event.target === event.currentTarget;
+      }}
+      onClick={() => {
+        if (!pressedOnBackdrop.current || !releasedOnBackdrop.current) return;
         onClose();
       }}
       role="presentation"

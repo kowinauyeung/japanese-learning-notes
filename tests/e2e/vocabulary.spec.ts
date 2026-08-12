@@ -98,6 +98,16 @@ test.describe('browsing', () => {
 
     await expect(page.getByRole('heading', { name: /MANIFEST/ })).toBeVisible();
     await expect(page.getByRole('dialog', { name: '単語' })).toBeHidden();
+
+    /**
+     * One press of Back, not two. The dialog pushed this address by hand when
+     * it opened, so a 詳細を見る that pushed it again left a duplicate entry the
+     * reader cannot see — and the first Back appeared to do nothing, because it
+     * moved between two entries showing the same page.
+     */
+    await page.goBack();
+    await expect(page).toHaveURL(/\/vocabulary$/);
+    await expect(page.getByText('3 語')).toBeVisible();
   });
 
   test('says so plainly when nothing matches', async ({ page }) => {

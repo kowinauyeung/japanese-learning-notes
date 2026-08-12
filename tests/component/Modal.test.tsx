@@ -33,7 +33,25 @@ describe('Modal — dismissing by backdrop', () => {
     const { onClose, backdrop, card } = setup();
 
     fireEvent.pointerDown(card);
+    fireEvent.pointerUp(backdrop);
     // Released over the backdrop, so this is where the browser sends the click.
+    fireEvent.click(backdrop);
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The mirror of the case above, and the one the first attempt at this let
+   * through: the press really did start on the backdrop, so tracking only that
+   * end passed it. The gesture still ended inside the card — a text selection
+   * begun on the backdrop and finished in the add-word sheet — and closing on
+   * it discards what had been typed just the same.
+   */
+  it('stays open when the release landed inside the dialog', () => {
+    const { onClose, backdrop, card } = setup();
+
+    fireEvent.pointerDown(backdrop);
+    fireEvent.pointerUp(card);
     fireEvent.click(backdrop);
 
     expect(onClose).not.toHaveBeenCalled();
@@ -43,6 +61,7 @@ describe('Modal — dismissing by backdrop', () => {
     const { onClose, backdrop } = setup();
 
     fireEvent.pointerDown(backdrop);
+    fireEvent.pointerUp(backdrop);
     fireEvent.click(backdrop);
 
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -53,13 +72,14 @@ describe('Modal — dismissing by backdrop', () => {
     const { onClose, card } = setup();
 
     fireEvent.pointerDown(card);
+    fireEvent.pointerUp(card);
     fireEvent.click(card);
 
     expect(onClose).not.toHaveBeenCalled();
   });
 
   /**
-   * The flag follows the latest press rather than accumulating: a genuine
+   * The flags follow the latest gesture rather than accumulating: a genuine
    * backdrop dismissal must not arm the next release, when that one began
    * inside the card.
    */
@@ -67,8 +87,11 @@ describe('Modal — dismissing by backdrop', () => {
     const { onClose, backdrop, card } = setup();
 
     fireEvent.pointerDown(backdrop);
+    fireEvent.pointerUp(backdrop);
     fireEvent.click(backdrop);
+
     fireEvent.pointerDown(card);
+    fireEvent.pointerUp(backdrop);
     fireEvent.click(backdrop);
 
     expect(onClose).toHaveBeenCalledTimes(1);

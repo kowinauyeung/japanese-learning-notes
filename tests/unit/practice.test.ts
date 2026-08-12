@@ -385,3 +385,30 @@ describe('practice filters in the URL', () => {
     expect(practiceFiltersToParams(EMPTY_PRACTICE_FILTERS).toString()).toBe('');
   });
 });
+
+/**
+ * A bound that is not a date is not a bound.
+ *
+ * The two are compared as plain strings, so anything sorting above a real date
+ * excludes every entry at once — and the learner sees a blank date field,
+ * 「0 件が対象」 and nothing on screen accounting for either. `pos`, `origin`
+ * and `jlpt` were already refused; these two were passed straight through.
+ */
+describe('practice filters — date bounds from the URL', () => {
+  it.each(['zzz', '2026-6-1', '2026-02-31', 'yesterday'])(
+    'refuses %o rather than filtering everything out',
+    (value) => {
+      const filters = practiceFiltersFromParams(new URLSearchParams(`from=${value}&to=${value}`));
+      expect(filters.from).toBe('');
+      expect(filters.to).toBe('');
+    },
+  );
+
+  it('keeps a real date on both ends', () => {
+    const params = new URLSearchParams('from=2026-01-01&to=2026-06-30');
+    expect(practiceFiltersFromParams(params)).toMatchObject({
+      from: '2026-01-01',
+      to: '2026-06-30',
+    });
+  });
+});
