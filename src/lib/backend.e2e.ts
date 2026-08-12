@@ -10,7 +10,7 @@ import type {
 } from '@/domain/ports';
 import type { EntryProgress, PracticeSession, PracticeSessionDraft } from '@/domain/practice';
 import type { WordSet, WordSetDraft } from '@/domain/wordSet';
-import { sanitizeEntry, sanitizeWordSet } from './sanitize';
+import { sanitizeEntry, sanitizeSession, sanitizeWordSet } from './sanitize';
 
 /**
  * In-memory adapters for the end-to-end build, and nothing else.
@@ -37,6 +37,8 @@ interface Seed {
   weak?: string[];
   /** Raw 単語集 documents. Nothing in the app creates one yet. */
   wordSets?: unknown[];
+  /** Finished sessions, so 履歴 can be reached without drilling first. */
+  sessions?: unknown[];
 }
 
 declare global {
@@ -262,7 +264,16 @@ function progressFor(uid: string): Map<string, EntryProgress> {
 function sessionsFor(uid: string): PracticeSession[] {
   const existing = sessionStores.get(uid);
   if (existing) return existing;
-  const restored = load<PracticeSession[]>(`sessions.${uid}`, []);
+
+  const persisted = load<PracticeSession[] | null>(`sessions.${uid}`, null);
+  const restored =
+    persisted ??
+    (seed().sessions ?? []).map((raw, index) => {
+      const row = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+      const id = typeof row.id === 'string' ? row.id : `e2e-session-${index + 1}`;
+      return sanitizeSession(id, row);
+    });
+
   for (const session of restored) {
     const n = Number(/^e2e-session-(\d+)$/.exec(session.id)?.[1]);
     if (Number.isInteger(n) && n > sessionSequence) sessionSequence = n;

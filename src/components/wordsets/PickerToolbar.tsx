@@ -22,7 +22,7 @@ export function PickerToolbar({
   onChange: (next: Filters) => void;
 }) {
   /**
-   * Folded until asked for. 一覧's panel is around 200px tall; open by default
+   * Folded until asked for. 単語's filter panel is around 200px tall; open by default
    * it takes that much off both lists at once.
    */
   const [open, setOpen] = useState(false);

@@ -1,16 +1,50 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Distribution } from '@/components/dashboard/Distribution';
 import { EntryRow } from '@/components/dashboard/EntryRow';
 import { Heatmap } from '@/components/dashboard/Heatmap';
+import { RecentPractice } from '@/components/dashboard/RecentPractice';
 import { StatTiles } from '@/components/dashboard/StatTiles';
 import { TodayWord, pickWordOfDay } from '@/components/dashboard/TodayWord';
+import type { PracticeMode, PracticeSession } from '@/domain/practice';
 import { dateKey, shortDate } from '@/lib/dates';
 import { useEntries } from '@/lib/entries';
+import { latestByMode, RECENT_WINDOW } from '@/lib/history';
+import { useProgress } from '@/lib/progress';
 import { summarise } from '@/lib/stats';
 
 export function Component() {
   const { entries, loading, error } = useEntries();
+  const { repository } = useProgress();
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+
+  /**
+   * The newest session of each mode, or nulls while it is being read.
+   *
+   * Read here rather than held by `ProgressProvider`: sessions are an unbounded
+   * collection and this is the only screen outside 履歴 that wants any of them,
+   * so loading them on sign-in would be a read nobody asked for. A failure is
+   * deliberately silent — the panel falls back to its empty state, and a
+   * dashboard that refuses to render because one panel could not load would be
+   * a worse answer than a panel that says 「まだ実施していません」.
+   */
+  const [latest, setLatest] = useState<Record<PracticeMode, PracticeSession | null>>(() =>
+    latestByMode([]),
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    repository
+      .listSessions({ limit: RECENT_WINDOW, cursor: null })
+      .then((page) => {
+        if (!cancelled) setLatest(latestByMode(page.items));
+      })
+      .catch((cause: unknown) => {
+        console.error(cause);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [repository]);
 
   const stats = useMemo(() => summarise(entries, new Date()), [entries]);
 
@@ -33,17 +67,7 @@ export function Component() {
         <StatTiles week={stats.inWeek} month={stats.inMonth} year={stats.inYear} />
       </div>
 
-      <section className="rounded-card bg-card p-5 shadow-panel">
-        <h2 className="text-xs font-semibold tracking-wide text-muted">最新の練習</h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {['フラッシュカード', '書き取り練習'].map((mode) => (
-            <div key={mode} className="rounded-panel bg-bg-alt p-4">
-              <p className="text-sm font-medium">{mode}</p>
-              <p className="mt-1 text-xs text-muted">まだ実施していません</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <RecentPractice latest={latest} />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Distribution title={`JLPTレベル（全 ${entries.length} 語）`} rows={stats.jlptRows} />

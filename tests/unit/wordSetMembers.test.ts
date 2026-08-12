@@ -89,8 +89,8 @@ describe('candidatesFor', () => {
   });
 
   /**
-   * The same 一覧 filters over the same predicate, so a word that a filter
-   * combination finds on 一覧 is findable by that combination here. A second
+   * The same 単語 filters over the same predicate, so a word that a filter
+   * combination finds on 単語 is findable by that combination here. A second
    * search implementation is how that stops being true.
    */
   it('narrows on a filter the search box cannot express', () => {

@@ -35,11 +35,25 @@ export default defineConfig({
 
   expect: {
     toHaveScreenshot: {
-      // Loose enough to absorb subpixel antialiasing, tight enough that a
-      // furigana annotation moving from above the word to beside it — which is
-      // the defect these exist for — is far outside it.
+      /**
+       * `threshold` is per pixel and absorbs subpixel antialiasing. The budget
+       * beside it counts pixels, and it is **absolute rather than a ratio** —
+       * which was the whole problem with the ratio.
+       *
+       * A ratio scales the allowance with the canvas, so it is strictest on the
+       * baselines that need it least: 0.005 gave the 244×73 furigana crop 89
+       * pixels and the 1280×1135 full-page dashboard 7,264. The large shot,
+       * where a regression has the most room to hide, had the loosest gate. It
+       * absorbed three changes in a row — a rebuilt 最新の練習 panel, and the
+       * navigation both renamed and reordered — using 1,293 of those 7,264 and
+       * staying green throughout.
+       *
+       * 150 is headroom, not tolerance: measured at `maxDiffPixels: 0`, all
+       * four baselines render byte-identical in the pinned container image, so
+       * this is slack for a font or driver revision inside it and nothing else.
+       */
       threshold: 0.15,
-      maxDiffPixelRatio: 0.005,
+      maxDiffPixels: 150,
       animations: 'disabled',
       caret: 'hide',
     },

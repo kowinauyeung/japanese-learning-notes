@@ -1,11 +1,11 @@
-import { Link } from 'react-router-dom';
 import { Ruby } from '@/components/Ruby';
+import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
 
 export function EntryCard({ entry }: { entry: Entry }) {
   return (
-    <Link
-      to={`/vocabulary/${entry.id}`}
+    <VocabLink
+      entryId={entry.id}
       className="flex flex-col gap-3 rounded-card bg-card p-4 shadow-panel transition hover:-translate-y-0.5"
     >
       <div className="flex items-start justify-between gap-2">
@@ -36,6 +36,6 @@ export function EntryCard({ entry }: { entry: Entry }) {
         ))}
         <span className="ml-auto text-[11px] text-muted tabular-nums">{entry.learnedOn}</span>
       </div>
-    </Link>
+    </VocabLink>
   );
 }

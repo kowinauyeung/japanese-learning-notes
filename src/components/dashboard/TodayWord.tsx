@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom';
 import { LogoMark } from '@/components/Logo';
 import { Ruby } from '@/components/Ruby';
+import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
 
 /**
@@ -24,8 +24,8 @@ export function TodayWord({ entry }: { entry: Entry }) {
   const summary = entry.senses[0]?.description || entry.definition;
 
   return (
-    <Link
-      to={`/vocabulary/${entry.id}`}
+    <VocabLink
+      entryId={entry.id}
       className="relative block overflow-hidden rounded-card border border-line bg-linear-to-br from-accent-soft to-card p-5 shadow-panel transition hover:-translate-y-0.5"
     >
       {/* Decorative, and already announced by the heading below. */}
@@ -61,6 +61,6 @@ export function TodayWord({ entry }: { entry: Entry }) {
           <span className="ml-auto text-xs font-semibold text-accent">詳しく見る →</span>
         </div>
       </div>
-    </Link>
+    </VocabLink>
   );
 }

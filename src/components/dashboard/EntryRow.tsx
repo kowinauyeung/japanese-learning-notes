@@ -1,11 +1,11 @@
-import { Link } from 'react-router-dom';
 import { Ruby } from '@/components/Ruby';
+import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
 
 export function EntryRow({ entry }: { entry: Entry }) {
   return (
-    <Link
-      to={`/vocabulary/${entry.id}`}
+    <VocabLink
+      entryId={entry.id}
       className="flex items-center gap-3 rounded-panel px-3 py-2.5 transition hover:bg-bg-alt"
     >
       <Ruby
@@ -17,6 +17,6 @@ export function EntryRow({ entry }: { entry: Entry }) {
         {entry.senses[0]?.description || entry.definition}
       </span>
       <span className="shrink-0 text-xs text-muted tabular-nums">{entry.learnedOn}</span>
-    </Link>
+    </VocabLink>
   );
 }

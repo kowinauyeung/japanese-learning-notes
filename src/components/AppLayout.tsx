@@ -1,20 +1,28 @@
 import { useCallback, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { VocabDialog } from '@/components/VocabDialog';
 import { useAuth } from '@/lib/auth';
 import { EntriesProvider } from '@/lib/entries';
 import { ProgressProvider } from '@/lib/progress';
 import { useTheme } from '@/lib/theme';
 import { useClickOutside } from '@/lib/useClickOutside';
+import { VocabDialogProvider } from '@/lib/vocabDialog';
 import { WordSetsProvider } from '@/lib/wordSets';
 import { EntryFormModal } from './entry-form/EntryFormModal';
 import { LogoMark } from './Logo';
 
+/**
+ * Ordered the way the notebook is used, not the way it was built: collect
+ * words, organise them, drill them, look back. 単語 and 単語集 sit together
+ * because one is made out of the other, and the two drills sit together
+ * because choosing between them is a single decision.
+ */
 const NAV = [
   { to: '/', label: 'ダッシュボード', end: true },
-  { to: '/vocabulary', label: '一覧', end: false },
+  { to: '/vocabulary', label: '単語', end: false },
+  { to: '/wordsets', label: '単語集', end: false },
   { to: '/practice/flashcards', label: 'フラッシュカード', end: false },
   { to: '/practice/dictation', label: '書き取り練習', end: false },
-  { to: '/wordsets', label: '単語集', end: false },
   { to: '/history', label: '履歴', end: false },
 ];
 
@@ -43,69 +51,75 @@ export function AppLayout() {
     <EntriesProvider uid={user.uid}>
       <ProgressProvider uid={user.uid}>
         <WordSetsProvider uid={user.uid}>
-          <div className="min-h-dvh bg-bg text-ink">
-            <header className="sticky top-0 z-30 border-b border-line bg-card/85 backdrop-blur">
-              <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
-                <NavLink
-                  to="/"
-                  className="mr-1 flex items-center gap-1.5 font-display text-lg font-bold text-accent"
-                >
-                  <LogoMark className="h-7 w-7" />
-                  語彙庭
-                </NavLink>
-
-                {/* Desktop: the full pill row. */}
-                <nav className="hidden flex-1 items-center gap-1 nav:flex">
-                  {NAV.map((item) => (
-                    <NavLink key={item.to} to={item.to} end={item.end} className={pillClass}>
-                      {item.label}
-                    </NavLink>
-                  ))}
-                </nav>
-
-                <div className="flex flex-1 items-center justify-end gap-2 nav:flex-none">
-                  <button
-                    type="button"
-                    onClick={() => setMenuOpen((open) => !open)}
-                    aria-label="メニュー"
-                    aria-expanded={menuOpen}
-                    className="grid h-11 w-11 place-items-center rounded-pill text-xl hover:bg-bg-alt nav:hidden"
+          {/* Below the data providers because the dialog reads the notebook
+              they hold, and above the outlet because any page may open it. */}
+          <VocabDialogProvider>
+            <div className="min-h-dvh bg-bg text-ink">
+              <header className="sticky top-0 z-30 border-b border-line bg-card/85 backdrop-blur">
+                <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
+                  <NavLink
+                    to="/"
+                    className="mr-1 flex items-center gap-1.5 font-display text-lg font-bold text-accent"
                   >
-                    {menuOpen ? '✕' : '☰'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAdding(true)}
-                    className="hidden rounded-pill bg-accent px-4 py-2 text-sm font-semibold text-on-accent nav:block"
-                  >
-                    ＋追加
-                  </button>
-                  <AvatarMenu />
+                    <LogoMark className="h-7 w-7" />
+                    語彙庭
+                  </NavLink>
+
+                  {/* Desktop: the full pill row. */}
+                  <nav className="hidden flex-1 items-center gap-1 nav:flex">
+                    {NAV.map((item) => (
+                      <NavLink key={item.to} to={item.to} end={item.end} className={pillClass}>
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </nav>
+
+                  <div className="flex flex-1 items-center justify-end gap-2 nav:flex-none">
+                    <button
+                      type="button"
+                      onClick={() => setMenuOpen((open) => !open)}
+                      aria-label="メニュー"
+                      aria-expanded={menuOpen}
+                      className="grid h-11 w-11 place-items-center rounded-pill text-xl hover:bg-bg-alt nav:hidden"
+                    >
+                      {menuOpen ? '✕' : '☰'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdding(true)}
+                      className="hidden rounded-pill bg-accent px-4 py-2 text-sm font-semibold text-on-accent nav:block"
+                    >
+                      ＋追加
+                    </button>
+                    <AvatarMenu />
+                  </div>
                 </div>
-              </div>
 
-              {menuOpen && <MobileNav onNavigate={() => setMenuOpen(false)} />}
-            </header>
+                {menuOpen && <MobileNav onNavigate={() => setMenuOpen(false)} />}
+              </header>
 
-            <main className="mx-auto max-w-5xl px-4 py-6 pb-28 nav:pb-10">
-              <Outlet />
-            </main>
+              <main className="mx-auto max-w-5xl px-4 py-6 pb-28 nav:pb-10">
+                <Outlet />
+              </main>
 
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              aria-label="単語を追加"
-              className="fixed right-5 bottom-5 z-20 grid h-14 w-14 place-items-center rounded-pill bg-accent text-2xl text-on-accent shadow-panel nav:hidden"
-            >
-              ＋
-            </button>
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                aria-label="単語を追加"
+                className="fixed right-5 bottom-5 z-20 grid h-14 w-14 place-items-center rounded-pill bg-accent text-2xl text-on-accent shadow-panel nav:hidden"
+              >
+                ＋
+              </button>
 
-            <EntryFormModal
-              open={adding}
-              onClose={() => setAdding(false)}
-              onSaved={(id) => void navigate(`/vocabulary/${id}`)}
-            />
-          </div>
+              <EntryFormModal
+                open={adding}
+                onClose={() => setAdding(false)}
+                onSaved={(id) => void navigate(`/vocabulary/${id}`)}
+              />
+
+              <VocabDialog />
+            </div>
+          </VocabDialogProvider>
         </WordSetsProvider>
       </ProgressProvider>
     </EntriesProvider>

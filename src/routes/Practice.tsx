@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DictationSession } from '@/components/practice/DictationSession';
 import { FlashcardSession } from '@/components/practice/FlashcardSession';
@@ -10,7 +10,7 @@ import type { PracticeMode } from '@/domain/practice';
 import { useEntries } from '@/lib/entries';
 import {
   describeFilters,
-  EMPTY_PRACTICE_FILTERS,
+  practiceFiltersFromParams,
   matchesPractice,
   mergeProgress,
   scopeFor,
@@ -69,10 +69,22 @@ function Practice({ mode }: { mode: PracticeMode }) {
     progress,
     record,
   } = useProgress();
-  const { sets } = useWordSets();
+  const { sets, loading: setsLoading } = useWordSets();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const [filters, setFilters] = useState<PracticeFilters>(EMPTY_PRACTICE_FILTERS);
+  /**
+   * Seeded from the query string, then owned by this screen.
+   *
+   * Read once rather than kept in sync, which is the opposite of what Browse
+   * does — and deliberately. A Browse URL *is* the view, and stepping back
+   * through refinements is the point. A practice URL is a way in: 履歴's 復習
+   * button hands over a scope, and from that moment the setup screen is being
+   * edited towards a session, not towards a link worth keeping.
+   */
+  const [filters, setFilters] = useState<PracticeFilters>(() =>
+    practiceFiltersFromParams(searchParams),
+  );
   const [session, setSession] = useState<Session | null>(null);
   const [quitting, setQuitting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -119,6 +131,43 @@ function Practice({ mode }: { mode: PracticeMode }) {
     setSaveError(null);
     setSession({ queue, index: 0, answers: [], startedAt: new Date().toISOString(), filterLabel });
   };
+
+  /**
+   * `?start=1` — deal the cards without stopping at the setup screen.
+   *
+   * Waits for both loads before deciding, because the scope it was handed may
+   * be 苦手のみ, and that is answered by the progress map rather than by the
+   * entry. Firing while the map is still arriving would see no weak words, take
+   * the empty-scope branch below, and never start at all — the ref makes that
+   * permanent for the visit.
+   *
+   * All three loads, because `matches` is computed through `scopeFor(filters,
+   * sets, weakIds)`: a `?set=…&start=1` link whose sets have not arrived yet
+   * resolves the id against an empty array, sees no matches, and latches this
+   * permanently — the sets landing a moment later cannot un-latch it. Latent
+   * rather than live, since nothing generates a `set=` link today, but
+   * `practiceFiltersToParams` serialises `sets` deliberately.
+   *
+   * **None of the three waits is verified.** Against the in-memory adapter all
+   * of them settle in the same tick, so removing any one fails nothing; against
+   * Firestore they are independent round trips. Reasoned, not measured — do not
+   * read the green suite as cover for them.
+   *
+   * A scope that matches nothing falls through to the setup screen instead,
+   * where 「0 件が対象」 already says so and 開始する is already blocked. The ref
+   * makes it a one-shot: the learner may then edit the filters, and re-firing
+   * would take the screen away from them mid-edit.
+   */
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStarted.current || searchParams.get('start') !== '1') return;
+    if (loading || progressLoading || setsLoading) return;
+    autoStarted.current = true;
+    if (matches.length > 0) start(shuffle(matches, Math.random), describeFilters(filters, sets));
+    // `start` and `filters` are read at the moment this fires and are not what
+    // decides whether it should; listing them would re-run it on every edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, progressLoading, setsLoading, matches, searchParams]);
 
   const finish = (finished: Session, answers: Answer[]) => {
     const at = new Date().toISOString();

@@ -45,7 +45,7 @@ export function membersOf(set: WordSet, entries: readonly Entry[]): Entry[] {
 export const CANDIDATE_LIMIT = 50;
 
 /**
- * Words that could join the set, narrowed the same way 一覧 narrows the
+ * Words that could join the set, narrowed the same way 単語 narrows the
  * notebook, minus the ones already in it.
  *
  * Excluding current members is not cosmetic: adding a word twice is a no-op
