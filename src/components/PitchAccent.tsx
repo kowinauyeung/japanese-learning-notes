@@ -26,7 +26,10 @@ export function PitchAccent({
   if (shape.length === 0) return null;
 
   return (
-    <span className={className}>
+    // `has-accent` is the screenshot's handle, emitted here rather than passed
+    // in so a call site cannot forget it — the same job `.has-ruby` does, which
+    // callers do pass and which is therefore one edit away from untested.
+    <span className={className ? `has-accent ${className}` : 'has-accent'}>
       <span className="text-muted tabular-nums">{accentLabel(pitchAccent, kana)}</span>{' '}
       <span className="whitespace-nowrap">
         {shape.map((mora, index) => (
