@@ -1,5 +1,6 @@
 import type { Entry } from '@/domain/entry';
-import type { PracticeSession } from '@/domain/practice';
+import { PRACTICE_MODES } from '@/domain/practice';
+import type { PracticeMode, PracticeSession } from '@/domain/practice';
 
 /**
  * Reading a recorded session back, weeks after the drill that produced it.
@@ -64,4 +65,41 @@ export function sessionTime(finishedAt: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(at);
+}
+
+/**
+ * How many sessions the dashboard reads to find the newest of each mode.
+ *
+ * A window, not a per-mode query, and the reason is that the per-mode query
+ * needs a composite index on `(mode, finishedAt)`. The Firestore emulator does
+ * **not** enforce composite indexes — it answers any query — so an integration
+ * test would pass against the emulator and the query would fail in production
+ * on an index nobody had deployed. `firestore.indexes.json` exists but is empty
+ * and no script deploys it. A test that cannot tell the two apart is worse than
+ * the limitation below.
+ */
+export const RECENT_WINDOW = 20;
+
+/**
+ * The most recent session of each mode, out of the window that was read.
+ *
+ * **Null does not always mean "never drilled".** A mode last practised more
+ * than `RECENT_WINDOW` sessions ago falls out of the window and reads as
+ * untouched. That is the cost of not needing an index, and it is bounded: it
+ * takes twenty sessions of one mode without a single one of the other.
+ *
+ * Takes the sessions already ordered, because that is how `listSessions`
+ * returns them — re-sorting here would hide a caller that had not.
+ */
+export function latestByMode(
+  newestFirst: readonly PracticeSession[],
+): Record<PracticeMode, PracticeSession | null> {
+  const found = Object.fromEntries(PRACTICE_MODES.map((mode) => [mode, null])) as Record<
+    PracticeMode,
+    PracticeSession | null
+  >;
+  for (const session of newestFirst) {
+    if (found[session.mode] === null) found[session.mode] = session;
+  }
+  return found;
 }

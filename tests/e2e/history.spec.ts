@@ -84,6 +84,52 @@ test.describe('history', () => {
   });
 
   /**
+   * The dashboard panel and 履歴 read the same collection from different
+   * screens, and the panel is the only place the *newest of each mode* is
+   * asked for — a distinction no unit test over a fixed array can show has
+   * survived the round trip.
+   */
+  test('shows the newest session of each mode on the dashboard', async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS,
+      sessions: [
+        {
+          id: 'e2e-session-1',
+          mode: 'flashcard',
+          filterLabel: '古い記録',
+          total: 3,
+          correct: 1,
+          missed: [],
+          startedAt: '2026-06-01T00:00:00.000Z',
+          finishedAt: '2026-06-01T00:05:00.000Z',
+        },
+        {
+          id: 'e2e-session-2',
+          mode: 'flashcard',
+          filterLabel: '新しい記録',
+          total: 3,
+          correct: 3,
+          missed: [],
+          startedAt: '2026-06-02T00:00:00.000Z',
+          finishedAt: '2026-06-02T00:05:00.000Z',
+        },
+      ],
+    });
+    await page.goto('/');
+
+    const panel = page.locator('section', {
+      has: page.getByRole('heading', { name: '最新の練習' }),
+    });
+    // The newer of the two flashcard runs, not the first one found.
+    await expect(panel).toContainText('3 / 3');
+    await expect(panel).toContainText('新しい記録');
+    await expect(panel).not.toContainText('古い記録');
+    // Dictation has never been drilled, so it keeps the empty state.
+    await expect(panel).toContainText('まだ実施していません');
+  });
+
+  /**
    * The scope can be empty — every weak word deleted since, or a hand-edited
    * URL — and an auto-start that dealt nothing would record a 0 / 0 session.
    * Falling through to the setup screen is what says so instead.

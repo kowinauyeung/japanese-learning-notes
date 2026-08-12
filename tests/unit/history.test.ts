@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PracticeSession } from '@/domain/practice';
-import { missedWords, sessionTime, weakWords } from '@/lib/history';
+import { latestByMode, missedWords, RECENT_WINDOW, sessionTime, weakWords } from '@/lib/history';
 import { makeEntry } from '../fixtures/entry';
 
 /**
@@ -84,5 +84,51 @@ describe('sessionTime', () => {
 
   it('renders something for a real instant', () => {
     expect(sessionTime('2026-06-24T09:04:00.000Z')).not.toBe('');
+  });
+});
+
+/**
+ * What the dashboard's 最新の練習 panel shows, out of the window it read.
+ *
+ * A window rather than a query per mode, because the per-mode query needs a
+ * composite index the emulator does not enforce — see `RECENT_WINDOW`. The
+ * cost of that choice is the last case here, and it is written down rather
+ * than hidden.
+ */
+describe('latestByMode', () => {
+  const session = (id: string, mode: 'flashcard' | 'dictation', finishedAt: string) =>
+    makeSession({ id, mode, finishedAt });
+
+  it('picks the newest of each mode out of a mixed list', () => {
+    const newestFirst = [
+      session('s3', 'flashcard', '2026-06-24T12:00:00.000Z'),
+      session('s2', 'dictation', '2026-06-23T12:00:00.000Z'),
+      session('s1', 'flashcard', '2026-06-22T12:00:00.000Z'),
+    ];
+    const latest = latestByMode(newestFirst);
+    expect(latest.flashcard?.id).toBe('s3');
+    expect(latest.dictation?.id).toBe('s2');
+  });
+
+  it('reports a mode that has never been drilled as null', () => {
+    const latest = latestByMode([session('s1', 'flashcard', '2026-06-24T12:00:00.000Z')]);
+    expect(latest.flashcard?.id).toBe('s1');
+    expect(latest.dictation).toBeNull();
+  });
+
+  it('has both modes as keys even with nothing to show', () => {
+    expect(latestByMode([])).toEqual({ flashcard: null, dictation: null });
+  });
+
+  /**
+   * The limitation, pinned so it is a decision rather than a surprise: a mode
+   * that has not been drilled inside the window reads as untouched. It takes
+   * `RECENT_WINDOW` sessions of one mode without a single one of the other.
+   */
+  it('cannot see a mode that fell out of the window it was given', () => {
+    const onlyFlashcards = Array.from({ length: RECENT_WINDOW }, (_, index) =>
+      session(`s${index}`, 'flashcard', '2026-06-24T12:00:00.000Z'),
+    );
+    expect(latestByMode(onlyFlashcards).dictation).toBeNull();
   });
 });
