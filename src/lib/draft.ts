@@ -111,3 +111,22 @@ export function parseTags(input: string): string[] {
 export function invalidTags(tags: string[]): string[] {
   return tags.filter((tag) => !TAG_PATTERN.test(tag));
 }
+
+/**
+ * The same rule from the other side, for the read path.
+ *
+ * `parseTags` splits and de-duplicates and has never checked the shape, so the
+ * two paths disagreed: `a/b` and a 40-character tag were refused on save and
+ * accepted on read. A stored document written before the rule existed, or by
+ * hand, came back as a valid `Entry` carrying a tag the form would reject and
+ * no filter chip could ever match — visible, unusable, and unexplained.
+ *
+ * Dropping is the right degradation here and is not the call made for the
+ * accent's upper bound, because the rules differ in kind: `TAG_PATTERN` is
+ * absolute, while an accent is only too large *relative to a sibling field the
+ * user is still editing*.
+ */
+export function validTags(tags: string[]): string[] {
+  const bad = new Set(invalidTags(tags));
+  return tags.filter((tag) => !bad.has(tag));
+}

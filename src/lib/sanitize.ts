@@ -15,7 +15,7 @@ import { PRACTICE_MODES } from '@/domain/practice';
 import type { EntryProgress, PracticeSession } from '@/domain/practice';
 import type { WordSet } from '@/domain/wordSet';
 import { isValidIsoDate } from './dates';
-import { emptyDraft, parseTags } from './draft';
+import { emptyDraft, parseTags, validTags } from './draft';
 
 export { isValidIsoDate };
 
@@ -212,7 +212,7 @@ export function sanitizeDraft(value: unknown, fallback: EntryDraft = emptyDraft(
     source: str(raw.source),
     context: entryContext(raw.context),
     usage: usage(raw.usage),
-    tags: parseTags(strings(raw.tags).join(' ')),
+    tags: validTags(parseTags(strings(raw.tags).join(' '))),
     learnedOn: isoDate(raw.learnedOn, fallback.learnedOn),
   };
 }

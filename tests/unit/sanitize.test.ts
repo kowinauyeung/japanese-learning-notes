@@ -255,6 +255,18 @@ describe('sanitizeDraft — scalars', () => {
     expect(sanitizeDraft({ pitchAccent: 9, reading: 'たまご' }).pitchAccent).toBe(9);
   });
 
+  /**
+   * The read path and the write path share `TAG_PATTERN` now. They did not:
+   * `parseTags` splits and de-duplicates and never checked the shape, so `a/b`
+   * and a 40-character tag were refused by `invalidTags` on save and waved
+   * through on read. A document written before the rule existed came back as a
+   * valid `Entry` carrying a tag the form rejects and no filter chip can match.
+   */
+  it('drops a stored tag the form itself would refuse', () => {
+    expect(sanitizeDraft({ tags: ['a/b', 'ニュース', '仕事!'] }).tags).toEqual(['ニュース']);
+    expect(sanitizeDraft({ tags: ['x'.repeat(40)] }).tags).toEqual([]);
+  });
+
   it('splits, strips and de-duplicates tags', () => {
     expect(sanitizeDraft({ tags: ['#ニュース', 'ビジネス 会議', null, 'ニュース'] }).tags).toEqual([
       'ニュース',
