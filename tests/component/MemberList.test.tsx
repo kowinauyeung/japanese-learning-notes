@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { MemberList } from '@/components/wordsets/MemberList';
 import type { ListDrag } from '@/lib/listDrag';
+import { VocabDialogProvider } from '@/lib/vocabDialog';
 import { idleDrag } from '../fixtures/drag';
 import { makeEntry } from '../fixtures/entry';
 
@@ -18,15 +19,17 @@ const setup = (busy = false, drag: ListDrag = idleDrag) => {
   // in-memory one, not a stand-in for anything of ours.
   const { container } = render(
     <MemoryRouter>
-      <MemberList
-        members={MEMBERS}
-        list="members"
-        drag={drag}
-        busy={busy}
-        onRemove={vi.fn()}
-        onRemoveAll={onRemoveAll}
-        onMoveBy={onMoveBy}
-      />
+      <VocabDialogProvider>
+        <MemberList
+          members={MEMBERS}
+          list="members"
+          drag={drag}
+          busy={busy}
+          onRemove={vi.fn()}
+          onRemoveAll={onRemoveAll}
+          onMoveBy={onMoveBy}
+        />
+      </VocabDialogProvider>
     </MemoryRouter>,
   );
   return {

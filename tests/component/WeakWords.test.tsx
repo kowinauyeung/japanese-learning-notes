@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { WeakWords } from '@/components/history/WeakWords';
 import { EMPTY_PRACTICE_FILTERS } from '@/lib/practice';
 import type { PracticeFilters } from '@/lib/practice';
+import { VocabDialogProvider } from '@/lib/vocabDialog';
 import { makeEntry } from '../fixtures/entry';
 
 const WORDS = [makeEntry({ id: 'w1', headword: '切り分け' })];
@@ -14,7 +15,9 @@ const setup = (
 ) =>
   render(
     <MemoryRouter>
-      <WeakWords words={words} filters={filters} />
+      <VocabDialogProvider>
+        <WeakWords words={words} filters={filters} />
+      </VocabDialogProvider>
     </MemoryRouter>,
   );
 

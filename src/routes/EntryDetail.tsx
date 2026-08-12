@@ -54,7 +54,7 @@ export function Component() {
       <div className="py-16 text-center">
         <p className="text-sm text-muted">単語が見つかりません</p>
         <Link to="/vocabulary" className="mt-2 inline-block text-sm text-accent underline">
-          一覧に戻る
+          単語一覧に戻る
         </Link>
       </div>
     );

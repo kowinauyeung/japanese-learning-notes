@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Ruby } from '@/components/Ruby';
+import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
 
 /**
@@ -43,8 +44,8 @@ export function SessionSummary({
           <ul className="divide-y divide-line">
             {missed.map((entry) => (
               <li key={entry.id}>
-                <Link
-                  to={`/vocabulary/${entry.id}`}
+                <VocabLink
+                  entryId={entry.id}
                   className="flex items-baseline justify-between gap-3 py-2.5"
                 >
                   <Ruby
@@ -55,7 +56,7 @@ export function SessionSummary({
                   <span className="line-clamp-1 text-xs text-muted">
                     {entry.senses[0]?.description || entry.definition}
                   </span>
-                </Link>
+                </VocabLink>
               </li>
             ))}
           </ul>

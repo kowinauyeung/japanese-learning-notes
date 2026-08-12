@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Ruby } from '@/components/Ruby';
+import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
 import { practiceFiltersToParams } from '@/lib/practice';
 import type { PracticeFilters } from '@/lib/practice';
@@ -38,10 +39,7 @@ export function WeakWords({
       <ul className="divide-y divide-line">
         {words.map((entry) => (
           <li key={entry.id}>
-            <Link
-              to={`/vocabulary/${entry.id}`}
-              className="flex items-center justify-between gap-3 py-2"
-            >
+            <VocabLink entryId={entry.id} className="flex items-center justify-between gap-3 py-2">
               <Ruby
                 headword={entry.headword}
                 reading={entry.reading}
@@ -50,7 +48,7 @@ export function WeakWords({
               <span className="shrink-0 rounded-pill bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
                 {entry.jlpt}
               </span>
-            </Link>
+            </VocabLink>
           </li>
         ))}
       </ul>

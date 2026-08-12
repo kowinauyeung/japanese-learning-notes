@@ -48,18 +48,82 @@ test.describe('browsing', () => {
     await expect(page.getByText('1 語')).toBeVisible();
   });
 
-  test('opens a word and shows the detail the card omits', async ({ page }) => {
+  test('opens a word in a dialog without leaving the list', async ({ page }) => {
     await page.goto('/vocabulary');
     await page.getByRole('link', { name: /兆候/ }).click();
 
+    const dialog = page.getByRole('dialog', { name: '単語' });
+    await expect(dialog).toContainText('何かが起こる前ぶれ。');
+    // The list is still there underneath — that is the whole point of it being
+    // a dialog rather than a navigation.
+    await expect(page.getByText('3 語')).toBeVisible();
+    // And the address is the word's own, so it can be copied or reloaded.
     await expect(page).toHaveURL(/\/vocabulary\/w-choukou$/);
-    await expect(page.getByText('何かが起こる前ぶれ。')).toBeVisible();
+  });
+
+  /**
+   * The address is real, so a reload of it has to mean the page rather than the
+   * dialog. That is why the dialog is held in React state and not in
+   * `location.state`, which the browser restores across a reload — see
+   * `lib/vocabDialog.tsx`.
+   */
+  test('reloading the dialog’s address lands on the full page', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+    await expect(page.getByRole('dialog', { name: '単語' })).toBeVisible();
+
+    await page.reload();
+
+    await expect(page.getByRole('dialog', { name: '単語' })).toBeHidden();
     await expect(page.getByRole('heading', { name: /MANIFEST/ })).toBeVisible();
+  });
+
+  /** Back closes it and leaves you where you were, which is what a dialog owes. */
+  test('going back closes the dialog and keeps the page behind it', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+    await expect(page.getByRole('dialog', { name: '単語' })).toBeVisible();
+
+    await page.goBack();
+
+    await expect(page.getByRole('dialog', { name: '単語' })).toBeHidden();
+    await expect(page).toHaveURL(/\/vocabulary$/);
+    await expect(page.getByText('3 語')).toBeVisible();
+  });
+
+  test('reaches the full page from the dialog', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+    await page.getByRole('link', { name: '詳細を見る' }).click();
+
+    await expect(page.getByRole('heading', { name: /MANIFEST/ })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: '単語' })).toBeHidden();
   });
 
   test('says so plainly when nothing matches', async ({ page }) => {
     await page.goto('/vocabulary?q=' + encodeURIComponent('存在しない語'));
     await expect(page.getByText('条件に合う単語がありません')).toBeVisible();
+  });
+});
+
+/**
+ * The nav is the app's table of contents, and its order is a claim about how
+ * the notebook is used: collect words, organise them, drill them, look back.
+ * Nothing else asserts it, so a rename or a dropped destination would otherwise
+ * reach a reviewer as a diff nobody had to justify.
+ */
+test.describe('navigation', () => {
+  test('lists the six destinations in the order the notebook is used', async ({ page }) => {
+    await page.goto('/');
+
+    await expect(page.getByRole('navigation').first().getByRole('link')).toHaveText([
+      'ダッシュボード',
+      '単語',
+      '単語集',
+      'フラッシュカード',
+      '書き取り練習',
+      '履歴',
+    ]);
   });
 });
 

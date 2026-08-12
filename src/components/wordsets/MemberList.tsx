@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
 import { Ruby } from '@/components/Ruby';
+import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
 import type { ListDrag } from '@/lib/listDrag';
 import { DragHandle } from './DragHandle';
@@ -105,16 +105,8 @@ export function MemberList({
               onPointerDown={drag.handleProps({ list, id: entry.id, index }).onPointerDown}
               onMoveBy={(delta) => onMoveBy(index, delta)}
             />
-            <Link
-              to={`/vocabulary/${entry.id}`}
-              /**
-               * An `<a>` is natively draggable, and the row body is now a drag
-               * source. Left alone, a press that drifts even a few pixels
-               * starts the browser's own link drag instead — which cancels the
-               * click, so the word cannot be opened, and fights our pointer
-               * drag for the gesture.
-               */
-              draggable={false}
+            <VocabLink
+              entryId={entry.id}
               // `cursor-grab` overrides the pointer an anchor gets by default:
               // the row is draggable along its whole width, and a hand that
               // changes shape halfway across it says the opposite.
@@ -125,7 +117,7 @@ export function MemberList({
                 reading={entry.reading}
                 className="has-ruby font-display text-base font-bold"
               />
-            </Link>
+            </VocabLink>
             <button
               type="button"
               onClick={() => onRemove(entry.id)}

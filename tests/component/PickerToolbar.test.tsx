@@ -5,7 +5,7 @@ import { EMPTY_FILTERS } from '@/lib/filters';
 
 describe('PickerToolbar', () => {
   /**
-   * Layout, not tidiness, and the reason belongs on the assertion: 一覧's filter
+   * Layout, not tidiness, and the reason belongs on the assertion: 単語's filter
    * panel is around 200px tall, and it sits above both of the bounded lists it
    * shares the screen with. Rendered open it takes that height off each of
    * them, and a drag whose source and target are both scrolled away cannot be

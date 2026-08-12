@@ -44,10 +44,31 @@ test.describe('history', () => {
     await expect(sessionRows(page).first()).toContainText('0 / 1');
     // The stored label, not one rebuilt now — it says what was drilled that day.
     await expect(sessionRows(page).first()).toContainText('#仕事');
-    // And the word that was missed is named, and links to itself.
-    await expect(
-      sessionRows(page).first().locator('a[href="/vocabulary/w-kiriwake"]'),
-    ).toBeVisible();
+    // The row counts the missed words; the words themselves are one click away.
+    await expect(sessionRows(page).first()).toContainText('間違えた語 1');
+  });
+
+  /**
+   * The row is a summary and the dialog is where the parts that do not fit go —
+   * chiefly the words that were missed, which the row can only count. The row
+   * became a single button to make it openable at all: a control cannot hold
+   * controls, so the links had to move somewhere with room for them.
+   */
+  test('opens a session to see which words were missed', async ({ page }) => {
+    await seedSignedIn(page);
+    await page.goto('/practice/flashcards');
+    await page.getByRole('button', { name: '#仕事' }).click();
+    await page.getByRole('button', { name: '開始する' }).click();
+    await page.getByRole('button', { name: /裏を見る/ }).click();
+    await page.getByRole('button', { name: /もう一度/ }).click();
+
+    await page.goto('/history');
+    await sessionRows(page).first().getByRole('button').click();
+
+    const dialog = page.getByRole('dialog', { name: 'フラッシュカード' });
+    await expect(dialog).toContainText('0 / 1');
+    await expect(dialog).toContainText('0%');
+    await expect(dialog.locator('a[href="/vocabulary/w-kiriwake"]')).toBeVisible();
   });
 
   /**

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SessionDialog } from '@/components/history/SessionDialog';
 import { SessionRow } from '@/components/history/SessionRow';
 import { WeakWords } from '@/components/history/WeakWords';
 import type { PracticeSession } from '@/domain/practice';
@@ -6,6 +7,7 @@ import { useEntries } from '@/lib/entries';
 import { weakWords } from '@/lib/history';
 import { EMPTY_PRACTICE_FILTERS } from '@/lib/practice';
 import { useProgress } from '@/lib/progress';
+import { useVocabDialog } from '@/lib/vocabDialog';
 
 /**
  * How many sessions a page holds.
@@ -31,6 +33,9 @@ export function Component() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** The row that has been opened out, or null. Held here so the dialog is a
+   *  sibling of the list rather than something each row carries. */
+  const [opened, setOpened] = useState<PracticeSession | null>(null);
 
   /**
    * Which walk may publish, the shape the providers settled on.
@@ -68,6 +73,18 @@ export function Component() {
 
   const weak = useMemo(() => weakWords(weakIds, entries), [weakIds, entries]);
 
+  /**
+   * Opening a word from inside the session dialog closes the session dialog.
+   *
+   * Two modals over each other is one Escape closing both and a backdrop that
+   * belongs to neither. The word is what was asked for, so it is the one that
+   * stays.
+   */
+  const { openId } = useVocabDialog();
+  useEffect(() => {
+    if (openId !== null) setOpened(null);
+  }, [openId]);
+
   if (entriesLoading || progressLoading)
     return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
   // Both feed this page: the sessions name entry ids, and 苦手な語 is the
@@ -91,7 +108,7 @@ export function Component() {
         {sessions.length > 0 ? (
           <ul className="divide-y divide-line">
             {sessions.map((session) => (
-              <SessionRow key={session.id} session={session} entries={entries} />
+              <SessionRow key={session.id} session={session} entries={entries} onOpen={setOpened} />
             ))}
           </ul>
         ) : (
@@ -113,6 +130,8 @@ export function Component() {
           </button>
         )}
       </section>
+
+      <SessionDialog session={opened} entries={entries} onClose={() => setOpened(null)} />
     </div>
   );
 }
