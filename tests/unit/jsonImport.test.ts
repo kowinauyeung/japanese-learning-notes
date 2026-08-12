@@ -46,6 +46,33 @@ describe('jsonToDraft — parsing', () => {
   );
 });
 
+/**
+ * The accent arrives through the paste box like everything else, and an
+ * assistant asked for a number will sometimes send `"2"`, `2.5` or a sentence.
+ * Coercion happens in `sanitizeDraft`; what this checks is that the import path
+ * reaches it at all, rather than dropping a field the prompt now asks for.
+ */
+describe('jsonToDraft — the pitch accent', () => {
+  const note = (pitchAccent: string) =>
+    jsonToDraft(`{"headword":"卵","definition":"たまご","reading":"たまご",${pitchAccent}}`).draft;
+
+  it('carries a well-formed accent through to the draft', () => {
+    expect(note('"pitchAccent":2')?.pitchAccent).toBe(2);
+    expect(note('"pitchAccent":0')?.pitchAccent).toBe(0);
+  });
+
+  it('takes the null the prompt asks for when the assistant is unsure', () => {
+    expect(note('"pitchAccent":null')?.pitchAccent).toBeNull();
+    expect(jsonToDraft('{"headword":"卵","definition":"たまご"}').draft?.pitchAccent).toBeNull();
+  });
+
+  it('drops what an assistant sends instead of a number', () => {
+    expect(note('"pitchAccent":"2"')?.pitchAccent).toBeNull();
+    expect(note('"pitchAccent":2.5')?.pitchAccent).toBeNull();
+    expect(note('"pitchAccent":"わかりません"')?.pitchAccent).toBeNull();
+  });
+});
+
 describe('jsonToDraft — required fields', () => {
   it('refuses a note with no headword', () => {
     expect(jsonToDraft('{"definition":"前ぶれ"}').error).toBe('"headword" が空です。');
@@ -164,6 +191,40 @@ describe('buildPrompt', () => {
   it('passes a source through, and asks for it to be left blank otherwise', () => {
     expect(buildPrompt('兆候', '廣東話', { source: '会議' })).toContain('「会議」');
     expect(buildPrompt('兆候', '廣東話')).toContain('"source" は空のままにしてください');
+  });
+
+  /**
+   * The accent is the one field where an assistant's confident wrong answer is
+   * worse than no answer: a learner cannot tell 2 from 3 by looking, so a guess
+   * gets memorised. The prompt asks for null instead, and says so in the same
+   * breath as the rule, because an instruction to be unsure that arrives after
+   * the instruction to answer is read as optional.
+   */
+  /**
+   * The rules and the shape are two halves of one instruction: a rule for a
+   * field the assistant cannot see in the schema is a rule for a field it will
+   * not emit. `null` rather than a number is what the blank state looks like,
+   * so the example does not itself become a guess to copy.
+   */
+  it('declares the accent in the shape it asks the assistant to fill', () => {
+    expect(SCHEMA).toContain('"pitchAccent": null');
+  });
+
+  it('asks for a null accent over a guessed one', () => {
+    const prompt = buildPrompt('兆候', '廣東話');
+    expect(prompt).toContain('"pitchAccent" は null');
+    expect(prompt).toContain('推測より空欄');
+  });
+
+  /**
+   * An assistant counts characters unless told not to, which puts the drop on
+   * the wrong syllable for every word containing a yōon, っ, ん or ー — and the
+   * import path has no way to tell a plausible wrong number from a right one.
+   */
+  it('spells out that a mora is not a character', () => {
+    const prompt = buildPrompt('兆候', '廣東話');
+    expect(prompt).toContain('「きょ」は1拍');
+    expect(prompt).toContain('「っ」「ん」「ー」');
   });
 
   it('ignores a context made only of whitespace', () => {
