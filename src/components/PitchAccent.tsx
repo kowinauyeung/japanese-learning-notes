@@ -13,31 +13,38 @@ import { accentLabel, pitchShape } from '@/lib/mora';
  * Renders nothing when the number does not fit the reading — see `pitchShape`.
  */
 export function PitchAccent({
-  reading,
+  kana,
   pitchAccent,
   className,
 }: {
-  reading: string;
+  /** The kana the accent describes — see `accentKana`. */
+  kana: string;
   pitchAccent: number;
   className?: string;
 }) {
-  const shape = pitchShape(reading, pitchAccent);
+  const shape = pitchShape(kana, pitchAccent);
   if (shape.length === 0) return null;
 
   return (
     <span className={className}>
-      <span className="text-muted tabular-nums">{accentLabel(pitchAccent, reading)}</span>{' '}
+      <span className="text-muted tabular-nums">{accentLabel(pitchAccent, kana)}</span>{' '}
       <span className="whitespace-nowrap">
         {shape.map((mora, index) => (
           <span
             key={index}
+            /*
+             * Each side names a colour outright rather than defaulting to
+             * transparent and being overridden. Both utilities set the same
+             * property, so which one wins is the order Tailwind emits them in —
+             * a fact about the build, invisible to jsdom, and one that a later
+             * `border-2` on this element would also flip. Naming both states
+             * leaves nothing to override.
+             */
             className={[
-              'inline-block border-t-2 border-r-2 border-transparent px-px',
-              mora.high && 'border-t-current',
-              mora.drop && 'border-r-current',
-            ]
-              .filter(Boolean)
-              .join(' ')}
+              'inline-block border-t-2 border-r-2 px-px',
+              mora.high ? 'border-t-current' : 'border-t-transparent',
+              mora.drop ? 'border-r-current' : 'border-r-transparent',
+            ].join(' ')}
           >
             {mora.mora}
           </span>

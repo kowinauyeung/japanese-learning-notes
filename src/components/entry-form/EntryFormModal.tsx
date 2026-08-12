@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Entry, EntryDraft } from '@/domain/entry';
-import { emptyDraft, invalidTags, parseTags, toDraft } from '@/lib/draft';
+import { draftError, emptyDraft, parseTags, toDraft } from '@/lib/draft';
 import { useEntries } from '@/lib/entries';
 import { jsonToDraft } from '@/lib/jsonImport';
-import { isValidIsoDate } from '@/lib/sanitize';
 import { EntryForm } from './EntryForm';
 import { Area, Field, Text } from './fields';
 import { emptyJsonImport, JsonImport } from './JsonImport';
@@ -76,14 +75,8 @@ export function EntryFormModal({
   };
 
   const save = async () => {
-    if (!draft.headword.trim()) return setError('見出し語は必須です。');
-    if (!draft.definition.trim()) return setError('意味・説明は必須です。');
-    const bad = invalidTags(draft.tags);
-    if (bad.length) return setError(`タグに使えない文字があります: ${bad.join(', ')}`);
-    // A cleared or impossible date must not reach Firestore. Read-side coercion
-    // would silently rewrite it to today, which is indistinguishable from having
-    // learned the word today and quietly wrong in every dashboard statistic.
-    if (!isValidIsoDate(draft.learnedOn)) return setError('学習日を正しく入力してください。');
+    const invalid = draftError(draft);
+    if (invalid) return setError(invalid);
 
     setSaving(true);
     setError(null);
@@ -144,7 +137,13 @@ export function EntryFormModal({
             <button
               key={item.id}
               type="button"
-              onClick={() => setTab(item.id)}
+              onClick={() => {
+                setTab(item.id);
+                // `error` carries both a JSON parse failure and a save failure.
+                // Left alone, a malformed paste kept complaining from the footer
+                // of the 詳細 tab, next to a 保存する it had nothing to do with.
+                setError(null);
+              }}
               className={`flex-1 rounded-pill py-1.5 text-xs font-semibold transition ${
                 tab === item.id ? 'bg-card text-ink shadow-panel' : 'text-muted'
               }`}

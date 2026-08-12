@@ -3,6 +3,7 @@ import { Modal } from '@/components/Modal';
 import { PitchAccent } from '@/components/PitchAccent';
 import { Ruby } from '@/components/Ruby';
 import { useEntries } from '@/lib/entries';
+import { accentKana } from '@/lib/mora';
 import { useVocabDialog } from '@/lib/vocabDialog';
 
 /**
@@ -67,7 +68,7 @@ export function VocabDialog() {
           />
           {entry.pitchAccent !== null && (
             <PitchAccent
-              reading={entry.reading || entry.headword}
+              kana={accentKana(entry.headword, entry.reading)}
               pitchAccent={entry.pitchAccent}
               className="mt-2 block font-display text-base"
             />

@@ -290,6 +290,39 @@ test.describe('the dashboard', () => {
 });
 
 /**
+ * The accent, which no other layer sees whole: `mora.ts` is unit-tested and the
+ * notation has a component test, but until `w-choukou` carried a `pitchAccent`
+ * nothing rendered it against a real route, a real provider and real CSS.
+ */
+test.describe('the pitch accent', () => {
+  test('draws the notation on the word it belongs to, and refuses to save a bad one', async ({
+    page,
+  }) => {
+    await page.goto('/vocabulary/w-choukou');
+    // 0（平板）: mora 0 low, the rest high, and no fall anywhere in the word.
+    await expect(page.getByText('0（平板）')).toBeVisible();
+
+    await page.getByRole('button', { name: '編集' }).click();
+    const dialog = editDialog(page);
+    const accent = dialog.getByLabel(/アクセント/);
+
+    // ちょうこう is four mora — five is past the end of the word.
+    await accent.fill('5');
+    await expect(dialog.getByText('ちょうこう は4拍です。')).toBeVisible();
+    await expect(accent).toHaveAttribute('aria-invalid', 'true');
+
+    await dialog.getByRole('button', { name: '保存する' }).click();
+    // Still open, and saying why: a message under the field was not a refusal.
+    await expect(dialog.getByText(/アクセントが読み方の拍数に合いません/)).toBeVisible();
+
+    await accent.fill('3');
+    await dialog.getByRole('button', { name: '保存する' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText('3（中高）')).toBeVisible();
+  });
+});
+
+/**
  * Layout, which is why this is here and not in a component test: the defect is
  * a scroll container's geometry, and jsdom has no layout to be wrong about.
  */

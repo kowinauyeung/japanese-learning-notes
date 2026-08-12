@@ -199,13 +199,6 @@ describe('buildPrompt', () => {
   });
 
   /**
-   * The accent is the one field where an assistant's confident wrong answer is
-   * worse than no answer: a learner cannot tell 2 from 3 by looking, so a guess
-   * gets memorised. The prompt asks for null instead, and says so in the same
-   * breath as the rule, because an instruction to be unsure that arrives after
-   * the instruction to answer is read as optional.
-   */
-  /**
    * The rules and the shape are two halves of one instruction: a rule for a
    * field the assistant cannot see in the schema is a rule for a field it will
    * not emit.

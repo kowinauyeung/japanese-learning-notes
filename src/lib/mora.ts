@@ -36,6 +36,28 @@ export function moraCount(kana: string): number {
   return splitMora(kana).length;
 }
 
+/** Hiragana, katakana, and the marks that only appear inside kana runs. */
+const KANA_ONLY = /^[\p{Script=Hiragana}\p{Script=Katakana}ーゝゞヽヾ]+$/u;
+
+/**
+ * The kana an accent describes, or `''` when the word has not said.
+ *
+ * `reading || headword` is the obvious version and it is wrong: `reading` is
+ * empty *by convention* when the headword is already kana, and nothing enforces
+ * the convention — both entry forms accept a kanji headword with the reading
+ * left blank. `splitMora` then counts characters, because its rule for anything
+ * that is not kana is one mora each. 兆候 measures 2 where ちょうこう is 4, so
+ * the form refuses the real accent 3, and the detail page draws a pitch line
+ * over kanji — the exact lie this module exists to avoid.
+ *
+ * An empty result means "no accent can be shown or checked", which every caller
+ * already handles: `accentPattern` refuses a zero mora count.
+ */
+export function accentKana(headword: string, reading: string): string {
+  if (reading) return reading;
+  return KANA_ONLY.test(headword) ? headword : '';
+}
+
 /**
  * Name the accent class, or `null` when the number cannot describe this word.
  *

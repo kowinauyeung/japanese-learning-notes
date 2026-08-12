@@ -6,6 +6,7 @@ import { EntryFormModal } from '@/components/entry-form/EntryFormModal';
 import { PitchAccent } from '@/components/PitchAccent';
 import { Ruby } from '@/components/Ruby';
 import { useEntries } from '@/lib/entries';
+import { accentKana } from '@/lib/mora';
 
 /** ①②③… for sense and example numbering, matching the notes. */
 function circled(index: number): string {
@@ -90,7 +91,7 @@ export function Component() {
             />
             {entry.pitchAccent !== null && (
               <PitchAccent
-                reading={entry.reading || entry.headword}
+                kana={accentKana(entry.headword, entry.reading)}
                 pitchAccent={entry.pitchAccent}
                 className="mt-2 block font-display text-lg"
               />

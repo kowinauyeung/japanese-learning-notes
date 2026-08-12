@@ -1,5 +1,7 @@
 import { TAG_PATTERN } from '@/domain/common';
 import type { Entry, EntryDraft } from '@/domain/entry';
+import { isValidIsoDate } from './dates';
+import { accentKana, accentPattern, moraCount } from './mora';
 
 /**
  * Pure draft helpers, kept clear of the repository so they can be used and
@@ -53,6 +55,45 @@ export function toDraft(entry: Entry): EntryDraft {
     ...draft
   } = entry;
   return draft;
+}
+
+/**
+ * Everything that must hold before a draft may be written, or `null`.
+ *
+ * This lives here rather than inside the save handler so it can be tested at
+ * all: `EntryFormModal` resolves its repository through a provider, which no
+ * component test may reach.
+ *
+ * **A field that shows an error in the form is not a field that is refused.**
+ * The accent had a red message under it and nothing stopping the save, so an
+ * out-of-range value reached Firestore two ways, both silent: `2.5` was written
+ * and then coerced to `null` on the next read, losing what was typed; `9` on a
+ * three-mora word was written *and kept*, then drawn by nothing, because
+ * `pitchShape` refuses to render what it cannot place. `learnedOn` had been
+ * stopped here from the start, for the same class of reason.
+ */
+export function draftError(draft: EntryDraft): string | null {
+  if (!draft.headword.trim()) return '見出し語は必須です。';
+  if (!draft.definition.trim()) return '意味・説明は必須です。';
+
+  const bad = invalidTags(draft.tags);
+  if (bad.length) return `タグに使えない文字があります: ${bad.join(', ')}`;
+
+  // A cleared or impossible date must not reach Firestore. Read-side coercion
+  // would silently rewrite it to today, which is indistinguishable from having
+  // learned the word today and quietly wrong in every dashboard statistic.
+  if (!isValidIsoDate(draft.learnedOn)) return '学習日を正しく入力してください。';
+
+  if (draft.pitchAccent !== null) {
+    const kana = accentKana(draft.headword, draft.reading);
+    if (accentPattern(draft.pitchAccent, moraCount(kana)) === null) {
+      return kana
+        ? `アクセントが読み方の拍数に合いません（${kana} は${moraCount(kana)}拍）。`
+        : 'アクセントを入れるには読み方（かな）が必要です。';
+    }
+  }
+
+  return null;
 }
 
 /** Tags are typed as free text; split on spaces, commas and full-width commas. */

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { accentLabel, accentPattern, moraCount, pitchShape, splitMora } from '@/lib/mora';
+import {
+  accentKana,
+  accentLabel,
+  accentPattern,
+  moraCount,
+  pitchShape,
+  splitMora,
+} from '@/lib/mora';
 
 /**
  * A mora is not a character, and every rule below exists because counting
@@ -122,5 +129,40 @@ describe('moraCount', () => {
   it('bounds the accent field by beats rather than characters', () => {
     expect(moraCount('きょう')).toBe(2);
     expect(moraCount('がっこう')).toBe(4);
+  });
+});
+
+/**
+ * `reading || headword` was the fallback at all three call sites, and it is
+ * wrong wherever the convention it rests on is not enforced — which is
+ * everywhere, since 読み方 is optional in both entry forms.
+ */
+describe('accentKana', () => {
+  it('uses the reading when there is one', () => {
+    expect(accentKana('兆候', 'ちょうこう')).toBe('ちょうこう');
+  });
+
+  it('falls back to a headword that is already kana, which is why reading is blank', () => {
+    expect(accentKana('ちょっと', '')).toBe('ちょっと');
+    expect(accentKana('コンシェルジュ', '')).toBe('コンシェルジュ');
+    expect(accentKana('コーヒー', '')).toBe('コーヒー');
+  });
+
+  /**
+   * The case the naive fallback got wrong. `splitMora` gives one mora per
+   * character for anything that is not kana, so 兆候 measured 2 where ちょうこう
+   * is 4: the form refused the real accent 3, and the detail page drew a pitch
+   * line over kanji — the lie `pitchShape` exists to refuse.
+   */
+  it('refuses a kanji headword with no reading, rather than counting characters', () => {
+    expect(accentKana('兆候', '')).toBe('');
+    expect(accentKana('学校', '')).toBe('');
+    expect(moraCount(accentKana('兆候', ''))).toBe(0);
+    expect(pitchShape(accentKana('学校', ''), 0)).toEqual([]);
+  });
+
+  it('refuses a mixed headword, where only part of it is kana', () => {
+    expect(accentKana('小ネタ', '')).toBe('');
+    expect(accentKana('メロい', '')).toBe('メロい');
   });
 });

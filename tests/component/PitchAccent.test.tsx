@@ -16,7 +16,7 @@ describe('PitchAccent', () => {
   it('puts the fall after the named mora, not after the named character', () => {
     // びょういん is four mora; a drop after mora 1 belongs on びょ, which is two
     // characters. Splitting by character would mark び and leave ょ behind it.
-    const { container } = render(<PitchAccent reading="びょういん" pitchAccent={1} />);
+    const { container } = render(<PitchAccent kana="びょういん" pitchAccent={1} />);
     const spans = mora(container).filter((node) => node.textContent !== '1（頭高）');
 
     expect(spans.map((node) => node.textContent)).toEqual(['びょ', 'う', 'い', 'ん']);
@@ -30,21 +30,21 @@ describe('PitchAccent', () => {
    * Without it the detail page shows おとこ and さくら as the same accent.
    */
   it('distinguishes 尾高 from 平板 by the mark on the last mora', () => {
-    const owari = render(<PitchAccent reading="おとこ" pitchAccent={3} />);
-    const heiban = render(<PitchAccent reading="さくら" pitchAccent={0} />);
+    const owari = render(<PitchAccent kana="おとこ" pitchAccent={3} />);
+    const heiban = render(<PitchAccent kana="さくら" pitchAccent={0} />);
 
     expect(owari.container.innerHTML).toContain('border-r-current');
     expect(heiban.container.innerHTML).not.toContain('border-r-current');
   });
 
   it('renders nothing when the accent does not fit the reading', () => {
-    const { container } = render(<PitchAccent reading="たまご" pitchAccent={9} />);
+    const { container } = render(<PitchAccent kana="たまご" pitchAccent={9} />);
 
     expect(container).toBeEmptyDOMElement();
   });
 
   it('prints the number with its class, so the value is readable as text', () => {
-    const { container } = render(<PitchAccent reading="たまご" pitchAccent={2} />);
+    const { container } = render(<PitchAccent kana="たまご" pitchAccent={2} />);
 
     expect(container.textContent).toContain('2（中高）');
   });
