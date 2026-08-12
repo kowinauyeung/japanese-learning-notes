@@ -21,6 +21,7 @@ const setup = () => {
   const { container } = render(
     <Modal open title="単語" onClose={onClose}>
       <input aria-label="見出し語" />
+      <button type="button">タブ</button>
     </Modal>,
   );
   const backdrop = container.querySelector('[role="presentation"]');
@@ -76,6 +77,33 @@ describe('Modal — dismissing by backdrop', () => {
     fireEvent.click(card);
 
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A click with no pointer events before it — the keyboard path.
+   *
+   * The two flags only mean anything about the gesture that set them, and a
+   * keyboard activation sets neither: the browser fires a click with no
+   * `pointerdown` or `pointerup` at all. A previous genuine backdrop dismissal
+   * leaves both `true`, and the dialog stays mounted with `open={false}` so the
+   * flags survive into the next opening. Without the target check — which was
+   * dropped when the second flag was added, and which the card's removed
+   * `stopPropagation` had been resting on — pressing Enter on any control
+   * inside the sheet closed it and took the input with it.
+   */
+  it('stays open when a control inside it is activated from the keyboard', () => {
+    const { onClose, backdrop } = setup();
+
+    fireEvent.pointerDown(backdrop);
+    fireEvent.pointerUp(backdrop);
+    fireEvent.click(backdrop);
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    // Reopened, and activated from the keyboard: no pointer events, so neither
+    // flag is refreshed and both still read as a backdrop gesture.
+    fireEvent.click(screen.getByRole('button', { name: 'タブ' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   /**

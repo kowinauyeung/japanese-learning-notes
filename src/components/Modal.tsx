@@ -97,9 +97,22 @@ export function Modal({
        * closed on a gesture that ended inside it — the same defect, with the
        * same worst case, in the other direction.
        *
-       * Neither flag is cleared after use, because neither needs to be: every
-       * click is preceded by the pair of pointer events that set them afresh.
-       * Adding a reset was tried and no test could be made to fail on it.
+       * **Three checks, and all three earn their place.** `target ===
+       * currentTarget` refuses a click that merely bubbled up from the card,
+       * which is what lets the card get away with not stopping propagation.
+       * The two flags refuse a drag that crossed the boundary in either
+       * direction.
+       *
+       * Dropping the target check once the flags existed looked safe and was
+       * not: the flags describe the last *pointer* gesture, and a keyboard
+       * activation fires a click with no pointer events before it, so they
+       * still read as whatever preceded them. A backdrop dismissal leaves both
+       * `true`, and this component stays mounted across `open={false}`, so the
+       * next Enter pressed on any control inside the sheet closed it.
+       *
+       * Neither flag is cleared after use. Nothing needs it while the target
+       * check stands, and a reset was tried once with no test able to fail on
+       * it.
        */
       onPointerDown={(event) => {
         pressedOnBackdrop.current = event.target === event.currentTarget;
@@ -107,7 +120,8 @@ export function Modal({
       onPointerUp={(event) => {
         releasedOnBackdrop.current = event.target === event.currentTarget;
       }}
-      onClick={() => {
+      onClick={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (!pressedOnBackdrop.current || !releasedOnBackdrop.current) return;
         onClose();
       }}
