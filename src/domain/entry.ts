@@ -49,6 +49,18 @@ export type Style = (typeof STYLES)[number];
 export const POLITENESS = ['スラング', 'くだけた', '普通', '丁寧'] as const;
 export type Politeness = (typeof POLITENESS)[number];
 
+/**
+ * The four accent classes, named as a Japanese dictionary names them.
+ *
+ * They are not stored — `pitchAccent` is the number, and the class is derived
+ * from it together with how many mora the reading has. 尾高 and 平板 both leave
+ * the last mora high and are told apart only by what happens to a particle
+ * after it, which is why the mora count is needed and why one number cannot
+ * name its own class.
+ */
+export const ACCENT_PATTERNS = ['平板', '頭高', '中高', '尾高'] as const;
+export type AccentPattern = (typeof ACCENT_PATTERNS)[number];
+
 /** 1 (rare) – 5 (everyday). Rendered as ★×freq + ☆×(5−freq). */
 export type Frequency = 1 | 2 | 3 | 4 | 5;
 

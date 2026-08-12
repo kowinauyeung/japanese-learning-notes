@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Modal } from '@/components/Modal';
+import { PitchAccent } from '@/components/PitchAccent';
 import { Ruby } from '@/components/Ruby';
 import { useEntries } from '@/lib/entries';
 import { useVocabDialog } from '@/lib/vocabDialog';
@@ -64,6 +65,13 @@ export function VocabDialog() {
             reading={entry.reading}
             className="has-ruby block font-display text-3xl font-bold"
           />
+          {entry.pitchAccent !== null && (
+            <PitchAccent
+              reading={entry.reading || entry.headword}
+              pitchAccent={entry.pitchAccent}
+              className="mt-2 block font-display text-base"
+            />
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
             <span className="rounded-pill bg-accent-soft px-2.5 py-1 font-semibold text-accent">
               {entry.jlpt}

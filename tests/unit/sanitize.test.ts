@@ -193,6 +193,35 @@ describe('sanitizeDraft — scalars', () => {
     expect(sanitizeDraft({ pitchAccent: null }).pitchAccent).toBeNull();
   });
 
+  /**
+   * `typeof value === 'number'` was the entire check here for the field's whole
+   * life, and every value below satisfies it. None of them is a mora anything
+   * can drop after: they reached the detail page as "NaN" drawn over the kana,
+   * or as a border on no mora at all.
+   *
+   * The field had no input and no display until the accent work, so nothing
+   * could put one there — which is why this went unnoticed rather than why it
+   * was safe.
+   */
+  it('rejects NaN, Infinity and a fractional or negative mora', () => {
+    expect(sanitizeDraft({ pitchAccent: Number.NaN }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: Number.POSITIVE_INFINITY }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: -3 }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: 2.7 }).pitchAccent).toBeNull();
+  });
+
+  /**
+   * The bound that is *not* enforced here, stated as a test so removing it is a
+   * decision rather than an accident. 9 does not fit a three-mora reading, but
+   * the reading is a sibling field the user edits: rejecting it on read would
+   * delete a correct value the moment the kana were shortened. `PitchAccentField`
+   * refuses it where there is still someone to fix it, and `pitchShape` draws
+   * nothing meanwhile.
+   */
+  it('keeps an accent too large for the reading, which only the form can judge', () => {
+    expect(sanitizeDraft({ pitchAccent: 9, reading: 'たまご' }).pitchAccent).toBe(9);
+  });
+
   it('splits, strips and de-duplicates tags', () => {
     expect(sanitizeDraft({ tags: ['#ニュース', 'ビジネス 会議', null, 'ニュース'] }).tags).toEqual([
       'ニュース',

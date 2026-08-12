@@ -44,6 +44,24 @@ const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback
 const oneOfOptional = <T extends string>(value: unknown, allowed: readonly T[]): T | '' =>
   typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : '';
 
+/**
+ * The mora the pitch drops after: a non-negative integer, or nothing.
+ *
+ * `typeof value === 'number'` was the whole check until the accent field was
+ * built, and it admits `NaN`, `Infinity`, `-3` and `2.7` — all of which render
+ * as garbage over the kana. 0 is meaningful (平板), so the guard cannot lean on
+ * falsiness.
+ *
+ * **No upper bound here, deliberately.** A drop after mora 4 of a three-mora
+ * word is wrong, but it is wrong in a way only the reading can reveal, and the
+ * reading is editable: bounding it here would silently delete a value the user
+ * typed the moment they shortened the kana. The form owns that rule, where it
+ * can be shown and corrected instead — and `pitchShape` draws nothing rather
+ * than drawing a lie in the meantime.
+ */
+const pitchAccent = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+
 /** `freq` drives `'★'.repeat()`, so it must be an integer in 1..5 or nothing. */
 const frequency = (value: unknown, fallback: Frequency): Frequency => {
   const n = typeof value === 'number' ? value : Number.parseInt(str(value), 10);
@@ -186,7 +204,7 @@ export function sanitizeDraft(value: unknown, fallback: EntryDraft = emptyDraft(
   return {
     headword: str(raw.headword).trim() || fallback.headword,
     reading: str(raw.reading) || fallback.reading,
-    pitchAccent: typeof raw.pitchAccent === 'number' ? raw.pitchAccent : null,
+    pitchAccent: pitchAccent(raw.pitchAccent),
     pos: strings(raw.pos).filter((p): p is (typeof POS)[number] =>
       (POS as readonly string[]).includes(p),
     ),

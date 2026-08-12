@@ -2,6 +2,7 @@ import type { EntryDraft, Pos } from '@/domain/entry';
 import { JLPT_LEVELS, POLITENESS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import { parseTags } from '@/lib/draft';
 import { Area, Field, RepeatableList, Select, Text, inputClass } from './fields';
+import { PitchAccentField } from './PitchAccentField';
 
 export function EntryForm({
   draft,
@@ -22,6 +23,13 @@ export function EntryForm({
         <Field label="読み方" hint="かな">
           <Text value={draft.reading} onChange={(v) => set('reading', v)} />
         </Field>
+        {/* The accent describes the kana, which is the headword itself when
+            there is no separate reading. */}
+        <PitchAccentField
+          reading={draft.reading || draft.headword}
+          value={draft.pitchAccent}
+          onChange={(v) => set('pitchAccent', v)}
+        />
         <Field label="タグ" hint="スペース・カンマ区切り">
           <Text
             value={draft.tags.join(' ')}
