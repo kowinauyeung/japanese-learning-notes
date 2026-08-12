@@ -3,10 +3,12 @@ import { Modal } from '@/components/Modal';
 import type { Entry, EntryDraft } from '@/domain/entry';
 import { emptyDraft, invalidTags, parseTags, toDraft } from '@/lib/draft';
 import { useEntries } from '@/lib/entries';
+import { jsonToDraft } from '@/lib/jsonImport';
 import { isValidIsoDate } from '@/lib/sanitize';
 import { EntryForm } from './EntryForm';
 import { Area, Field, Text } from './fields';
-import { JsonImport } from './JsonImport';
+import { emptyJsonImport, JsonImport } from './JsonImport';
+import type { JsonImportState } from './JsonImport';
 
 type Tab = 'simple' | 'full' | 'json';
 
@@ -37,13 +39,41 @@ export function EntryFormModal({
   const [draft, setDraft] = useState<EntryDraft>(emptyDraft);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The JSON tab's fields live here rather than inside `JsonImport`, because
+   * its 読み込む button is rendered into the modal footer and needs the pasted
+   * text to act on.
+   *
+   * The button belongs there and not at the end of the panel: the paste box is
+   * ten rows and the schema block above it expands, so anywhere inside the
+   * scroll area puts the one control the tab exists to reach below the fold.
+   * Two attempts to pin it with `position: sticky` failed differently — the
+   * first left 32px of scrollable panel beneath it, the second parked it past
+   * its own resting place so it slid 16px on the last of the scroll. The footer
+   * is outside the scrollport and already `shrink-0`, so nothing about it moves.
+   */
+  const [json, setJson] = useState<JsonImportState>(emptyJsonImport);
 
   useEffect(() => {
     if (!open) return;
     setDraft(entry ? toDraft(entry) : emptyDraft());
     setTab(entry ? 'full' : 'simple');
+    setJson(emptyJsonImport());
     setError(null);
   }, [open, entry]);
+
+  const loadJson = () => {
+    const { draft: loaded, error: failure } = jsonToDraft(json.raw, {
+      original: json.original,
+      source: json.source,
+    });
+    if (failure) return setError(failure);
+    setError(null);
+    if (loaded) {
+      setDraft(loaded);
+      setTab('full');
+    }
+  };
 
   const save = async () => {
     if (!draft.headword.trim()) return setError('見出し語は必須です。');
@@ -80,6 +110,16 @@ export function EntryFormModal({
       footer={
         <div className="flex items-center gap-3">
           {error && <p className="flex-1 text-xs text-danger">{error}</p>}
+          {tab === 'json' && !entry && (
+            <button
+              type="button"
+              onClick={loadJson}
+              disabled={!json.raw.trim()}
+              className="min-h-10 rounded-pill bg-bg-alt px-5 text-sm font-semibold text-ink disabled:opacity-50"
+            >
+              読み込む
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -152,14 +192,7 @@ export function EntryFormModal({
 
       {tab === 'full' && <EntryForm draft={draft} onChange={setDraft} />}
 
-      {tab === 'json' && !entry && (
-        <JsonImport
-          onLoad={(loaded) => {
-            setDraft(loaded);
-            setTab('full');
-          }}
-        />
-      )}
+      {tab === 'json' && !entry && <JsonImport value={json} onChange={setJson} />}
     </Modal>
   );
 }

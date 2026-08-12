@@ -296,16 +296,17 @@ test.describe('the dashboard', () => {
 test.describe('the JSON import tab', () => {
   /**
    * 読み込む is the one control the tab exists to reach, and a ten-row paste box
-   * with an expandable schema block above it put the button below the fold. It
-   * is pinned to the floor of the dialog's scroll area now.
+   * under an expandable schema block put it below the fold. It sits in the modal
+   * footer now, outside the scrollport.
    *
-   * The gap is asserted rather than the class, because the first attempt at
-   * pinning it *had* `position: sticky` and still left 32px of scroll container
-   * beneath it — a sticky element is held inside the content box, not the
-   * padding box, and this bar's own padding stacked on top of that. Both are
-   * invisible to any assertion about the rule being present.
+   * **Position is asserted across a scroll, not presence.** Two attempts to pin
+   * it inside the panel with `position: sticky` failed in ways that every
+   * available cheaper assertion passes: the first left 32px of scrollable panel
+   * beneath it, the second parked it past its own resting place so it slid 16px
+   * over the last of the scroll. Both rendered the button, both had the rule
+   * applied, and both were visible to `toBeVisible()`.
    */
-  test('keeps 読み込む on screen however long the pasted JSON is', async ({ page }) => {
+  test('keeps 読み込む in one place however far the panel is scrolled', async ({ page }) => {
     await page.goto('/vocabulary');
     await page.getByRole('button', { name: '＋追加' }).click();
     await addDialog(page).getByRole('button', { name: 'JSON' }).click();
@@ -315,18 +316,18 @@ test.describe('the JSON import tab', () => {
 
     const button = page.getByRole('button', { name: '読み込む' });
     await expect(button).toBeVisible();
+    const atTop = await button.boundingBox();
 
-    const gap = await page.evaluate(() => {
-      const scroller = document.querySelector('[role="dialog"] .overflow-y-auto');
-      const control = [...document.querySelectorAll('button')].find(
-        (node) => node.textContent?.trim() === '読み込む',
-      );
-      if (!scroller || !control) return null;
-      return scroller.getBoundingClientRect().bottom - control.getBoundingClientRect().bottom;
+    const scrolled = await page.evaluate(() => {
+      const panel = document.querySelector('[role="dialog"] .overflow-y-auto');
+      if (!(panel instanceof HTMLElement)) return 0;
+      panel.scrollTop = panel.scrollHeight;
+      return panel.scrollTop;
     });
+    // The fixture has to actually overflow, or the test proves nothing.
+    expect(scrolled).toBeGreaterThan(0);
 
-    // Flush with the floor. Anything positive is scrollable emptiness under a
-    // control that is meant to be the last thing in the panel.
-    expect(gap).toBe(0);
+    await expect(button).toBeVisible();
+    expect(await button.boundingBox()).toEqual(atTop);
   });
 });

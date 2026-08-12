@@ -1,30 +1,49 @@
 import { useState } from 'react';
-import type { EntryDraft } from '@/domain/entry';
-import { buildPrompt, jsonToDraft, SCHEMA } from '@/lib/jsonImport';
+import { buildPrompt, SCHEMA } from '@/lib/jsonImport';
 import { Area, Field, inputClass } from './fields';
 
-export function JsonImport({ onLoad }: { onLoad: (draft: EntryDraft) => void }) {
-  const [word, setWord] = useState('');
-  const [language, setLanguage] = useState('廣東語');
-  const [original, setOriginal] = useState('');
-  const [source, setSource] = useState('');
-  const [raw, setRaw] = useState('');
-  const [error, setError] = useState<string | null>(null);
+/**
+ * Everything the tab collects. Held by the modal rather than here, because the
+ * 読み込む button lives in the modal footer — see `EntryFormModal`.
+ */
+export interface JsonImportState {
+  word: string;
+  language: string;
+  original: string;
+  source: string;
+  raw: string;
+}
+
+export const emptyJsonImport = (): JsonImportState => ({
+  word: '',
+  language: '廣東語',
+  original: '',
+  source: '',
+  raw: '',
+});
+
+export function JsonImport({
+  value,
+  onChange,
+}: {
+  value: JsonImportState;
+  onChange: (next: JsonImportState) => void;
+}) {
+  // Purely local: nothing outside this component acts on it.
   const [copied, setCopied] = useState(false);
 
-  const context = { original, source };
+  const set = <K extends keyof JsonImportState>(key: K, next: JsonImportState[K]) =>
+    onChange({ ...value, [key]: next });
 
   const copyPrompt = async () => {
-    await navigator.clipboard.writeText(buildPrompt(word || '（単語）', language, context));
+    await navigator.clipboard.writeText(
+      buildPrompt(value.word || '（単語）', value.language, {
+        original: value.original,
+        source: value.source,
+      }),
+    );
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
-  };
-
-  const load = () => {
-    const { draft, error: failure } = jsonToDraft(raw, context);
-    if (failure) return setError(failure);
-    setError(null);
-    if (draft) onLoad(draft);
   };
 
   return (
@@ -33,8 +52,8 @@ export function JsonImport({ onLoad }: { onLoad: (draft: EntryDraft) => void }) 
         <Field label="単語">
           <input
             type="text"
-            value={word}
-            onChange={(event) => setWord(event.target.value)}
+            value={value.word}
+            onChange={(event) => set('word', event.target.value)}
             placeholder="兆候"
             className={inputClass}
           />
@@ -42,8 +61,8 @@ export function JsonImport({ onLoad }: { onLoad: (draft: EntryDraft) => void }) 
         <Field label="訳の言語">
           <input
             type="text"
-            value={language}
-            onChange={(event) => setLanguage(event.target.value)}
+            value={value.language}
+            onChange={(event) => set('language', event.target.value)}
             className={inputClass}
           />
         </Field>
@@ -51,8 +70,8 @@ export function JsonImport({ onLoad }: { onLoad: (draft: EntryDraft) => void }) 
 
       <Field label="出会った文" hint="任意">
         <Area
-          value={original}
-          onChange={setOriginal}
+          value={value.original}
+          onChange={(v) => set('original', v)}
           rows={2}
           placeholder="あやしい兆候ではあるのだろうけれど"
         />
@@ -61,8 +80,8 @@ export function JsonImport({ onLoad }: { onLoad: (draft: EntryDraft) => void }) 
       <Field label="出處" hint="任意">
         <input
           type="text"
-          value={source}
-          onChange={(event) => setSource(event.target.value)}
+          value={value.source}
+          onChange={(event) => set('source', event.target.value)}
           placeholder="会議、同僚、小説「海辺のカフカ」…"
           className={inputClass}
         />
@@ -86,38 +105,8 @@ export function JsonImport({ onLoad }: { onLoad: (draft: EntryDraft) => void }) 
       </details>
 
       <Field label="AI の返した JSON を貼り付け">
-        <Area value={raw} onChange={setRaw} rows={10} placeholder="{ …" />
+        <Area value={value.raw} onChange={(v) => set('raw', v)} rows={10} placeholder="{ …" />
       </Field>
-
-      {/*
-        Pinned to the floor of the dialog's scroll area rather than sitting
-        after the paste box, which put it below the fold on most screens: the
-        textarea is ten rows and the schema block above it expands, so the one
-        control the whole tab exists to reach was the one needing a scroll.
-
-        `-bottom-8` is not a nudge. A sticky element is held inside the scroll
-        container's *content* box, not its padding box, so `bottom-0` parks the
-        bar one `py-4` above the floor and this bar's own `pb-4` adds a second —
-        measured at a 32px gap, which is what the screenshot showed. The offset
-        cancels both; the overhang is clipped by the container.
-
-        The negative inline margins cancel the container's side padding so the
-        backdrop spans the full width and the JSON passes under it, not beside
-        it. Below this sits the modal footer, which is outside the scrollport
-        and already `shrink-0`.
-      */}
-      <div className="sticky -bottom-8 -mx-5 -mb-4 space-y-2 bg-card px-5 pt-2 pb-4">
-        {error && <p className="text-sm text-danger">{error}</p>}
-
-        <button
-          type="button"
-          onClick={load}
-          disabled={!raw.trim()}
-          className="min-h-10 w-full rounded-pill bg-bg-alt text-sm font-semibold text-ink disabled:opacity-50"
-        >
-          読み込む
-        </button>
-      </div>
     </div>
   );
 }
