@@ -5,7 +5,7 @@ import { sanitizeDraft } from './sanitize';
 export const SCHEMA = `{
   "headword": "見出し語",
   "reading": "かな",
-  "pitchAccent": null,
+  "pitchAccent": 2,
   "tags": [],
   "learnedOn": "YYYY-MM-DD",
   "pos": ["名詞"],
@@ -70,7 +70,7 @@ ${sourceLine}
 - "politeness" は スラング・くだけた・普通・丁寧 のいずれか
 - "freq" は 1〜5 の整数
 - "pitchAccent" は音が下がる拍の番号です。0 は平板、1 は頭高。拍は文字ではなく、「きょ」は1拍、「っ」「ん」「ー」はそれぞれ1拍と数えてください。"reading" の拍数を超える数は書かないでください。
-- 自信がなければ "pitchAccent" は null にしてください。推測より空欄のほうが役に立ちます。
+- "pitchAccent" は辞書に載っている一般的な語であれば必ず数値を入れてください。null にしてよいのは、アクセントに複数の説があるなど、本当に判断できない場合だけです。
 
 ${SCHEMA}`;
 }

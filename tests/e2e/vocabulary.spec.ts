@@ -288,3 +288,45 @@ test.describe('the dashboard', () => {
     await expect(page.getByText('JLPTレベル（全 3 語）')).toBeVisible();
   });
 });
+
+/**
+ * Layout, which is why this is here and not in a component test: the defect is
+ * a scroll container's geometry, and jsdom has no layout to be wrong about.
+ */
+test.describe('the JSON import tab', () => {
+  /**
+   * 読み込む is the one control the tab exists to reach, and a ten-row paste box
+   * with an expandable schema block above it put the button below the fold. It
+   * is pinned to the floor of the dialog's scroll area now.
+   *
+   * The gap is asserted rather than the class, because the first attempt at
+   * pinning it *had* `position: sticky` and still left 32px of scroll container
+   * beneath it — a sticky element is held inside the content box, not the
+   * padding box, and this bar's own padding stacked on top of that. Both are
+   * invisible to any assertion about the rule being present.
+   */
+  test('keeps 読み込む on screen however long the pasted JSON is', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+    await addDialog(page).getByRole('button', { name: 'JSON' }).click();
+    await page
+      .getByLabel('AI の返した JSON を貼り付け')
+      .fill(`{\n${'  "filler": 1,\n'.repeat(60)}  "headword": "兆候"\n}`);
+
+    const button = page.getByRole('button', { name: '読み込む' });
+    await expect(button).toBeVisible();
+
+    const gap = await page.evaluate(() => {
+      const scroller = document.querySelector('[role="dialog"] .overflow-y-auto');
+      const control = [...document.querySelectorAll('button')].find(
+        (node) => node.textContent?.trim() === '読み込む',
+      );
+      if (!scroller || !control) return null;
+      return scroller.getBoundingClientRect().bottom - control.getBoundingClientRect().bottom;
+    });
+
+    // Flush with the floor. Anything positive is scrollable emptiness under a
+    // control that is meant to be the last thing in the panel.
+    expect(gap).toBe(0);
+  });
+});

@@ -90,17 +90,23 @@ export function JsonImport({ onLoad }: { onLoad: (draft: EntryDraft) => void }) 
       </Field>
 
       {/*
-        Pinned to the bottom of the dialog's scroll area rather than sitting
+        Pinned to the floor of the dialog's scroll area rather than sitting
         after the paste box, which put it below the fold on most screens: the
         textarea is ten rows and the schema block above it expands, so the one
         control the whole tab exists to reach was the one needing a scroll.
 
-        The negative margins cancel the scroll container's own padding so the
+        `-bottom-8` is not a nudge. A sticky element is held inside the scroll
+        container's *content* box, not its padding box, so `bottom-0` parks the
+        bar one `py-4` above the floor and this bar's own `pb-4` adds a second —
+        measured at a 32px gap, which is what the screenshot showed. The offset
+        cancels both; the overhang is clipped by the container.
+
+        The negative inline margins cancel the container's side padding so the
         backdrop spans the full width and the JSON passes under it, not beside
-        it. `bottom-0` sticks it above the modal footer, which is outside this
-        element and already `shrink-0`.
+        it. Below this sits the modal footer, which is outside the scrollport
+        and already `shrink-0`.
       */}
-      <div className="sticky bottom-0 -mx-5 -mb-4 space-y-2 bg-card px-5 pt-2 pb-4">
+      <div className="sticky -bottom-8 -mx-5 -mb-4 space-y-2 bg-card px-5 pt-2 pb-4">
         {error && <p className="text-sm text-danger">{error}</p>}
 
         <button

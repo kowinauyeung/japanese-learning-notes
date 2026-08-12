@@ -208,17 +208,30 @@ describe('buildPrompt', () => {
   /**
    * The rules and the shape are two halves of one instruction: a rule for a
    * field the assistant cannot see in the schema is a rule for a field it will
-   * not emit. `null` rather than a number is what the blank state looks like,
-   * so the example does not itself become a guess to copy.
+   * not emit.
+   *
+   * **The example is a number, and that is the whole point.** It was `null`
+   * first, reasoning that a sample number would be copied as a guess. The
+   * opposite happened: every other field in this schema shows a real value, so
+   * the one blank read as "this field is normally empty", and GPT returned
+   * `null` every time. A schema example is read as the shape of a normal
+   * answer, not as a neutral placeholder.
    */
-  it('declares the accent in the shape it asks the assistant to fill', () => {
-    expect(SCHEMA).toContain('"pitchAccent": null');
+  it('shows a real number in the shape, not the blank state', () => {
+    expect(SCHEMA).toContain('"pitchAccent": 2');
+    expect(SCHEMA).not.toContain('"pitchAccent": null');
   });
 
-  it('asks for a null accent over a guessed one', () => {
+  /**
+   * The escape hatch survives, because a confident wrong accent is worse than
+   * none — but it is now the exception it was meant to be. Paired with the rule
+   * above: a permission to answer `null` next to an example of `null` is not a
+   * fallback, it is an instruction.
+   */
+  it('demands a number by default and allows null only as the exception', () => {
     const prompt = buildPrompt('兆候', '廣東話');
-    expect(prompt).toContain('"pitchAccent" は null');
-    expect(prompt).toContain('推測より空欄');
+    expect(prompt).toContain('必ず数値を入れてください');
+    expect(prompt).toContain('本当に判断できない場合だけ');
   });
 
   /**
