@@ -60,6 +60,32 @@ test.describe('visual', () => {
   });
 
   /**
+   * The pitch line, for the same reason as the furigana above and no other.
+   *
+   * Everything else about the accent is covered without pixels: the mora
+   * arithmetic in tests/unit/mora.test.ts, which border lands on which mora in
+   * tests/component/PitchAccent.test.tsx, and the whole round trip end to end
+   * in vocabulary.spec.ts. **None of them can see whether the line is drawn.**
+   * It is a border on each mora span, so a zero width, a transparent colour, or
+   * a later rule resetting `border` leaves every one of those assertions green
+   * and the notation invisible.
+   *
+   * 兆候 is 0（平板）: ちょうこう is four mora, the first low and the rest high,
+   * with no fall anywhere in the word. The baseline therefore shows an overline
+   * beginning after ちょ and running unbroken to the end, with no downward tick
+   * — which is also what distinguishes 平板 from 尾高, the one distinction the
+   * notation exists to carry.
+   */
+  test('the pitch line sits above the mora it marks', async ({ page }) => {
+    await seedSignedIn(page);
+    await page.goto('/vocabulary/w-choukou');
+
+    const accent = page.locator('.has-accent').first();
+    await expect(accent).toBeVisible();
+    await expect(accent).toHaveScreenshot('pitch-accent.png');
+  });
+
+  /**
    * The heatmap is a CSS grid whose whole content is position and colour: a
    * broken column count or a shifted week boundary says something false about
    * when the learner studied, and reads as ordinary output while doing it.

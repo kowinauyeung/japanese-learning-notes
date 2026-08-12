@@ -1,5 +1,7 @@
 import { TAG_PATTERN } from '@/domain/common';
 import type { Entry, EntryDraft } from '@/domain/entry';
+import { isValidIsoDate } from './dates';
+import { accentKana, accentProblem } from './mora';
 
 /**
  * Pure draft helpers, kept clear of the repository so they can be used and
@@ -55,6 +57,44 @@ export function toDraft(entry: Entry): EntryDraft {
   return draft;
 }
 
+/**
+ * Everything that must hold before a draft may be written, or `null`.
+ *
+ * This lives here rather than inside the save handler so it can be tested at
+ * all: `EntryFormModal` resolves its repository through a provider, which no
+ * component test may reach.
+ *
+ * **A field that shows an error in the form is not a field that is refused.**
+ * The accent had a red message under it and nothing stopping the save, so an
+ * out-of-range value reached Firestore two ways, both silent: `2.5` was written
+ * and then coerced to `null` on the next read, losing what was typed; `9` on a
+ * three-mora word was written *and kept*, then drawn by nothing, because
+ * `pitchShape` refuses to render what it cannot place. `learnedOn` had been
+ * stopped here from the start, for the same class of reason.
+ */
+export function draftError(draft: EntryDraft): string | null {
+  if (!draft.headword.trim()) return '見出し語は必須です。';
+  if (!draft.definition.trim()) return '意味・説明は必須です。';
+
+  const bad = invalidTags(draft.tags);
+  if (bad.length) return `タグに使えない文字があります: ${bad.join(', ')}`;
+
+  // A cleared or impossible date must not reach Firestore. Read-side coercion
+  // would silently rewrite it to today, which is indistinguishable from having
+  // learned the word today and quietly wrong in every dashboard statistic.
+  if (!isValidIsoDate(draft.learnedOn)) return '学習日を正しく入力してください。';
+
+  if (draft.pitchAccent !== null) {
+    // The same sentence the field is already showing. Two wordings for one
+    // rejection is how the footer came to answer "たまご は3拍です" to a value
+    // whose problem was that it was not a whole number.
+    const problem = accentProblem(draft.pitchAccent, accentKana(draft.headword, draft.reading));
+    if (problem) return problem;
+  }
+
+  return null;
+}
+
 /** Tags are typed as free text; split on spaces, commas and full-width commas. */
 export function parseTags(input: string): string[] {
   return [
@@ -69,4 +109,26 @@ export function parseTags(input: string): string[] {
 
 export function invalidTags(tags: string[]): string[] {
   return tags.filter((tag) => !TAG_PATTERN.test(tag));
+}
+
+/**
+ * The same rule from the other side, for the read path.
+ *
+ * `parseTags` splits and de-duplicates and has never checked the shape, so the
+ * two paths disagreed: `a/b` and a 40-character tag were refused on save and
+ * accepted on read. A stored document written before the rule existed, or by
+ * hand, came back as a valid `Entry` carrying a tag the form would reject and
+ * no filter chip could ever match — visible, unusable, and unexplained.
+ *
+ * Dropping is the right degradation here and is not the call made for the
+ * accent's upper bound, because the rules differ in kind: `TAG_PATTERN` is
+ * absolute, while an accent is only too large *relative to a sibling field the
+ * user is still editing*.
+ *
+ * It tests `TAG_PATTERN` directly rather than routing through `invalidTags`.
+ * The shared thing is the pattern, and an indirection that filters out what a
+ * second pass just collected does not make the sharing any more real.
+ */
+export function validTags(tags: string[]): string[] {
+  return tags.filter((tag) => TAG_PATTERN.test(tag));
 }

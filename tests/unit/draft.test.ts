@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { emptyDraft, invalidTags, parseTags, toDraft } from '@/lib/draft';
+import type { EntryDraft } from '@/domain/entry';
+import { draftError, emptyDraft, invalidTags, parseTags, toDraft } from '@/lib/draft';
 import { makeEntry } from '../fixtures/entry';
 
 describe('parseTags', () => {
@@ -126,5 +127,63 @@ describe('emptyDraft', () => {
     const a = emptyDraft();
     a.tags.push('会議');
     expect(emptyDraft().tags).toEqual([]);
+  });
+});
+
+/**
+ * The gate between the form and Firestore. It lives in `lib` rather than in the
+ * save handler so it can be tested at all — `EntryFormModal` resolves its
+ * repository through a provider that no component test may reach.
+ *
+ * The accent is why this exists in this shape. It had a red message under the
+ * input and nothing refusing the value, and the two write paths spread the draft
+ * straight into Firestore: `2.5` was stored and then coerced to `null` on the
+ * next read, losing what was typed, while `9` on a three-mora word was stored,
+ * kept, and drawn by nothing.
+ */
+describe('draftError', () => {
+  const ok = (over: Partial<EntryDraft> = {}): EntryDraft => ({
+    ...emptyDraft(),
+    headword: '兆候',
+    definition: '前ぶれ。',
+    learnedOn: '2026-06-24',
+    ...over,
+  });
+
+  it('passes a draft with everything it needs', () => {
+    expect(draftError(ok())).toBeNull();
+  });
+
+  it('refuses the fields that were already refused before the accent existed', () => {
+    expect(draftError(ok({ headword: '  ' }))).toContain('見出し語');
+    expect(draftError(ok({ definition: '' }))).toContain('意味・説明');
+    expect(draftError(ok({ tags: ['駄目 な タグ'] }))).toContain('タグ');
+    expect(draftError(ok({ learnedOn: '2026-02-31' }))).toContain('学習日');
+  });
+
+  it('lets a well-formed accent through', () => {
+    expect(draftError(ok({ reading: 'ちょうこう', pitchAccent: 0 }))).toBeNull();
+    expect(draftError(ok({ reading: 'ちょうこう', pitchAccent: 4 }))).toBeNull();
+    expect(draftError(ok({ pitchAccent: null }))).toBeNull();
+  });
+
+  /** Stored and then coerced away on the next read — the value simply vanishes. */
+  it('refuses an accent that is not a whole non-negative number', () => {
+    expect(draftError(ok({ reading: 'ちょうこう', pitchAccent: 2.5 }))).not.toBeNull();
+    expect(draftError(ok({ reading: 'ちょうこう', pitchAccent: -1 }))).not.toBeNull();
+  });
+
+  /** Stored, kept, and drawn by nothing: `pitchShape` refuses what it cannot place. */
+  it('refuses an accent past the end of the reading', () => {
+    expect(draftError(ok({ reading: 'たまご', pitchAccent: 9 }))).toContain('3拍');
+  });
+
+  /**
+   * A kanji headword with no reading has no mora count to check against, and
+   * counting its characters would accept a number that means nothing.
+   */
+  it('refuses an accent on a word whose kana are unknown', () => {
+    expect(draftError(ok({ headword: '兆候', reading: '', pitchAccent: 0 }))).toContain('読み方');
+    expect(draftError(ok({ headword: 'ちょっと', reading: '', pitchAccent: 0 }))).toBeNull();
   });
 });

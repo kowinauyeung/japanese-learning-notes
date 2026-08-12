@@ -3,8 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { KeyValueTable, Section } from '@/components/detail/Section';
 import { EntryFormModal } from '@/components/entry-form/EntryFormModal';
+import { PitchAccent } from '@/components/PitchAccent';
 import { Ruby } from '@/components/Ruby';
 import { useEntries } from '@/lib/entries';
+import { accentKana } from '@/lib/mora';
 
 /** ①②③… for sense and example numbering, matching the notes. */
 function circled(index: number): string {
@@ -87,6 +89,13 @@ export function Component() {
               reading={entry.reading}
               className="has-ruby block font-display text-[34px] font-bold sm:text-[40px]"
             />
+            {entry.pitchAccent !== null && (
+              <PitchAccent
+                kana={accentKana(entry.headword, entry.reading)}
+                pitchAccent={entry.pitchAccent}
+                className="mt-2 block font-display text-lg"
+              />
+            )}
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
               <span className="rounded-pill bg-accent-soft px-2.5 py-1 font-semibold text-accent">
                 {entry.jlpt}

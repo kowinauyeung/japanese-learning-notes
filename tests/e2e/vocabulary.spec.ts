@@ -288,3 +288,83 @@ test.describe('the dashboard', () => {
     await expect(page.getByText('JLPTレベル（全 3 語）')).toBeVisible();
   });
 });
+
+/**
+ * The accent, which no other layer sees whole: `mora.ts` is unit-tested and the
+ * notation has a component test, but until `w-choukou` carried a `pitchAccent`
+ * nothing rendered it against a real route, a real provider and real CSS.
+ */
+test.describe('the pitch accent', () => {
+  test('draws the notation on the word it belongs to, and refuses to save a bad one', async ({
+    page,
+  }) => {
+    await page.goto('/vocabulary/w-choukou');
+    // 0（平板）: mora 0 low, the rest high, and no fall anywhere in the word.
+    await expect(page.getByText('0（平板）')).toBeVisible();
+
+    await page.getByRole('button', { name: '編集' }).click();
+    const dialog = editDialog(page);
+    const accent = dialog.getByLabel(/アクセント/);
+
+    // ちょうこう is four mora — five is past the end of the word.
+    await accent.fill('5');
+    await expect(dialog.getByText('ちょうこう は4拍です。')).toBeVisible();
+    await expect(accent).toHaveAttribute('aria-invalid', 'true');
+
+    await dialog.getByRole('button', { name: '保存する' }).click();
+    // Refused, not merely flagged: the dialog is still open. And the count is 2
+    // on purpose — the field and the footer give the *same* sentence. They gave
+    // two different ones until `accentProblem` became the single source, and the
+    // footer's was the vaguer of the pair.
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('ちょうこう は4拍です。')).toHaveCount(2);
+
+    await accent.fill('3');
+    await dialog.getByRole('button', { name: '保存する' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText('3（中高）')).toBeVisible();
+  });
+});
+
+/**
+ * Layout, which is why this is here and not in a component test: the defect is
+ * a scroll container's geometry, and jsdom has no layout to be wrong about.
+ */
+test.describe('the JSON import tab', () => {
+  /**
+   * 読み込む is the one control the tab exists to reach, and a ten-row paste box
+   * under an expandable schema block put it below the fold. It sits in the modal
+   * footer now, outside the scrollport.
+   *
+   * **Position is asserted across a scroll, not presence.** Two attempts to pin
+   * it inside the panel with `position: sticky` failed in ways that every
+   * available cheaper assertion passes: the first left 32px of scrollable panel
+   * beneath it, the second parked it past its own resting place so it slid 16px
+   * over the last of the scroll. Both rendered the button, both had the rule
+   * applied, and both were visible to `toBeVisible()`.
+   */
+  test('keeps 読み込む in one place however far the panel is scrolled', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+    await addDialog(page).getByRole('button', { name: 'JSON' }).click();
+    await page
+      .getByLabel('AI の返した JSON を貼り付け')
+      .fill(`{\n${'  "filler": 1,\n'.repeat(60)}  "headword": "兆候"\n}`);
+
+    const button = page.getByRole('button', { name: '読み込む' });
+    await expect(button).toBeVisible();
+    const atTop = await button.boundingBox();
+
+    const scrolled = await page.evaluate(() => {
+      const panel = document.querySelector('[role="dialog"] .overflow-y-auto');
+      if (!(panel instanceof HTMLElement)) return 0;
+      panel.scrollTop = panel.scrollHeight;
+      return panel.scrollTop;
+    });
+    // The fixture has to actually overflow, or the test proves nothing.
+    expect(scrolled).toBeGreaterThan(0);
+
+    await expect(button).toBeVisible();
+    expect(await button.boundingBox()).toEqual(atTop);
+  });
+});

@@ -13,7 +13,7 @@
     "build": "tsc -b && vite build",
     "build:e2e": "vite build --mode e2e",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit && tsc -p tsconfig.migration.json --noEmit",
     "test": "yarn test:unit && yarn test:emulator",
     "test:unit": "vitest run --project unit --project dom",
     "test:emulator": "firebase emulators:exec --only firestore --project demo-goitei 'vitest run --project emulator'",
@@ -28,6 +28,7 @@
     "auth:revoke": "CLOUDSDK_CONFIG=.gcloud gcloud auth application-default revoke",
     "migrate:parse": "node migration/parse.mjs",
     "migrate:upload": "node migration/upload.mjs",
+    "migrate:accents": "vite-node migration/accents.ts --",
     "rules:dev": "firebase deploy --only firestore:rules --project dev",
     "rules:prod": "firebase deploy --only firestore:rules --project prod"
   },

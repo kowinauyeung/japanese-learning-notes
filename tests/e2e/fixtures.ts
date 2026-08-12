@@ -53,6 +53,9 @@ export const WORDS: Record<string, unknown>[] = [
     id: 'w-choukou',
     headword: '兆候',
     reading: 'ちょうこう',
+    // The only fixture with an accent. Without one, nothing end to end ever
+    // rendered the notation — every spec passed on a feature that was never on.
+    pitchAccent: 0,
     definition: '何かが起こる前ぶれ。',
     definitionSub: '徵兆',
     pos: ['名詞'],

@@ -187,10 +187,84 @@ describe('sanitizeDraft — scalars', () => {
     expect(sanitizeDraft({ definition: '' }, FALLBACK).definition).toBe('fallback-definition');
   });
 
-  it('keeps pitchAccent only when it is a number, since 0 is meaningful', () => {
+  it('keeps pitchAccent when it is a number, since 0 is meaningful', () => {
     expect(sanitizeDraft({ pitchAccent: 0 }).pitchAccent).toBe(0);
-    expect(sanitizeDraft({ pitchAccent: '2' }).pitchAccent).toBeNull();
     expect(sanitizeDraft({ pitchAccent: null }).pitchAccent).toBeNull();
+  });
+
+  /**
+   * The other end of this field is an assistant writing JSON by hand, and one
+   * asked for a number sends `"2"` often enough that refusing it drops a correct
+   * answer on a technicality — silently, because the import says nothing about a
+   * field it could not read. `freq` has always accepted a numeric string from
+   * the same source; this now matches it.
+   */
+  it('accepts the quoted number an assistant sends instead of a bare one', () => {
+    expect(sanitizeDraft({ pitchAccent: '2' }).pitchAccent).toBe(2);
+    expect(sanitizeDraft({ pitchAccent: ' 0 ' }).pitchAccent).toBe(0);
+  });
+
+  /**
+   * The empty string is the trap: `Number('')` is 0, and 0 is 平板 — a positive
+   * claim about the word, invented out of a blank field.
+   */
+  it('reads a blank string as absent rather than as 平板', () => {
+    expect(sanitizeDraft({ pitchAccent: '' }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: '   ' }).pitchAccent).toBeNull();
+  });
+
+  /**
+   * `typeof value === 'number'` was the entire check here for the field's whole
+   * life, and every value below satisfies it. None of them is a mora anything
+   * can drop after: they reached the detail page as "NaN" drawn over the kana,
+   * or as a border on no mora at all.
+   *
+   * The field had no input and no display until the accent work, so nothing
+   * could put one there — which is why this went unnoticed rather than why it
+   * was safe.
+   */
+  it('rejects NaN, Infinity and a fractional or negative mora', () => {
+    expect(sanitizeDraft({ pitchAccent: Number.NaN }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: Number.POSITIVE_INFINITY }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: -3 }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: 2.7 }).pitchAccent).toBeNull();
+  });
+
+  /**
+   * A string is coerced with `Number`, not `parseInt`, so it fails on exactly
+   * the values the bare number fails on. `parseInt` would read '2.7' as 2 and
+   * '2（中高）' as 2 — a different answer for the same input depending only on
+   * whether the assistant quoted it.
+   */
+  it('holds a quoted value to the same rules as a bare one', () => {
+    expect(sanitizeDraft({ pitchAccent: '2.7' }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: '-3' }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: '2（中高）' }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: 'わかりません' }).pitchAccent).toBeNull();
+  });
+
+  /**
+   * The bound that is *not* enforced here, stated as a test so removing it is a
+   * decision rather than an accident. 9 does not fit a three-mora reading, but
+   * the reading is a sibling field the user edits: rejecting it on read would
+   * delete a correct value the moment the kana were shortened. `PitchAccentField`
+   * refuses it where there is still someone to fix it, and `pitchShape` draws
+   * nothing meanwhile.
+   */
+  it('keeps an accent too large for the reading, which only the form can judge', () => {
+    expect(sanitizeDraft({ pitchAccent: 9, reading: 'たまご' }).pitchAccent).toBe(9);
+  });
+
+  /**
+   * The read path and the write path share `TAG_PATTERN` now. They did not:
+   * `parseTags` splits and de-duplicates and never checked the shape, so `a/b`
+   * and a 40-character tag were refused by `invalidTags` on save and waved
+   * through on read. A document written before the rule existed came back as a
+   * valid `Entry` carrying a tag the form rejects and no filter chip can match.
+   */
+  it('drops a stored tag the form itself would refuse', () => {
+    expect(sanitizeDraft({ tags: ['a/b', 'ニュース', '仕事!'] }).tags).toEqual(['ニュース']);
+    expect(sanitizeDraft({ tags: ['x'.repeat(40)] }).tags).toEqual([]);
   });
 
   it('splits, strips and de-duplicates tags', () => {

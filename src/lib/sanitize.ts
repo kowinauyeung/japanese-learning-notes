@@ -14,7 +14,10 @@ import type {
 import { PRACTICE_MODES } from '@/domain/practice';
 import type { EntryProgress, PracticeSession } from '@/domain/practice';
 import type { WordSet } from '@/domain/wordSet';
-import { emptyDraft, parseTags } from './draft';
+import { isValidIsoDate } from './dates';
+import { emptyDraft, parseTags, validTags } from './draft';
+
+export { isValidIsoDate };
 
 /**
  * Coercion for `Entry` data arriving from outside the app — assistant-written
@@ -44,35 +47,39 @@ const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback
 const oneOfOptional = <T extends string>(value: unknown, allowed: readonly T[]): T | '' =>
   typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : '';
 
+/**
+ * The mora the pitch drops after: a non-negative integer, or nothing.
+ *
+ * `typeof value === 'number'` was the whole check until the accent field was
+ * built, and it admits `NaN`, `Infinity`, `-3` and `2.7` — all of which render
+ * as garbage over the kana. 0 is meaningful (平板), so the guard cannot lean on
+ * falsiness.
+ *
+ * **A numeric string counts**, the way `freq` has always counted one. The other
+ * end of this field is an assistant writing JSON by hand, and an assistant asked
+ * for a number sends `"2"` often enough that refusing it drops a correct answer
+ * on a technicality — silently, since the import reports nothing about a field
+ * it could not read. `Number` rather than `parseInt`, so `"2.7"` fails exactly
+ * as `2.7` does instead of quietly becoming 2; and the string must be non-empty,
+ * because `Number('')` is 0, which is 平板 and a claim nobody made.
+ *
+ * **No upper bound here, deliberately.** A drop after mora 4 of a three-mora
+ * word is wrong, but it is wrong in a way only the reading can reveal, and the
+ * reading is editable: bounding it here would silently delete a value the user
+ * typed the moment they shortened the kana. The form owns that rule, where it
+ * can be shown and corrected instead — and `pitchShape` draws nothing rather
+ * than drawing a lie in the meantime.
+ */
+const pitchAccent = (value: unknown): number | null => {
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const n = typeof value === 'number' || typeof value === 'string' ? Number(value) : Number.NaN;
+  return Number.isInteger(n) && n >= 0 ? n : null;
+};
+
 /** `freq` drives `'★'.repeat()`, so it must be an integer in 1..5 or nothing. */
 const frequency = (value: unknown, fallback: Frequency): Frequency => {
   const n = typeof value === 'number' ? value : Number.parseInt(str(value), 10);
   return Number.isInteger(n) && n >= 1 && n <= 5 ? (n as Frequency) : fallback;
-};
-
-/**
- * A real calendar day in `YYYY-MM-DD`.
- *
- * Shape and non-`NaN` are both insufficient. `Date` rejects an out-of-range
- * month or a day above 31, but rolls a day that is merely wrong for its month
- * forward instead: `2026-02-31` parses happily as `2026-03-03`. Only comparing
- * the parsed components back against the input catches that.
- *
- * The value is stored and compared as a plain string, so an impossible date
- * would sort and filter as if it were real, and `parseLocalDate` would hand the
- * dashboard an Invalid Date.
- */
-export const isValidIsoDate = (value: unknown): boolean => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof value === 'string' ? value.trim() : '');
-  if (!match) return false;
-  const [, year, month, day] = match;
-  const parsed = new Date(`${match[0]}T00:00:00Z`);
-  return (
-    !Number.isNaN(parsed.getTime()) &&
-    parsed.getUTCFullYear() === Number(year) &&
-    parsed.getUTCMonth() + 1 === Number(month) &&
-    parsed.getUTCDate() === Number(day)
-  );
 };
 
 const isoDate = (value: unknown, fallback: string): string => {
@@ -186,7 +193,7 @@ export function sanitizeDraft(value: unknown, fallback: EntryDraft = emptyDraft(
   return {
     headword: str(raw.headword).trim() || fallback.headword,
     reading: str(raw.reading) || fallback.reading,
-    pitchAccent: typeof raw.pitchAccent === 'number' ? raw.pitchAccent : null,
+    pitchAccent: pitchAccent(raw.pitchAccent),
     pos: strings(raw.pos).filter((p): p is (typeof POS)[number] =>
       (POS as readonly string[]).includes(p),
     ),
@@ -205,7 +212,7 @@ export function sanitizeDraft(value: unknown, fallback: EntryDraft = emptyDraft(
     source: str(raw.source),
     context: entryContext(raw.context),
     usage: usage(raw.usage),
-    tags: parseTags(strings(raw.tags).join(' ')),
+    tags: validTags(parseTags(strings(raw.tags).join(' '))),
     learnedOn: isoDate(raw.learnedOn, fallback.learnedOn),
   };
 }

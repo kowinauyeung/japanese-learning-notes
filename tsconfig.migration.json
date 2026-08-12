@@ -1,0 +1,37 @@
+{
+  // Standalone, and a third pass in `yarn typecheck`, for the same reason
+  // tsconfig.test.json is: these files reach into src and a composite project
+  // may only do that through a reference tsconfig.app.json cannot provide.
+  //
+  // The folder was plain .mjs until accents.ts, so it sat outside both existing
+  // passes and nobody noticed. Measured at the time: importing a symbol that
+  // does not exist from src/lib/mora left `yarn typecheck` green, so renaming an
+  // export would have broken the migration silently — and the artefact this
+  // folder writes is what goes to production.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+
+    "erasableSyntaxOnly": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "skipLibCheck": true,
+
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["migration"]
+}

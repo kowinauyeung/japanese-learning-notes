@@ -46,6 +46,38 @@ describe('jsonToDraft — parsing', () => {
   );
 });
 
+/**
+ * The accent arrives through the paste box like everything else, and an
+ * assistant asked for a number will sometimes send `"2"`, `2.5` or a sentence.
+ * Coercion happens in `sanitizeDraft`; what this checks is that the import path
+ * reaches it at all, rather than dropping a field the prompt now asks for.
+ */
+describe('jsonToDraft — the pitch accent', () => {
+  const note = (pitchAccent: string) =>
+    jsonToDraft(`{"headword":"卵","definition":"たまご","reading":"たまご",${pitchAccent}}`).draft;
+
+  it('carries a well-formed accent through to the draft', () => {
+    expect(note('"pitchAccent":2')?.pitchAccent).toBe(2);
+    expect(note('"pitchAccent":0')?.pitchAccent).toBe(0);
+  });
+
+  it('takes the null the prompt asks for when the assistant is unsure', () => {
+    expect(note('"pitchAccent":null')?.pitchAccent).toBeNull();
+    expect(jsonToDraft('{"headword":"卵","definition":"たまご"}').draft?.pitchAccent).toBeNull();
+  });
+
+  /** An assistant asked for a number routinely quotes it. That is still an answer. */
+  it('accepts a quoted number, which is how an assistant often sends one', () => {
+    expect(note('"pitchAccent":"2"')?.pitchAccent).toBe(2);
+  });
+
+  it('drops what an assistant sends instead of a number', () => {
+    expect(note('"pitchAccent":2.5')?.pitchAccent).toBeNull();
+    expect(note('"pitchAccent":"わかりません"')?.pitchAccent).toBeNull();
+    expect(note('"pitchAccent":"2（中高）"')?.pitchAccent).toBeNull();
+  });
+});
+
 describe('jsonToDraft — required fields', () => {
   it('refuses a note with no headword', () => {
     expect(jsonToDraft('{"definition":"前ぶれ"}').error).toBe('"headword" が空です。');
@@ -164,6 +196,46 @@ describe('buildPrompt', () => {
   it('passes a source through, and asks for it to be left blank otherwise', () => {
     expect(buildPrompt('兆候', '廣東話', { source: '会議' })).toContain('「会議」');
     expect(buildPrompt('兆候', '廣東話')).toContain('"source" は空のままにしてください');
+  });
+
+  /**
+   * The rules and the shape are two halves of one instruction: a rule for a
+   * field the assistant cannot see in the schema is a rule for a field it will
+   * not emit.
+   *
+   * **The example is a number, and that is the whole point.** It was `null`
+   * first, reasoning that a sample number would be copied as a guess. The
+   * opposite happened: every other field in this schema shows a real value, so
+   * the one blank read as "this field is normally empty", and GPT returned
+   * `null` every time. A schema example is read as the shape of a normal
+   * answer, not as a neutral placeholder.
+   */
+  it('shows a real number in the shape, not the blank state', () => {
+    expect(SCHEMA).toContain('"pitchAccent": 2');
+    expect(SCHEMA).not.toContain('"pitchAccent": null');
+  });
+
+  /**
+   * The escape hatch survives, because a confident wrong accent is worse than
+   * none — but it is now the exception it was meant to be. Paired with the rule
+   * above: a permission to answer `null` next to an example of `null` is not a
+   * fallback, it is an instruction.
+   */
+  it('demands a number by default and allows null only as the exception', () => {
+    const prompt = buildPrompt('兆候', '廣東話');
+    expect(prompt).toContain('必ず数値を入れてください');
+    expect(prompt).toContain('本当に判断できない場合だけ');
+  });
+
+  /**
+   * An assistant counts characters unless told not to, which puts the drop on
+   * the wrong syllable for every word containing a yōon, っ, ん or ー — and the
+   * import path has no way to tell a plausible wrong number from a right one.
+   */
+  it('spells out that a mora is not a character', () => {
+    const prompt = buildPrompt('兆候', '廣東話');
+    expect(prompt).toContain('「きょ」は1拍');
+    expect(prompt).toContain('「っ」「ん」「ー」');
   });
 
   it('ignores a context made only of whitespace', () => {
