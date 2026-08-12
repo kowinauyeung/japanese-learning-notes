@@ -116,6 +116,26 @@ export function pitchShape(kana: string, pitchAccent: number): MoraPitch[] {
   }));
 }
 
+/**
+ * Why a value cannot be an accent for this word, or `null` if it can.
+ *
+ * `accentPattern` returns `null` for three unrelated reasons, and answering all
+ * three with the mora count is true and useless: `2.5` against たまご said
+ * "たまご は3拍です", a fact about the word rather than about the mistake.
+ *
+ * It lives here rather than in the field because the save gate needs the same
+ * sentences and `lib` cannot import from a component — which is how the field
+ * came to say one thing and the footer another for the same value.
+ */
+export function accentProblem(pitchAccent: number, kana: string): string | null {
+  if (!kana) return 'アクセントを入れるには読み方（かな）が必要です。';
+  if (!Number.isInteger(pitchAccent)) return '拍の番号なので、整数で入れてください。';
+  if (pitchAccent < 0) return '0（平板）以上で入れてください。';
+  const mora = moraCount(kana);
+  if (pitchAccent > mora) return `${kana} は${mora}拍です。`;
+  return null;
+}
+
 /** `2（中高）`, the way a dictionary prints it. Empty when the value does not fit. */
 export function accentLabel(pitchAccent: number, kana: string): string {
   const pattern = accentPattern(pitchAccent, moraCount(kana));

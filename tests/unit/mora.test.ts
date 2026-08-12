@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   accentKana,
+  accentProblem,
   accentLabel,
   accentPattern,
   moraCount,
@@ -164,5 +165,30 @@ describe('accentKana', () => {
   it('refuses a mixed headword, where only part of it is kana', () => {
     expect(accentKana('小ネタ', '')).toBe('');
     expect(accentKana('メロい', '')).toBe('メロい');
+  });
+});
+
+/**
+ * The sentence shown when a value is refused. It lives beside the rule rather
+ * than in the field, because the save gate needs the same words and `lib` cannot
+ * import from a component — which is how the field and the footer came to answer
+ * the same rejection differently.
+ */
+describe('accentProblem', () => {
+  it('says nothing when the value fits', () => {
+    expect(accentProblem(0, 'たまご')).toBeNull();
+    expect(accentProblem(3, 'たまご')).toBeNull();
+  });
+
+  /**
+   * The point of splitting it. All three used to answer with the mora count,
+   * so `2.5` against たまご was told "たまご は3拍です" — true, and not the
+   * problem.
+   */
+  it('names the reason rather than the mora count', () => {
+    expect(accentProblem(2.5, 'たまご')).toContain('整数');
+    expect(accentProblem(-1, 'たまご')).toContain('0（平板）以上');
+    expect(accentProblem(9, 'たまご')).toBe('たまご は3拍です。');
+    expect(accentProblem(0, '')).toContain('読み方');
   });
 });

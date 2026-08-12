@@ -13,7 +13,7 @@
     "build": "tsc -b && vite build",
     "build:e2e": "vite build --mode e2e",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit && tsc -p tsconfig.migration.json --noEmit",
     "test": "yarn test:unit && yarn test:emulator",
     "test:unit": "vitest run --project unit --project dom",
     "test:emulator": "firebase emulators:exec --only firestore --project demo-goitei 'vitest run --project emulator'",

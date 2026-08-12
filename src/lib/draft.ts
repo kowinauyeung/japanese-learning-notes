@@ -1,7 +1,7 @@
 import { TAG_PATTERN } from '@/domain/common';
 import type { Entry, EntryDraft } from '@/domain/entry';
 import { isValidIsoDate } from './dates';
-import { accentKana, accentPattern, moraCount } from './mora';
+import { accentKana, accentProblem } from './mora';
 
 /**
  * Pure draft helpers, kept clear of the repository so they can be used and
@@ -85,12 +85,11 @@ export function draftError(draft: EntryDraft): string | null {
   if (!isValidIsoDate(draft.learnedOn)) return '学習日を正しく入力してください。';
 
   if (draft.pitchAccent !== null) {
-    const kana = accentKana(draft.headword, draft.reading);
-    if (accentPattern(draft.pitchAccent, moraCount(kana)) === null) {
-      return kana
-        ? `アクセントが読み方の拍数に合いません（${kana} は${moraCount(kana)}拍）。`
-        : 'アクセントを入れるには読み方（かな）が必要です。';
-    }
+    // The same sentence the field is already showing. Two wordings for one
+    // rejection is how the footer came to answer "たまご は3拍です" to a value
+    // whose problem was that it was not a whole number.
+    const problem = accentProblem(draft.pitchAccent, accentKana(draft.headword, draft.reading));
+    if (problem) return problem;
   }
 
   return null;
@@ -125,8 +124,11 @@ export function invalidTags(tags: string[]): string[] {
  * accent's upper bound, because the rules differ in kind: `TAG_PATTERN` is
  * absolute, while an accent is only too large *relative to a sibling field the
  * user is still editing*.
+ *
+ * It tests `TAG_PATTERN` directly rather than routing through `invalidTags`.
+ * The shared thing is the pattern, and an indirection that filters out what a
+ * second pass just collected does not make the sharing any more real.
  */
 export function validTags(tags: string[]): string[] {
-  const bad = new Set(invalidTags(tags));
-  return tags.filter((tag) => !bad.has(tag));
+  return tags.filter((tag) => TAG_PATTERN.test(tag));
 }

@@ -1,24 +1,7 @@
 import { useId } from 'react';
 import { PitchAccent } from '@/components/PitchAccent';
-import { moraCount } from '@/lib/mora';
+import { accentProblem, moraCount } from '@/lib/mora';
 import { Field, inputClass } from './fields';
-
-/**
- * Why a value is refused, in the words that say what to change.
- *
- * `accentPattern` returns `null` for three unrelated reasons, and naming the
- * mora count for all of them is true and useless: typing `2.5` against たまご
- * answered "たまご は3拍です", which is a fact about the word rather than about
- * the mistake.
- */
-function reason(value: number, kana: string): string | null {
-  if (!kana) return 'アクセントを入れるには読み方（かな）が必要です。';
-  if (!Number.isInteger(value)) return '拍の番号なので、整数で入れてください。';
-  if (value < 0) return '0（平板）以上で入れてください。';
-  const mora = moraCount(kana);
-  if (value > mora) return `${kana} は${mora}拍です。`;
-  return null;
-}
 
 /**
  * アクセント — the mora the pitch drops after, with the reading it applies to
@@ -47,7 +30,7 @@ export function PitchAccentField({
 }) {
   const errorId = useId();
   const mora = moraCount(kana);
-  const message = value === null ? null : reason(value, kana);
+  const message = value === null ? null : accentProblem(value, kana);
 
   return (
     <div className="space-y-1">

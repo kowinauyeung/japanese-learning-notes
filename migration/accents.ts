@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { accentPattern, moraCount, splitMora } from '../src/lib/mora';
+import { accentKana, accentPattern, moraCount, splitMora } from '../src/lib/mora';
 
 /**
  * Fill `pitchAccent` across the migrated notebook, in two halves.
@@ -32,8 +32,21 @@ interface Entry {
   pitchAccent: number | null;
 }
 
-/** The kana the accent describes — the reading, or the headword when it is already kana. */
-const kanaOf = (entry: Entry) => entry.reading || entry.headword;
+/**
+ * The kana the accent describes, through the same guard the app uses.
+ *
+ * `entry.reading || entry.headword` was written here after `accentKana` had
+ * already replaced it in the app, which is the whole argument against relying on
+ * a convention: 27 of the 67 entries have a blank reading and every one of them
+ * is kana-only today, so the two agree on every row — until one does not.
+ *
+ * It matters more here than in the form. `writePrompt` prints `${'${mora}'}拍` per
+ * row and tells the assistant not to exceed it, and `apply` checks the answer
+ * against the same count, so a kanji headword with a blank reading would have
+ * both halves agreeing on a number that means nothing — and this file writes
+ * what `upload.mjs` sends to production.
+ */
+const kanaOf = (entry: Entry) => accentKana(entry.headword, entry.reading);
 
 /**
  * A phrase has no single accent number: 鵜呑みにする is several accent phrases,
@@ -50,6 +63,7 @@ function writePrompt() {
   const rows = entries.map((entry) => {
     const kana = kanaOf(entry);
     const mora = splitMora(kana);
+    if (!kana) return `${entry.headword}\t（読み不明）\t— ← 読みがないので null`;
     const note = isPhrase(entry) ? '  ← 句なので null' : '';
     return `${entry.headword}\t${kana}\t${mora.length}拍 (${mora.join('・')})${note}`;
   });

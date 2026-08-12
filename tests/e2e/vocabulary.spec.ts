@@ -312,8 +312,12 @@ test.describe('the pitch accent', () => {
     await expect(accent).toHaveAttribute('aria-invalid', 'true');
 
     await dialog.getByRole('button', { name: '保存する' }).click();
-    // Still open, and saying why: a message under the field was not a refusal.
-    await expect(dialog.getByText(/アクセントが読み方の拍数に合いません/)).toBeVisible();
+    // Refused, not merely flagged: the dialog is still open. And the count is 2
+    // on purpose — the field and the footer give the *same* sentence. They gave
+    // two different ones until `accentProblem` became the single source, and the
+    // footer's was the vaguer of the pair.
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('ちょうこう は4拍です。')).toHaveCount(2);
 
     await accent.fill('3');
     await dialog.getByRole('button', { name: '保存する' }).click();
