@@ -52,6 +52,14 @@ const oneOfOptional = <T extends string>(value: unknown, allowed: readonly T[]):
  * as garbage over the kana. 0 is meaningful (平板), so the guard cannot lean on
  * falsiness.
  *
+ * **A numeric string counts**, the way `freq` has always counted one. The other
+ * end of this field is an assistant writing JSON by hand, and an assistant asked
+ * for a number sends `"2"` often enough that refusing it drops a correct answer
+ * on a technicality — silently, since the import reports nothing about a field
+ * it could not read. `Number` rather than `parseInt`, so `"2.7"` fails exactly
+ * as `2.7` does instead of quietly becoming 2; and the string must be non-empty,
+ * because `Number('')` is 0, which is 平板 and a claim nobody made.
+ *
  * **No upper bound here, deliberately.** A drop after mora 4 of a three-mora
  * word is wrong, but it is wrong in a way only the reading can reveal, and the
  * reading is editable: bounding it here would silently delete a value the user
@@ -59,8 +67,11 @@ const oneOfOptional = <T extends string>(value: unknown, allowed: readonly T[]):
  * can be shown and corrected instead — and `pitchShape` draws nothing rather
  * than drawing a lie in the meantime.
  */
-const pitchAccent = (value: unknown): number | null =>
-  typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+const pitchAccent = (value: unknown): number | null => {
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const n = typeof value === 'number' || typeof value === 'string' ? Number(value) : Number.NaN;
+  return Number.isInteger(n) && n >= 0 ? n : null;
+};
 
 /** `freq` drives `'★'.repeat()`, so it must be an integer in 1..5 or nothing. */
 const frequency = (value: unknown, fallback: Frequency): Frequency => {

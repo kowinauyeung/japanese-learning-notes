@@ -187,10 +187,30 @@ describe('sanitizeDraft — scalars', () => {
     expect(sanitizeDraft({ definition: '' }, FALLBACK).definition).toBe('fallback-definition');
   });
 
-  it('keeps pitchAccent only when it is a number, since 0 is meaningful', () => {
+  it('keeps pitchAccent when it is a number, since 0 is meaningful', () => {
     expect(sanitizeDraft({ pitchAccent: 0 }).pitchAccent).toBe(0);
-    expect(sanitizeDraft({ pitchAccent: '2' }).pitchAccent).toBeNull();
     expect(sanitizeDraft({ pitchAccent: null }).pitchAccent).toBeNull();
+  });
+
+  /**
+   * The other end of this field is an assistant writing JSON by hand, and one
+   * asked for a number sends `"2"` often enough that refusing it drops a correct
+   * answer on a technicality — silently, because the import says nothing about a
+   * field it could not read. `freq` has always accepted a numeric string from
+   * the same source; this now matches it.
+   */
+  it('accepts the quoted number an assistant sends instead of a bare one', () => {
+    expect(sanitizeDraft({ pitchAccent: '2' }).pitchAccent).toBe(2);
+    expect(sanitizeDraft({ pitchAccent: ' 0 ' }).pitchAccent).toBe(0);
+  });
+
+  /**
+   * The empty string is the trap: `Number('')` is 0, and 0 is 平板 — a positive
+   * claim about the word, invented out of a blank field.
+   */
+  it('reads a blank string as absent rather than as 平板', () => {
+    expect(sanitizeDraft({ pitchAccent: '' }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: '   ' }).pitchAccent).toBeNull();
   });
 
   /**
@@ -208,6 +228,19 @@ describe('sanitizeDraft — scalars', () => {
     expect(sanitizeDraft({ pitchAccent: Number.POSITIVE_INFINITY }).pitchAccent).toBeNull();
     expect(sanitizeDraft({ pitchAccent: -3 }).pitchAccent).toBeNull();
     expect(sanitizeDraft({ pitchAccent: 2.7 }).pitchAccent).toBeNull();
+  });
+
+  /**
+   * A string is coerced with `Number`, not `parseInt`, so it fails on exactly
+   * the values the bare number fails on. `parseInt` would read '2.7' as 2 and
+   * '2（中高）' as 2 — a different answer for the same input depending only on
+   * whether the assistant quoted it.
+   */
+  it('holds a quoted value to the same rules as a bare one', () => {
+    expect(sanitizeDraft({ pitchAccent: '2.7' }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: '-3' }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: '2（中高）' }).pitchAccent).toBeNull();
+    expect(sanitizeDraft({ pitchAccent: 'わかりません' }).pitchAccent).toBeNull();
   });
 
   /**

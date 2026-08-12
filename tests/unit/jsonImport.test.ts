@@ -66,10 +66,15 @@ describe('jsonToDraft — the pitch accent', () => {
     expect(jsonToDraft('{"headword":"卵","definition":"たまご"}').draft?.pitchAccent).toBeNull();
   });
 
+  /** An assistant asked for a number routinely quotes it. That is still an answer. */
+  it('accepts a quoted number, which is how an assistant often sends one', () => {
+    expect(note('"pitchAccent":"2"')?.pitchAccent).toBe(2);
+  });
+
   it('drops what an assistant sends instead of a number', () => {
-    expect(note('"pitchAccent":"2"')?.pitchAccent).toBeNull();
     expect(note('"pitchAccent":2.5')?.pitchAccent).toBeNull();
     expect(note('"pitchAccent":"わかりません"')?.pitchAccent).toBeNull();
+    expect(note('"pitchAccent":"2（中高）"')?.pitchAccent).toBeNull();
   });
 });
 

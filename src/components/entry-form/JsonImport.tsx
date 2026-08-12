@@ -89,16 +89,29 @@ export function JsonImport({ onLoad }: { onLoad: (draft: EntryDraft) => void }) 
         <Area value={raw} onChange={setRaw} rows={10} placeholder="{ …" />
       </Field>
 
-      {error && <p className="text-sm text-danger">{error}</p>}
+      {/*
+        Pinned to the bottom of the dialog's scroll area rather than sitting
+        after the paste box, which put it below the fold on most screens: the
+        textarea is ten rows and the schema block above it expands, so the one
+        control the whole tab exists to reach was the one needing a scroll.
 
-      <button
-        type="button"
-        onClick={load}
-        disabled={!raw.trim()}
-        className="min-h-10 w-full rounded-pill bg-bg-alt text-sm font-semibold text-ink disabled:opacity-50"
-      >
-        読み込む
-      </button>
+        The negative margins cancel the scroll container's own padding so the
+        backdrop spans the full width and the JSON passes under it, not beside
+        it. `bottom-0` sticks it above the modal footer, which is outside this
+        element and already `shrink-0`.
+      */}
+      <div className="sticky bottom-0 -mx-5 -mb-4 space-y-2 bg-card px-5 pt-2 pb-4">
+        {error && <p className="text-sm text-danger">{error}</p>}
+
+        <button
+          type="button"
+          onClick={load}
+          disabled={!raw.trim()}
+          className="min-h-10 w-full rounded-pill bg-bg-alt text-sm font-semibold text-ink disabled:opacity-50"
+        >
+          読み込む
+        </button>
+      </div>
     </div>
   );
 }
