@@ -91,6 +91,33 @@ describe('what the public pages must not disclose', () => {
 
     expect(disclosed).toBe(implemented);
   });
+
+  /**
+   * The same shape, for the processor that is easiest to forget.
+   *
+   * The policy listed Firebase and reCAPTCHA and stopped there, while the one
+   * contact channel it points every reader at is a Google Form — so the free
+   * text somebody types to exercise a privacy right was itself stored by a
+   * processor the policy did not name. That is the sharp edge of this
+   * particular omission: the undisclosed path is the one a person uses to ask
+   * about disclosure.
+   *
+   * Read from `site.feedbackFormUrl` rather than hard-coded, so moving the form
+   * to something that is not Google's turns this red instead of leaving a
+   * policy naming a processor that no longer processes anything — which is the
+   * failure the App Check test above already exists to catch, in the other
+   * direction.
+   */
+  it('names Google Forms when, and only when, the contact link is one', () => {
+    const isGoogleForm = /^https:\/\/(forms\.gle|docs\.google\.com\/forms)\//.test(
+      site.feedbackFormUrl,
+    );
+    const disclosed = privacy.sections
+      .flatMap((section) => [...section.body, ...(section.list ?? [])])
+      .some((line) => line.includes('Google Forms'));
+
+    expect(disclosed).toBe(isGoogleForm);
+  });
 });
 
 /**
