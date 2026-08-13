@@ -1,0 +1,217 @@
+name: Deploy (production)
+
+# Manual only. Production has no branch that deploys itself: a push to `main`
+# is a merge, and a merge is not a decision to release. The decision is this
+# button, and it names the commit it is releasing.
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Full commit SHA on main to deploy (40 characters)'
+        required: true
+
+permissions:
+  contents: read
+
+# Never two at once, and never cancelled halfway: a cancelled deploy between
+# the rules step and the hosting step leaves the two out of step with each
+# other, which is the one state this workflow orders itself to avoid.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  # Same split as the dev workflow and for the same reason: this job runs
+  # install scripts, so it holds no credential. Unlike dev it also has to
+  # establish that the commit is one that may be released at all.
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The whole history, because the ancestry check below needs main.
+          fetch-depth: 0
+          ref: ${{ inputs.sha }}
+
+      # The check that makes the input safe. Without it this workflow deploys
+      # any commit in the repository — including one that only ever existed on
+      # a branch, or in a pull request that was closed unmerged.
+      - name: Refuse a commit that is not on main
+        env:
+          SHA: ${{ inputs.sha }}
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "::error title=Not on main::$SHA is not an ancestor of origin/main. Production deploys only from main."
+            exit 1
+          fi
+          echo "::notice::Deploying $SHA ($(git log -1 --format='%s' "$SHA"))"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      # Dev warns and carries on when this is unset. Production does not: a
+      # build with no App Check ships a public Firebase config that nothing
+      # attests, and the console message saying so is seen by nobody.
+      - name: Require App Check
+        env:
+          KEY: ${{ secrets.VITE_RECAPTCHA_SITE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error title=App Check::VITE_RECAPTCHA_SITE_KEY is not set. Refusing to build production without App Check."
+            exit 1
+          fi
+
+      # VITE_RECAPTCHA_SITE_KEY is deliberately not PROD_-prefixed: one
+      # reCAPTCHA v3 site key covers both projects, because a v3 "site" is a
+      # list of domains and is not owned by a Firebase project. The App Check
+      # *registration* is per project and there are two of them, each holding
+      # the same secret. Enterprise keys would need splitting; v3 does not.
+      - name: Build
+        env:
+          # The released commit, not the workflow's. On a workflow_dispatch run
+          # GITHUB_SHA is the default branch's head, so a rollback would ship a
+          # footer naming source that was never running — see build-info.ts.
+          DEPLOY_SHA: ${{ inputs.sha }}
+          VITE_FIREBASE_API_KEY: ${{ secrets.PROD_VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.PROD_VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.PROD_VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.PROD_VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.PROD_VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.PROD_VITE_FIREBASE_APP_ID }}
+          VITE_RECAPTCHA_SITE_KEY: ${{ secrets.VITE_RECAPTCHA_SITE_KEY }}
+        run: yarn build
+
+      # Every PROD_ secret must exist before anything is checked against it.
+      #
+      # This job has no `environment:`, so it reads repository-level secrets
+      # only — putting the production values in the `production` environment,
+      # which is the natural reading of "production secrets", hands this job
+      # empty strings instead. Nothing downstream would catch that: `client.ts`
+      # validates the config at runtime, and `vite build` never evaluates the
+      # module, so the build stays green and the bundle throws on first paint.
+      #
+      # The names are listed in full rather than rebuilt from a short loop
+      # variable. Five of the six matched; `SENDER_ID` printed
+      # `PROD_VITE_FIREBASE_SENDER_ID` while the secret read is
+      # `PROD_VITE_FIREBASE_MESSAGING_SENDER_ID` — so the one run this step
+      # exists for sent the reader off to create a secret nothing reads.
+      - name: Require every production value
+        env:
+          PROD_VITE_FIREBASE_API_KEY: ${{ secrets.PROD_VITE_FIREBASE_API_KEY }}
+          PROD_VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.PROD_VITE_FIREBASE_AUTH_DOMAIN }}
+          PROD_VITE_FIREBASE_PROJECT_ID: ${{ secrets.PROD_VITE_FIREBASE_PROJECT_ID }}
+          PROD_VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.PROD_VITE_FIREBASE_STORAGE_BUCKET }}
+          PROD_VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.PROD_VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          PROD_VITE_FIREBASE_APP_ID: ${{ secrets.PROD_VITE_FIREBASE_APP_ID }}
+        run: |
+          missing=''
+          for name in \
+            PROD_VITE_FIREBASE_API_KEY \
+            PROD_VITE_FIREBASE_AUTH_DOMAIN \
+            PROD_VITE_FIREBASE_PROJECT_ID \
+            PROD_VITE_FIREBASE_STORAGE_BUCKET \
+            PROD_VITE_FIREBASE_MESSAGING_SENDER_ID \
+            PROD_VITE_FIREBASE_APP_ID
+          do
+            eval "value=\$$name"
+            if [ -z "$value" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Missing secrets::Not set at repository level:$missing. Environment-scoped secrets are not visible to this job."
+            exit 1
+          fi
+
+      # Proves the bundle is the one this run built, and that it points where
+      # it is about to be deployed. A dist/ built against the dev project would
+      # otherwise deploy happily and talk to the wrong database.
+      #
+      # `grep -q ""` matches every line and exits 0, so this check was a no-op
+      # whenever EXPECTED was empty — it failed open in exactly the case it
+      # existed for. The step above is what stops that, and this one no longer
+      # has to trust its input.
+      - name: Check the bundle points at production
+        env:
+          EXPECTED: ${{ secrets.PROD_VITE_FIREBASE_PROJECT_ID }}
+        run: |
+          if ! grep -rq "$EXPECTED" dist/assets/*.js; then
+            echo "::error title=Wrong project::The built bundle does not contain $EXPECTED."
+            exit 1
+          fi
+          if grep -rq 'goitei-dev' dist/assets/*.js; then
+            echo "::error title=Wrong project::The built bundle mentions goitei-dev."
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-prod
+          path: dist
+          retention-days: 1
+
+  # Holds the credentials, runs no install script from the build, and is gated
+  # on the `production` environment — which is where a required reviewer or a
+  # wait timer is configured. The gate is in GitHub rather than in this file so
+  # that changing it does not need a commit.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.sha }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      # Before authenticating, so no postinstall script sees a credential.
+      - run: yarn install --frozen-lockfile
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist-prod
+          path: dist
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_PROD_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_PROD_DEPLOY_SERVICE_ACCOUNT }}
+
+      # Rules first, hosting second, and never in one command.
+      #
+      # The window between them is the whole reason for the order. Rules ahead
+      # of the client means the client is briefly older than the rules it runs
+      # under, which fails closed — a request the new rules refuse. Hosting
+      # first means a client is briefly newer than its rules, which fails open:
+      # it writes a shape the old rules still permit.
+      #
+      # **Two steps come before this workflow runs, and it cannot check them.**
+      # These rules gate on a custom claim, which reaches a client only in a
+      # freshly minted ID token — so every account must be granted with
+      # `yarn allow` and must sign in again first, or it is locked out for up to
+      # an hour. See "Operator runbook" in README.md, which is in the working
+      # tree after merge in a way a pull request description is not.
+      - name: Deploy Firestore rules
+        run: yarn firebase deploy --only firestore:rules --project prod --non-interactive
+
+      - name: Deploy Hosting
+        run: yarn firebase deploy --only hosting --project prod --non-interactive
+
+      - name: Record what was released
+        env:
+          SHA: ${{ inputs.sha }}
+        run: echo "::notice title=Released::$SHA to goitei"
