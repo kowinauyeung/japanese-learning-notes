@@ -14,6 +14,14 @@ export interface DocSection {
   body: string[];
   /** Rendered as a list under `body`, when the section enumerates rather than explains. */
   list?: string[];
+  /**
+   * One destination the section exists to send the reader to.
+   *
+   * A URL written into a paragraph is a URL somebody has to select and paste.
+   * These pages have exactly one thing a reader ever needs to *do* — open the
+   * form — so it is a control rather than a line of text.
+   */
+  link?: { label: string; href: string };
 }
 
 export interface Doc {

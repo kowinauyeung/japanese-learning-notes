@@ -69,30 +69,44 @@ describe('what the public pages must not disclose', () => {
 });
 
 /**
- * A privacy policy naming no contact is not a privacy policy, and an invented
- * address is worse — it reads as a promise, delivers nothing, and may belong to
- * somebody real. Both values were blank until real ones existed; these keep them
- * that way, so emptying one fails here rather than publishing 準備中 to users.
+ * A privacy policy naming no contact is not a privacy policy — and this one
+ * names exactly one, on purpose. **There is no email address anywhere**: an
+ * address printed on three public pages is a permanent disclosure that cannot
+ * be withdrawn, while a form can be closed and replaced. APPI asks for a
+ * channel through which a person can exercise their rights, not for an email.
+ *
+ * What that trades away is a second channel, and these tests are what keep the
+ * remaining one honest: the link has to be real, and it has to reach every page
+ * that promises it.
  */
-describe('contact details', () => {
-  it('are filled in with something usable', () => {
-    expect(site.contactEmail).toMatch(/^[^@\s]+@[^@\s]+\.[^@\s]+$/);
+describe('contact', () => {
+  it('is a real form link', () => {
     expect(site.feedbackFormUrl).toMatch(/^https:\/\//);
   });
 
-  it('degrade to 準備中 rather than to an empty gap in a sentence', () => {
-    expect(orPending('')).toBe('準備中');
-    expect(orPending('a@b.example')).toBe('a@b.example');
-  });
-
-  /** The pages that promise a contact have to actually carry one. */
-  it('reach the pages that promise them, with no 準備中 left', () => {
-    const text = [privacy, terms, support]
+  it('carries no email address on any public page', () => {
+    const text = [about, privacy, terms, support]
       .flatMap((doc) => doc.sections.flatMap((s) => [...s.body, ...(s.list ?? [])]))
       .join('\n');
 
-    expect(text).not.toContain('準備中');
-    expect(text).toContain(site.contactEmail);
-    expect(text).toContain(site.feedbackFormUrl);
+    expect(text).not.toMatch(/[^\s@]+@[^\s@]+\.[^\s@]+/);
+  });
+
+  /**
+   * The form is a control, not a URL in a sentence: a reader should not have to
+   * select and paste an address to reach the one thing these pages exist to
+   * send them to.
+   */
+  it('is reachable as a link, not only as text', () => {
+    for (const doc of [privacy, terms, support]) {
+      const links = doc.sections.flatMap((s) => (s.link ? [s.link] : []));
+      expect(links.length).toBeGreaterThan(0);
+      for (const link of links) expect(link.href).toBe(site.feedbackFormUrl);
+    }
+  });
+
+  it('degrades to 準備中 rather than to an empty gap in a sentence', () => {
+    expect(orPending('')).toBe('準備中');
+    expect(orPending('https://example.test')).toBe('https://example.test');
   });
 });

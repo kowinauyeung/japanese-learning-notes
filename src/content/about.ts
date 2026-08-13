@@ -1,5 +1,5 @@
 import type { Doc } from './doc';
-import { orPending, site } from './site';
+import { site } from './site';
 
 export const about: Doc = {
   title: '語彙庭について',
@@ -36,7 +36,7 @@ export const about: Doc = {
       body: [
         `${site.operator}が個人で開発・運営しています。法人のサービスではなく、業務として提供しているものでもありません。`,
         '日本語能力試験（JLPT）およびその主催団体とは関係がなく、Google の公式サービスでもありません。',
-        `連絡先は ${orPending(site.contactEmail)} です。`,
+        'ご連絡は、サポートページのお問い合わせフォームからお願いします。',
       ],
     },
   ],

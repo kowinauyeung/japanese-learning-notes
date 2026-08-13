@@ -1,5 +1,5 @@
 import type { Doc } from './doc';
-import { orPending, site } from './site';
+import { site } from './site';
 
 /**
  * A first draft, not legal advice.
@@ -10,6 +10,8 @@ import { orPending, site } from './site';
  * negligence, and a clause that is void takes the reader's trust with it. The
  * limitation below is bounded instead.
  */
+const FORM = 'お問い合わせフォームを開く';
+
 export const terms: Doc = {
   title: '利用規約',
   lead: '本規約は、語彙庭の利用条件を定めるものです。ログインした時点で、本規約に同意したものとみなします。',
@@ -84,7 +86,8 @@ export const terms: Doc = {
     },
     {
       heading: 'お問い合わせ',
-      body: [`本規約に関するお問い合わせは ${orPending(site.contactEmail)} までご連絡ください。`],
+      body: ['本規約に関するお問い合わせは、お問い合わせフォームよりご連絡ください。'],
+      link: { label: FORM, href: site.feedbackFormUrl },
     },
   ],
 };

@@ -1,5 +1,5 @@
 import type { Doc } from './doc';
-import { orPending, site } from './site';
+import { site } from './site';
 
 /**
  * The prose here is a first draft written to cover what the service actually
@@ -8,6 +8,8 @@ import { orPending, site } from './site';
  * public — so treat this as the structure being right rather than the wording
  * being final.
  */
+const FORM = 'お問い合わせフォームを開く';
+
 export const privacy: Doc = {
   title: 'プライバシーポリシー',
   lead: '本ポリシーは、語彙庭が取得する情報、その利用目的および保存・削除について定めるものです。',
@@ -17,8 +19,9 @@ export const privacy: Doc = {
       heading: '運営者',
       body: [
         `語彙庭は、${site.operator}が個人で運営するサービスです。法人による運営ではありません。`,
-        `本ポリシーに関するお問い合わせは ${orPending(site.contactEmail)} までご連絡ください。`,
+        '本ポリシーに関するお問い合わせは、お問い合わせフォームよりご連絡ください。返信をご希望の場合は、フォーム内で返信先をご記入ください。',
       ],
+      link: { label: FORM, href: site.feedbackFormUrl },
     },
     {
       heading: '取得する情報',
@@ -83,8 +86,10 @@ export const privacy: Doc = {
     {
       heading: '本人の権利',
       body: [
-        `保有する個人データについて、開示、訂正、利用停止または削除を求めることができます。エクスポートおよび削除は画面から行えます。その他の請求は ${orPending(site.contactEmail)} までご連絡ください。`,
+        '保有する個人データについて、開示、訂正、利用停止または削除を求めることができます。エクスポートおよび削除はアカウント画面から行えます。',
+        'その他の請求は、お問い合わせフォームの「プライバシーに関する請求」よりお申し出ください。ご請求に回答するため、フォーム内で返信先をご記入ください。',
       ],
+      link: { label: FORM, href: site.feedbackFormUrl },
     },
     {
       heading: '改定',

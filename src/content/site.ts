@@ -1,18 +1,29 @@
 /**
  * The facts every public page repeats, in one place.
  *
- * Both contact details are real and were verified before being written here —
- * the form link resolves to a live form. They were deliberately blank until
- * then: a wrong address in a privacy policy is worse than a missing one,
- * because it reads as a promise, delivers nothing, and may belong to somebody
- * real. `orPending` and its test remain for the same reason, so emptying either
- * value fails the suite rather than quietly publishing 準備中.
+ * **There is deliberately no email address.** Every contact goes through the
+ * form, including security and privacy requests, and the reasoning is worth
+ * keeping: an address printed on three public pages is a permanent, unrevocable
+ * disclosure — once it is scraped, changing it means changing the policy and
+ * notifying users — while a form can be closed and replaced at any time. APPI
+ * asks for a channel through which a person can exercise their rights; it does
+ * not ask for an email.
+ *
+ * That holds on one condition, and the condition is the whole of it: **the form
+ * must take a reply address and must not require signing in.** A policy
+ * promising disclosure, correction and deletion through a window that cannot
+ * answer, or that demands a Google account from somebody objecting to how their
+ * Google data is handled, is a legal promise that cannot be kept.
+ *
+ * The accepted cost is that there is no second channel. If the form breaks or
+ * is deleted there is no way to reach the operator and no way for a user to
+ * find that out. That is a decision, not an oversight.
+ *
+ * The link was checked before being written here — it resolves to a live form.
  */
 export const site = {
   /** The name the service is operated under. */
   operator: 'Kowin',
-  /** Where a user reaches a person. Private, so it is safe for sensitive reports. */
-  contactEmail: 'kowinauyeung@gmail.com',
   /** Feedback goes to a form, not to Firestore — an unauthenticated write path is spam and quota surface. */
   feedbackFormUrl: 'https://forms.gle/4TPufH5u3LNvWLLK9',
 } as const;

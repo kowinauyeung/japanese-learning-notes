@@ -25,6 +25,16 @@ export function DocPage({ doc }: { doc: Doc }) {
                   {paragraph}
                 </p>
               ))}
+              {section.link && (
+                <a
+                  href={section.link.href}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="mt-4 inline-block min-h-11 rounded-pill bg-accent px-6 py-3 text-sm font-semibold text-on-accent"
+                >
+                  {section.link.label}
+                </a>
+              )}
               {section.list && (
                 <ul className="mt-3 space-y-2">
                   {section.list.map((item, index) => (
