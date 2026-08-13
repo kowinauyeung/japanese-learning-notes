@@ -1,7 +1,8 @@
 {
-  // Standalone, and a third pass in `yarn typecheck`, for the same reason
-  // tsconfig.test.json is: these files reach into src and a composite project
-  // may only do that through a reference tsconfig.app.json cannot provide.
+  // Every script outside src and tests — migration and admin — in one pass.
+  // Standalone for the same reason tsconfig.test.json is: these files reach
+  // into src, and a composite project may only do that through a reference
+  // tsconfig.app.json cannot provide.
   //
   // The folder was plain .mjs until accents.ts, so it sat outside both existing
   // passes and nobody noticed. Measured at the time: importing a symbol that
@@ -11,6 +12,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
+    // Top-level await, which the admin scripts are written with.
     "module": "ESNext",
     "moduleResolution": "bundler",
     "types": ["node"],
@@ -33,5 +35,5 @@
     "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["migration"]
+  "include": ["migration", "admin"]
 }

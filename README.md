@@ -169,31 +169,64 @@ days. Preview channels are hosting-only: rules are project-wide, so deploying
 them from a pull request would change the rules every other preview runs under.
 A preview reads the real `goitei-dev` data, not a copy.
 
-**Production is not automated.** Nothing in `.github/workflows/` can reach
-`goitei`; deploy it by hand with the commands below.
+**Production is a button, not a branch.** Run _Deploy (production)_ from the
+Actions tab and give it the full 40-character SHA; the workflow refuses any
+commit that is not an ancestor of `origin/main`, and the `production`
+environment is where a required reviewer or a wait timer is configured. A push
+to `main` is a merge, and a merge is not a decision to release.
 
 Which project a build talks to comes from the env file Vite picks, not from the
-`--project` flag, so the two must be set together:
+`--project` flag, so a by-hand deploy must set the two together:
 
 ```bash
 # dev
 yarn vite build --mode development
 yarn firebase deploy --only hosting,firestore:rules --project dev
-
-# production
-yarn build
-yarn firebase deploy --only hosting,firestore:rules --project prod
 ```
 
 `firestore.rules` gives an account read and write over everything beneath its
 own `users/{uid}`, and nothing else; every unlisted path is denied. Access is
-gated on `allowedUsers/{uid}` existing — an allowlist collection no client can
-write, so signups are closed until a document is added for that account. Nothing
-in front of the site can substitute for this: Hosting serves the config that
-reaches Firestore, so a password on the HTML protects the page, not the data.
+gated on the custom claim `allowed`, which nothing but `yarn allow` sets, so
+signups are closed until an operator grants it. Nothing in front of the site can
+substitute for this: Hosting serves the config that reaches Firestore, so a
+password on the HTML protects the page, not the data.
 
 For the first production import, follow the rules-first order in
 [`migration/README.md`](migration/README.md).
+
+### Operator runbook
+
+Everything below assumes `GOOGLE_APPLICATION_CREDENTIALS`, or `gcloud auth
+application-default login` against the right project.
+
+**Granting access.** `yarn allow you@example.com prod`. The account must have
+signed in once first — the claim is set on the uid Google issued, so there is
+nothing to set it on before that. Anything other than `prod` or `--revoke` is
+rejected rather than ignored.
+
+**Revoking it.** `yarn allow you@example.com prod --revoke`. **This lands within
+the hour, not on the keystroke.** The claim lives inside the ID token the client
+already holds and Firestore rules have no revocation check, so it keeps working
+until that token expires. Revoking the refresh tokens ends the session at the
+next refresh but does not shorten that window. When responding to abuse, delete
+the data — that part takes effect now.
+
+**Releasing.** Three steps, in this order:
+
+1. `yarn allow <email> prod` for every account that must keep working.
+2. Ask each of them to sign out and sign back in. A claim reaches the client
+   only in a freshly minted ID token; an open session picks it up at its next
+   refresh, which is up to an hour away.
+3. Run _Deploy (production)_.
+
+The order is not a preference. The workflow deploys rules before hosting on
+purpose — a client briefly older than its rules fails closed, the other way
+round fails open — and the rules being deployed require a claim that no token
+issued before step 1 carries. Reversing steps 1 and 3 locks out everyone who was
+already signed in, for up to an hour, including whoever is doing the deploy.
+
+This matters most exactly once: the first production run of that workflow _is_
+the migration onto the claim.
 
 ### Deploy credentials
 
