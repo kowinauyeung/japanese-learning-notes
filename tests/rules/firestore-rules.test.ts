@@ -6,6 +6,7 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+import { emptyDraft } from '@/lib/draft';
 
 /**
  * Security rules are the only thing protecting this data: the app is pure
@@ -388,5 +389,82 @@ describe('bounds on what an owner may write', () => {
   it('denies a collection nobody listed, even to its owner', async () => {
     const db = as(ALICE);
     await assertFails(db.doc(`users/${ALICE}/somethingNew/x`).set({ ownerUid: ALICE }));
+  });
+});
+
+/**
+ * The shapes the app actually writes, against the rules that will judge them.
+ *
+ * This exists because nothing else checks it. `tests/integration` connects with
+ * `mockUserToken: 'owner'`, which is the emulator's owner credential and
+ * **bypasses rules entirely** — so a green adapter suite says nothing about
+ * whether the documents it produces are writable in production. The bounds
+ * added here are the first rules that can reject a well-formed write, which
+ * makes this the first time that gap matters.
+ *
+ * Built from the production factories rather than by hand: a hand-written copy
+ * of the shape is exactly what stops failing when the schema moves.
+ */
+describe('what the adapters write is what the rules accept', () => {
+  it('accepts the document entryRepo.create sends', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/entries/real`).set({
+        ...emptyDraft(),
+        headword: '清高',
+        definition: '清らかで気高いこと。',
+        ownerUid: ALICE,
+        publishedId: null,
+        publishedVersion: 0,
+        copiedFrom: null,
+        createdAt: '2026-08-13T00:00:00.000Z',
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      }),
+    );
+  });
+
+  it('accepts the document wordSetRepo.create sends', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/real`).set({
+        // The literal WordSets.tsx sends; there is no factory for it.
+        name: '仕事',
+        description: '',
+        entryIds: [],
+        level: '',
+        topics: [],
+        ownerUid: ALICE,
+        publishedId: null,
+        publishedVersion: 0,
+        copiedFrom: null,
+        createdAt: '2026-08-13T00:00:00.000Z',
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      }),
+    );
+  });
+
+  /** `recordSession` writes both documents in one batch; both have to pass. */
+  it('accepts both documents recordSession sends', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/practiceSessions/real`).set({
+        mode: 'flashcard',
+        filterLabel: 'すべて',
+        total: 10,
+        correct: 8,
+        missed: ['e1', 'e2'],
+        startedAt: '2026-08-13T00:00:00.000Z',
+        ownerUid: ALICE,
+        finishedAt: '2026-08-13T00:01:00.000Z',
+      }),
+    );
+    await assertSucceeds(
+      db
+        .doc(`users/${ALICE}/progress/entries`)
+        .set(
+          { ownerUid: ALICE, entries: { e1: { status: 'wrong', attempts: 1 } } },
+          { merge: true },
+        ),
+    );
   });
 });
