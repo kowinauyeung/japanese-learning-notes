@@ -15,6 +15,15 @@
  * answer, or that demands a Google account from somebody objecting to how their
  * Google data is handled, is a legal promise that cannot be kept.
  *
+ * **A third condition, of the same kind and easier to break by accident: the
+ * form must not be set to collect respondents' Google addresses.** The privacy
+ * policy states that signing in is not required and that no Google account
+ * details are sent automatically. That is true of this form as configured, not
+ * of Google Forms — turning on 回答者のメールアドレスを収集する falsifies it
+ * from an admin screen, with no commit, no review and nothing in this
+ * repository able to notice. Whoever changes the form's settings has to come
+ * back here.
+ *
  * The accepted cost is that there is no second channel. If the form breaks or
  * is deleted there is no way to reach the operator and no way for a user to
  * find that out. That is a decision, not an oversight.
