@@ -1,6 +1,5 @@
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { applicationDefault } from 'firebase-admin/app';
 
 /**
  * Grant or revoke access, by custom claim.
@@ -27,13 +26,21 @@ import { applicationDefault } from 'firebase-admin/app';
  */
 
 const [email, ...rest] = process.argv.slice(2);
-const revoke = rest.includes('--revoke');
-const env = rest.includes('prod') ? 'prod' : 'dev';
 
-if (!email) {
+// Rejected rather than ignored, because the mistake this catches is silent and
+// natural: `--revoke` is spelled with dashes, so `--prod` is how one reaches
+// for the other — and `rest.includes('prod')` is false for it, so the run would
+// grant access on **dev** and say so only in its last line.
+const unknown = rest.filter((arg) => arg !== 'prod' && arg !== '--revoke');
+
+if (!email || unknown.length > 0) {
+  if (unknown.length > 0) console.error(`unknown argument: ${unknown.join(' ')}`);
   console.error('usage: allow-user.ts <email> [prod] [--revoke]');
   process.exit(1);
 }
+
+const revoke = rest.includes('--revoke');
+const env = rest.includes('prod') ? 'prod' : 'dev';
 
 const projectId = env === 'prod' ? 'goitei' : 'goitei-dev';
 

@@ -65,12 +65,19 @@ export const app = initializeApp(config);
  * does appear in the bundle, but every occurrence is the SDK reading it, and
  * the assignment is not there.
  *
- * **This needs a Content-Security-Policy change before the policy is enforced.**
- * reCAPTCHA Enterprise loads from `https://www.google.com/recaptcha/` and frames
- * a challenge from the same origin, and the policy in `firebase.json` allows
- * neither today. It is Report-Only, so nothing breaks now — but promoting the
- * policy without adding `https://www.google.com` to `script-src` and
- * `frame-src` would silently disable exactly the protection this adds.
+ * **This needs a Content-Security-Policy change before one is enforced.**
+ * v3 pulls its script from `https://www.gstatic.com/recaptcha/` *and*
+ * `https://www.google.com/recaptcha/`, and frames from `https://www.google.com`.
+ * Wherever a policy exists in this repository gstatic is already allowed and
+ * `www.google.com` is not, in either directive.
+ *
+ * Deliberately not a statement about what `firebase.json` holds today: the
+ * headers block arrives on a different branch, so anything asserted here would
+ * be true or false depending on which merged first. `tests/unit/csp.test.ts`
+ * asserts the conditional instead — *if* an enforcing `Content-Security-Policy`
+ * is present, `script-src` and `frame-src` must allow `https://www.google.com`.
+ * Green with no headers, green under Report-Only, red at the moment the policy
+ * is promoted without the hosts, which is the only moment it matters.
  */
 const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 

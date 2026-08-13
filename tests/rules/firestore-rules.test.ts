@@ -447,6 +447,97 @@ describe('what the adapters write is what the rules accept', () => {
     );
   });
 
+  /**
+   * The update path, which none of the creates above reaches.
+   *
+   * `keepsCreatedAt` compares the incoming `createdAt` against the stored one,
+   * and on a create it takes the `resource == null` branch and never makes the
+   * comparison — so a suite of creates stays green whatever that comparison
+   * does. `entryRepo.update` is the call that meets it: `updateDoc` with the
+   * whole draft and a fresh `updatedAt`, and deliberately without `createdAt`
+   * or `ownerUid`, both of which therefore reach `request.resource.data` only
+   * through the merge.
+   *
+   * `createdAt` is stored as a `Date` rather than an ISO string because that is
+   * what `serverTimestamp()` leaves behind, and the comparison is against
+   * whatever type is really in the document.
+   */
+  it('accepts the whole-draft update entryRepo.update sends over a stored entry', async () => {
+    const db = as(ALICE);
+    const ref = db.doc(`users/${ALICE}/entries/editable`);
+    await assertSucceeds(
+      ref.set({
+        ...emptyDraft(),
+        headword: '清高',
+        ownerUid: ALICE,
+        publishedId: null,
+        publishedVersion: 0,
+        copiedFrom: null,
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+      }),
+    );
+    await assertSucceeds(
+      ref.update({
+        ...emptyDraft(),
+        headword: '清廉',
+        definition: '心が清らかで欲がないこと。',
+        updatedAt: new Date('2026-08-13T00:00:00.000Z'),
+      }),
+    );
+  });
+
+  it('accepts the whole-draft update wordSetRepo.update sends over a stored set', async () => {
+    const db = as(ALICE);
+    const ref = db.doc(`users/${ALICE}/wordSets/editable`);
+    await assertSucceeds(
+      ref.set({
+        name: '仕事',
+        description: '',
+        entryIds: [],
+        level: '',
+        topics: [],
+        ownerUid: ALICE,
+        publishedId: null,
+        publishedVersion: 0,
+        copiedFrom: null,
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+      }),
+    );
+    await assertSucceeds(
+      ref.update({
+        name: '仕事（改）',
+        description: '',
+        entryIds: ['e1'],
+        level: 'N2',
+        topics: [],
+        updatedAt: new Date('2026-08-13T00:00:00.000Z'),
+      }),
+    );
+  });
+
+  /**
+   * Why the adapter omits `createdAt` rather than re-sending what it read.
+   *
+   * The stored value is a Timestamp and a client that round-trips it through
+   * the domain type sends back an ISO string. That is not the same value, so
+   * `keepsCreatedAt` refuses it — an edit that looks like it changes nothing.
+   */
+  it('refuses an update that re-sends a stored Timestamp createdAt as a string', async () => {
+    const db = as(ALICE);
+    const ref = db.doc(`users/${ALICE}/entries/round-tripped`);
+    await assertSucceeds(
+      ref.set({
+        ...emptyDraft(),
+        headword: '清高',
+        ownerUid: ALICE,
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      }),
+    );
+    await assertFails(ref.update({ headword: '清廉', createdAt: '2026-08-01T00:00:00.000Z' }));
+  });
+
   /** `recordSession` writes both documents in one batch; both have to pass. */
   it('accepts both documents recordSession sends', async () => {
     const db = as(ALICE);

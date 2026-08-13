@@ -97,19 +97,32 @@ jobs:
       # empty strings instead. Nothing downstream would catch that: `client.ts`
       # validates the config at runtime, and `vite build` never evaluates the
       # module, so the build stays green and the bundle throws on first paint.
+      #
+      # The names are listed in full rather than rebuilt from a short loop
+      # variable. Five of the six matched; `SENDER_ID` printed
+      # `PROD_VITE_FIREBASE_SENDER_ID` while the secret read is
+      # `PROD_VITE_FIREBASE_MESSAGING_SENDER_ID` — so the one run this step
+      # exists for sent the reader off to create a secret nothing reads.
       - name: Require every production value
         env:
-          API_KEY: ${{ secrets.PROD_VITE_FIREBASE_API_KEY }}
-          AUTH_DOMAIN: ${{ secrets.PROD_VITE_FIREBASE_AUTH_DOMAIN }}
-          PROJECT_ID: ${{ secrets.PROD_VITE_FIREBASE_PROJECT_ID }}
-          STORAGE_BUCKET: ${{ secrets.PROD_VITE_FIREBASE_STORAGE_BUCKET }}
-          SENDER_ID: ${{ secrets.PROD_VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          APP_ID: ${{ secrets.PROD_VITE_FIREBASE_APP_ID }}
+          PROD_VITE_FIREBASE_API_KEY: ${{ secrets.PROD_VITE_FIREBASE_API_KEY }}
+          PROD_VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.PROD_VITE_FIREBASE_AUTH_DOMAIN }}
+          PROD_VITE_FIREBASE_PROJECT_ID: ${{ secrets.PROD_VITE_FIREBASE_PROJECT_ID }}
+          PROD_VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.PROD_VITE_FIREBASE_STORAGE_BUCKET }}
+          PROD_VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.PROD_VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          PROD_VITE_FIREBASE_APP_ID: ${{ secrets.PROD_VITE_FIREBASE_APP_ID }}
         run: |
           missing=''
-          for name in API_KEY AUTH_DOMAIN PROJECT_ID STORAGE_BUCKET SENDER_ID APP_ID; do
+          for name in \
+            PROD_VITE_FIREBASE_API_KEY \
+            PROD_VITE_FIREBASE_AUTH_DOMAIN \
+            PROD_VITE_FIREBASE_PROJECT_ID \
+            PROD_VITE_FIREBASE_STORAGE_BUCKET \
+            PROD_VITE_FIREBASE_MESSAGING_SENDER_ID \
+            PROD_VITE_FIREBASE_APP_ID
+          do
             eval "value=\$$name"
-            if [ -z "$value" ]; then missing="$missing PROD_VITE_FIREBASE_$name"; fi
+            if [ -z "$value" ]; then missing="$missing $name"; fi
           done
           if [ -n "$missing" ]; then
             echo "::error title=Missing secrets::Not set at repository level:$missing. Environment-scoped secrets are not visible to this job."
@@ -185,6 +198,13 @@ jobs:
       # under, which fails closed — a request the new rules refuse. Hosting
       # first means a client is briefly newer than its rules, which fails open:
       # it writes a shape the old rules still permit.
+      #
+      # **Two steps come before this workflow runs, and it cannot check them.**
+      # These rules gate on a custom claim, which reaches a client only in a
+      # freshly minted ID token — so every account must be granted with
+      # `yarn allow` and must sign in again first, or it is locked out for up to
+      # an hour. See "Operator runbook" in README.md, which is in the working
+      # tree after merge in a way a pull request description is not.
       - name: Deploy Firestore rules
         run: yarn firebase deploy --only firestore:rules --project prod --non-interactive
 

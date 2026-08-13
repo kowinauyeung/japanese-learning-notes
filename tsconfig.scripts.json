@@ -11,9 +11,8 @@
   // folder writes is what goes to production.
   "compilerOptions": {
     "target": "ES2022",
-    // Top-level await, which the admin scripts are written with.
-    "module": "ESNext",
     "lib": ["ES2022"],
+    // Top-level await, which the admin scripts are written with.
     "module": "ESNext",
     "moduleResolution": "bundler",
     "types": ["node"],
