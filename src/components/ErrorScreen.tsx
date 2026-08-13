@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { Link, useRouteError } from 'react-router-dom';
+import { isRouteErrorResponse, Link, useRouteError } from 'react-router-dom';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
 import { newErrorId } from '@/lib/diagnostics';
+import { Component as NotFound } from '@/routes/NotFound';
 
 /**
  * What a thrown render or a failed lazy import looks like to a user.
@@ -19,6 +20,20 @@ import { newErrorId } from '@/lib/diagnostics';
 export function ErrorScreen() {
   const error = useRouteError();
   const errorId = useMemo(() => newErrorId(), []);
+
+  /**
+   * A mistyped address arrives here, not at a catch-all route.
+   *
+   * `/` is a layout route with children, so React Router matches it, fails to
+   * find a child for the rest of the path, and throws a 404 *through this
+   * boundary* — a top-level `path: '*'` never gets a turn. Measured: before this
+   * branch existed, /no-such-page rendered 問題が発生しました with an error id
+   * and a link to the report form, which invites a bug report for a typo.
+   *
+   * Rendered rather than redirected, so the address the user typed stays in the
+   * bar where they can see what went wrong.
+   */
+  if (isRouteErrorResponse(error) && error.status === 404) return <NotFound />;
 
   console.error(`[${errorId}]`, error);
 

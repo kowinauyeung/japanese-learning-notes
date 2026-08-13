@@ -44,6 +44,20 @@ test.describe('signing in', () => {
     });
   }
 
+  /**
+   * A mistyped address is not a crash and not a reason to demand a login.
+   * Before the catch-all route existed this rendered 問題が発生しました with an
+   * error id, which invites a bug report for a typo.
+   */
+  test('answers an unknown address with 404, signed out', async ({ page }) => {
+    await seed(page, {});
+    await page.goto('/no-such-page');
+
+    await expect(page.getByText('ページが見つかりません')).toBeVisible();
+    await expect(page.getByText('問題が発生しました')).toBeHidden();
+    await expect(page).toHaveURL(/no-such-page$/);
+  });
+
   /** The four documents are readable with no account at all. */
   for (const path of ['/about', '/privacy', '/terms', '/support']) {
     test(`serves ${path} to a visitor with no account`, async ({ page }) => {
