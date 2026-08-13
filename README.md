@@ -79,16 +79,30 @@ Pointing this at a fresh Firebase project takes a few more steps, in order:
 4. `yarn firebase login`, then deploy the rules with `yarn rules:dev` (once the
    alias points at your project) or
    `yarn firebase deploy --only firestore:rules --project <your-project-id>`.
-5. Sign in once, then add yourself to the allowlist — the rules deny everything
-   until `allowedUsers/{your-uid}` exists. `yarn migrate:upload` writes it for
-   you, or create the document by hand in the console.
+5. Sign in once, then grant yourself access — the rules deny everything until
+   your account carries the `allowed` custom claim. `yarn allow <your-email>`
+   sets it, and the account must have signed in before that, because the claim
+   goes on the uid Google issued and there is nothing to set it on until then.
+   **`yarn allow` is the one step here that cannot be pointed at your project.**
+   `admin/allow-user.ts` names `goitei-dev` and `goitei` directly, never reads
+   `.firebaserc`, and rejects any argument other than `prod` and `--revoke` — so
+   on a fresh project it will tell you the account has never signed in. Set the
+   claim through the Admin SDK yourself; that script is the worked example.
+6. **Sign out and sign back in.** A claim reaches the client only in a freshly
+   minted ID token, so the session you granted access to is still denied — for
+   up to an hour, until its token expires on its own.
 
 `firebase-tools` is a local devDependency, so the CLI is reached through
 `yarn firebase …` unless you have installed it globally.
 
 Step 3 only changes local configuration; nothing is enforced until step 4
-deploys the rules successfully. After step 5 every read and write is scoped to
+deploys the rules successfully. After step 6 every read and write is scoped to
 your account.
+
+Step 6 is a step rather than a note because leaving it out looks exactly like a
+broken build: every screen reports that it could not load, and running step 5
+again changes nothing. `yarn allow` prints the account it granted, so the last
+line of step 5 is not evidence that step 6 has happened.
 
 `.env.development` and `.env.production` are gitignored. Their values ship inside
 the JS bundle and are not secrets — Firestore rules are what enforce access — but

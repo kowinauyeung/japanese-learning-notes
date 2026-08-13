@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 import type { Entry } from '@/domain/entry';
 import type { EntryRepository } from '@/domain/ports';
 import { entryRepositoryFor } from '@/lib/backend';
+import { loadErrorMessage } from '@/lib/loadError';
 
 interface EntriesValue {
   entries: Entry[];
@@ -103,7 +104,7 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
       if (walk.current === mine) setEntries(all);
     } catch (cause) {
       console.error(cause);
-      if (walk.current === mine) setError('単語を読み込めませんでした。');
+      if (walk.current === mine) setError(loadErrorMessage(cause, '単語を読み込めませんでした。'));
     } finally {
       if (walk.current === mine) setLoading(false);
     }
