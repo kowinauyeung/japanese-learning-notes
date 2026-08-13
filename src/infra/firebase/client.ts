@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { ReCaptchaEnterpriseProvider, initializeAppCheck } from 'firebase/app-check';
+import { ReCaptchaV3Provider, initializeAppCheck } from 'firebase/app-check';
 import { GoogleAuthProvider, getAuth } from 'firebase/auth';
 import {
   initializeFirestore,
@@ -52,6 +52,12 @@ export const app = initializeApp(config);
  * until its metrics show real traffic attesting successfully. Shipping the
  * client first is what produces those metrics.
  *
+ * **v3, not Enterprise**, and that is a plan constraint rather than a
+ * preference: reCAPTCHA Enterprise is a Cloud product and its API cannot be
+ * enabled on a project without billing, so on Spark it is not an option at all.
+ * v3 is free, needs no card, and App Check treats the two identically —
+ * swapping providers later is this one import and the line below it.
+ *
  * The debug token below is for `yarn dev` only. It is compiled out of a
  * production build by the mode check, so it cannot ship: a debug token is a
  * bypass, and a bypass in a released bundle is the absence of App Check with
@@ -76,7 +82,7 @@ if (siteKey) {
       true;
   }
   initializeAppCheck(app, {
-    provider: new ReCaptchaEnterpriseProvider(siteKey),
+    provider: new ReCaptchaV3Provider(siteKey),
     isTokenAutoRefreshEnabled: true,
   });
 } else if (import.meta.env.PROD) {
