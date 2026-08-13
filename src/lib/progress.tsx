@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { ProgressRepository } from '@/domain/ports';
 import type { EntryProgress, PracticeSessionDraft } from '@/domain/practice';
 import { progressRepositoryFor } from '@/lib/backend';
+import { loadErrorMessage } from '@/lib/loadError';
 import { weakIdsOf } from '@/lib/practice';
 
 interface ProgressValue {
@@ -57,7 +58,7 @@ export function ProgressProvider({ uid, children }: { uid: string; children: Rea
       })
       .catch((cause: unknown) => {
         console.error(cause);
-        if (!cancelled) setError('練習の記録を読み込めませんでした。');
+        if (!cancelled) setError(loadErrorMessage(cause, '練習の記録を読み込めませんでした。'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

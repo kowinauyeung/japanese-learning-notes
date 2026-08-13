@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 import type { WordSetRepository } from '@/domain/ports';
 import type { WordSet } from '@/domain/wordSet';
 import { wordSetRepositoryFor } from '@/lib/backend';
+import { loadErrorMessage } from '@/lib/loadError';
 
 interface WordSetsValue {
   sets: WordSet[];
@@ -87,7 +88,8 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
       if (walk.current === mine) setSets(all);
     } catch (cause) {
       console.error(cause);
-      if (walk.current === mine) setError('単語集を読み込めませんでした。');
+      if (walk.current === mine)
+        setError(loadErrorMessage(cause, '単語集を読み込めませんでした。'));
     } finally {
       if (walk.current === mine) setLoading(false);
     }

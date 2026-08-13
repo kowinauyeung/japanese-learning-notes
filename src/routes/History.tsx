@@ -5,6 +5,7 @@ import { WeakWords } from '@/components/history/WeakWords';
 import type { PracticeSession } from '@/domain/practice';
 import { useEntries } from '@/lib/entries';
 import { weakWords } from '@/lib/history';
+import { loadErrorMessage } from '@/lib/loadError';
 import { EMPTY_PRACTICE_FILTERS } from '@/lib/practice';
 import { useProgress } from '@/lib/progress';
 import { useVocabDialog } from '@/lib/vocabDialog';
@@ -59,7 +60,8 @@ export function Component() {
         setCursor(page.cursor);
       } catch (cause) {
         console.error(cause);
-        if (walk.current === mine) setError('練習履歴を読み込めませんでした。');
+        if (walk.current === mine)
+          setError(loadErrorMessage(cause, '練習履歴を読み込めませんでした。'));
       } finally {
         if (walk.current === mine) setLoading(false);
       }
