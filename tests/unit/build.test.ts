@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildInfo } from '../../build-info';
 import { buildLine, environmentOf } from '@/lib/build';
 
 /**
@@ -29,5 +30,25 @@ describe('environmentOf', () => {
 describe('buildLine', () => {
   it('reads as version, commit, environment', () => {
     expect(buildLine('goitei')).toMatch(/^v\d+\.\d+\.\d+ · \w+ · (Production|Development|Local)$/);
+  });
+});
+
+/**
+ * The build line renders in the footer, which puts it inside two screenshot
+ * baselines — and a commit changes on every commit. Before it was pinned, the
+ * baselines differed between the machine that regenerated them and the CI run
+ * that checked them, by exactly the width of a seven-character SHA: 314 pixels,
+ * identically, on both images.
+ *
+ * The same reasoning `.env.e2e` is committed for. A baseline cannot contain a
+ * value that varies per build.
+ */
+describe('the end-to-end build identity', () => {
+  it('pins the commit, so a screenshot baseline can contain it', () => {
+    expect(buildInfo('e2e').__COMMIT_SHA__).toBe(JSON.stringify('e2e0000'));
+  });
+
+  it('does not pin it for any other build', () => {
+    expect(buildInfo('production').__COMMIT_SHA__).not.toBe(JSON.stringify('e2e0000'));
   });
 });

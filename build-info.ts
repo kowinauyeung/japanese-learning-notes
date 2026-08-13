@@ -14,9 +14,20 @@ import pkg from './package.json' with { type: 'json' };
  * a bundle was made rather than what source it came from. Outside Actions it is
  * `dev`, which is the honest answer for a bundle built from a working tree that
  * may not be committed at all.
+ *
+ * **The end-to-end build is pinned, and it has to be.** The build line is
+ * rendered in the footer, so it is inside two screenshot baselines — and a
+ * commit changes on every commit. A baseline containing it would be stale the
+ * moment it was written, and would differ between a laptop regenerating it and
+ * CI checking it. Which is exactly why `.env.e2e` is committed with a fixed
+ * project id: the login screen prints that too.
  */
+const E2E_COMMIT = 'e2e0000';
+
 export const buildInfo = (mode: string) => ({
   __APP_VERSION__: JSON.stringify(pkg.version),
-  __COMMIT_SHA__: JSON.stringify((process.env.GITHUB_SHA ?? 'dev').slice(0, 7)),
+  __COMMIT_SHA__: JSON.stringify(
+    mode === 'e2e' ? E2E_COMMIT : (process.env.GITHUB_SHA ?? 'dev').slice(0, 7),
+  ),
   __BUILD_MODE__: JSON.stringify(mode),
 });
