@@ -48,11 +48,18 @@ export function PublicLayout({ children }: { children: ReactNode }) {
  * Also rendered inside the signed-in layout, so the two never disagree about
  * where the policies are — and so the build line is reachable from every screen
  * rather than only from the ones a signed-out visitor sees.
+ *
+ * The width is passed in rather than fixed, because the two shells are not the
+ * same width: the public pages are `max-w-3xl` for reading prose and the app is
+ * `max-w-5xl` for a card grid. Hard-coding one of them left the footer's
+ * contents visibly out of line with the page above it everywhere else.
  */
-export function PublicFooter() {
+export function PublicFooter({ width = 'max-w-3xl' }: { width?: string }) {
   return (
     <footer className="border-t border-line bg-card">
-      <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-5 text-xs text-muted">
+      <div
+        className={`mx-auto flex ${width} flex-wrap items-center gap-x-4 gap-y-2 px-4 py-5 text-xs text-muted`}
+      >
         {LINKS.map((link) => (
           <Link key={link.to} to={link.to} className="hover:text-ink hover:underline">
             {link.label}

@@ -62,7 +62,10 @@ export function AppLayout() {
           {/* Below the data providers because the dialog reads the notebook
               they hold, and above the outlet because any page may open it. */}
           <VocabDialogProvider>
-            <div className="min-h-dvh bg-bg text-ink">
+            {/* A column, not a plain block: a short page used to leave the
+                footer floating with page background under it, which reads as a
+                stray edge across the screen in dark mode. */}
+            <div className="flex min-h-dvh flex-col bg-bg text-ink">
               <header className="sticky top-0 z-30 border-b border-line bg-card/85 backdrop-blur">
                 <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
                   <NavLink
@@ -106,7 +109,7 @@ export function AppLayout() {
                 {menuOpen && <MobileNav onNavigate={() => setMenuOpen(false)} />}
               </header>
 
-              <main className="mx-auto max-w-5xl px-4 py-6 pb-28 nav:pb-10">
+              <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 pb-28 nav:pb-10">
                 <Outlet />
               </main>
 
@@ -115,7 +118,7 @@ export function AppLayout() {
                   is one scroll away from any screen a bug is reported from.
                   Hidden on phones, where the bottom nav already occupies it. */}
               <div className="hidden nav:block">
-                <PublicFooter />
+                <PublicFooter width="max-w-5xl" />
               </div>
 
               <button

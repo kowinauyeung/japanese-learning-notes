@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { LogoMark } from '@/components/Logo';
+import { PublicFooter } from '@/components/PublicLayout';
 import { useAuth } from '@/lib/auth';
 import { projectId } from '@/lib/env';
 import { safeRedirect } from '@/lib/redirect';
@@ -37,29 +38,49 @@ export function Component() {
   };
 
   return (
-    <main className="grid min-h-dvh place-items-center bg-bg px-4">
-      <div className="w-full max-w-[360px] rounded-card bg-card p-8 shadow-panel">
-        <h1 className="flex flex-col items-center gap-3">
-          <LogoMark className="h-16 w-16" />
-          <span className="font-display text-3xl font-bold text-accent">語彙庭</span>
-        </h1>
-        <p className="mt-2 text-center text-sm text-muted">ログインして続ける</p>
+    /* A column with the card centred in the growing part, so the footer sits on
+       the bottom edge instead of wherever the card happens to end. */
+    <div className="flex min-h-dvh flex-col bg-bg">
+      <main className="grid flex-1 place-items-center px-4 py-8">
+        <div className="w-full max-w-[360px] rounded-card bg-card p-8 shadow-panel">
+          <h1 className="flex flex-col items-center gap-3">
+            <LogoMark className="h-16 w-16" />
+            <span className="font-display text-3xl font-bold text-accent">語彙庭</span>
+          </h1>
+          <p className="mt-2 text-center text-sm text-muted">ログインして続ける</p>
 
-        <button
-          type="button"
-          onClick={() => void onSignIn()}
-          disabled={busy}
-          className="mt-8 min-h-12 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
-        >
-          {busy ? 'ログイン中…' : 'Google でログイン'}
-        </button>
+          <button
+            type="button"
+            onClick={() => void onSignIn()}
+            disabled={busy}
+            className="mt-8 min-h-12 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
+          >
+            {busy ? 'ログイン中…' : 'Google でログイン'}
+          </button>
 
-        {error && <p className="mt-3 text-center text-sm text-danger">{error}</p>}
+          {error && <p className="mt-3 text-center text-sm text-danger">{error}</p>}
 
-        {/* Two projects share this build; knowing which one is live avoids
-            editing production while thinking it is the dev copy. */}
-        <p className="mt-6 text-center text-xs text-muted">{projectId}</p>
-      </div>
-    </main>
+          {/* Two projects share this build; knowing which one is live avoids
+              editing production while thinking it is the dev copy. */}
+          <p className="mt-6 text-center text-xs text-muted">{projectId}</p>
+
+          {/* The policies are agreed to by signing in, so this is the last
+              screen on which they have to be one tap away. */}
+          <p className="mt-4 text-center text-xs text-muted">
+            続行すると
+            <Link to="/terms" className="underline">
+              利用規約
+            </Link>
+            と
+            <Link to="/privacy" className="underline">
+              プライバシーポリシー
+            </Link>
+            に同意したものとみなします。
+          </p>
+        </div>
+      </main>
+
+      <PublicFooter />
+    </div>
   );
 }

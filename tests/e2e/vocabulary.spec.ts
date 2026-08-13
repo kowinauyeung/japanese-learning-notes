@@ -327,6 +327,42 @@ test.describe('the pitch accent', () => {
 });
 
 /**
+ * The footer, which is layout twice over.
+ *
+ * It is shared between the public shell and the signed-in one, and those are
+ * not the same width — `max-w-3xl` for reading prose, `max-w-5xl` for the card
+ * grid. With the width hard-coded to one of them, the footer's contents sat
+ * visibly out of line with every page above it in the other shell.
+ *
+ * And it has to reach the bottom. The signed-in layout was a plain block, so a
+ * short page left the footer floating with page background beneath it, which
+ * reads as a stray edge across the screen — visible in dark mode, easy to miss
+ * in light.
+ */
+test.describe('the footer', () => {
+  test('lines up with the page above it and sits on the bottom edge', async ({ page }) => {
+    // A short page on purpose: a long one hides the pinning bug entirely.
+    await page.goto('/wordsets');
+    await expect(page.getByText('まだ単語集がありません', { exact: false })).toBeVisible();
+
+    const box = await page.evaluate(() => {
+      const footer = document.querySelector('footer');
+      const main = document.querySelector('main');
+      if (!footer || !main) return null;
+      const inner = footer.firstElementChild;
+      if (!inner) return null;
+      return {
+        gapBelow: Math.round(window.innerHeight - footer.getBoundingClientRect().bottom),
+        left: Math.round(inner.getBoundingClientRect().left - main.getBoundingClientRect().left),
+        width: Math.round(inner.getBoundingClientRect().width - main.getBoundingClientRect().width),
+      };
+    });
+
+    expect(box).toEqual({ gapBelow: 0, left: 0, width: 0 });
+  });
+});
+
+/**
  * Layout, which is why this is here and not in a component test: the defect is
  * a scroll container's geometry, and jsdom has no layout to be wrong about.
  */
