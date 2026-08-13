@@ -44,9 +44,23 @@ jobs:
       # the runner has none. Scoped to this step rather than the job so that
       # install-time scripts never see them.
       #
-      # These six ship inside the bundle and can be read from the deployed site
-      # by anyone; rules, not secrecy, protect the data. They are secrets only
+      # These ship inside the bundle and can be read from the deployed site by
+      # anyone; rules, not secrecy, protect the data. They are secrets only
       # because the repo is public and a scraped key invites quota abuse.
+      #
+      # The reCAPTCHA key differs from the six above in one way that matters:
+      # the others are required and the build throws without them, while this
+      # one is optional and its absence means App Check is simply off. The
+      # client says so in the browser console, where a CI run has nobody
+      # looking — hence the annotation below, which puts it on the run summary.
+      - name: Warn when App Check is unconfigured
+        env:
+          KEY: ${{ secrets.VITE_RECAPTCHA_SITE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::warning title=App Check::VITE_RECAPTCHA_SITE_KEY is not set. This build ships without App Check: the Firebase config in it is public, and nothing attests that a request came from this app."
+          fi
+
       - name: Build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
@@ -55,6 +69,7 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_RECAPTCHA_SITE_KEY: ${{ secrets.VITE_RECAPTCHA_SITE_KEY }}
         run: yarn build
 
       - uses: actions/upload-artifact@v7
