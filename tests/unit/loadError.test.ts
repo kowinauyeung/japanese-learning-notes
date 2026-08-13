@@ -26,6 +26,18 @@ describe('loadErrorMessage', () => {
   });
 
   /**
+   * Reads like a wording check and is not one. Re-authenticating clears exactly
+   * one of the three causes of `permission-denied` — an account with no claim at
+   * all, and a rejected App Check token, both survive it. Without a second step
+   * the reader follows the only instruction on screen, arrives back where they
+   * started, and the message has told them to do the thing that cannot work.
+   * `/support` is where those two are resolved, and it is reachable from here.
+   */
+  it('offers a way out for the denials that signing in again cannot clear', () => {
+    expect(ACCESS_DENIED_MESSAGE).toContain('サポート');
+  });
+
+  /**
    * The fallback has to survive, or this change trades one indiscriminate
    * message for another: a network failure is genuinely about the thing being
    * read, and telling that reader to sign in again sends them nowhere.

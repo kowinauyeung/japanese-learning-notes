@@ -23,14 +23,41 @@
 
 /**
  * `permission-denied` is the rules refusing the request; `unauthenticated` is
- * the token being absent or expired. Both mean the same thing to a reader —
- * this account cannot see this right now — and both are fixed by the same
- * action, so they share a message.
+ * the token being absent or expired. They share a message because a reader
+ * cannot tell them apart and neither can this module.
  */
 const DENIED_CODES = new Set(['permission-denied', 'unauthenticated']);
 
+/**
+ * Two sentences, and the second one is why there is a third.
+ *
+ * `permission-denied` is not one situation. It is at least three, and only one
+ * of them is cleared by signing in again:
+ *
+ *  1. **A token minted before the grant.** Re-authenticating fixes it, which is
+ *     what the first instruction is for.
+ *  2. **No claim on the account at all** — nobody has run `yarn allow`, or rules
+ *     requiring the claim were deployed to a project where nobody carries it.
+ *     Signing out and back in mints another token with no claim, so the reader
+ *     follows the instruction, lands on the same screen, and is out of moves.
+ *  3. **App Check rejecting the request.** `src/infra/firebase/client.ts`
+ *     initialises it whenever a site key is present, and an unregistered domain
+ *     or a dead reCAPTCHA key surfaces here as `permission-denied` like the
+ *     other two. Re-authenticating does nothing at all.
+ *
+ * Three messages would be worse, not better: the reader has no way to tell which
+ * one they are in, and the note below on subject-specific wording applies just
+ * as much to splitting one cause four ways. What the message must not do is
+ * dead-end — so it names サポート, which is where 2 and 3 are actually resolved.
+ *
+ * That exit has to be reachable from where this renders, and it is: `/support`
+ * is a top-level route outside the auth gate, and `Account.tsx` links it from
+ * inside the app, which a signed-in-but-denied account can still open — the gate
+ * that failed is Firestore's, not Firebase Auth's.
+ */
 export const ACCESS_DENIED_MESSAGE =
-  'アクセスが許可されていません。一度サインアウトして、サインインし直してください。';
+  'アクセスが許可されていません。一度サインアウトして、サインインし直してください。' +
+  '解決しない場合は、サポートページからお問い合わせください。';
 
 export function isAccessDenied(cause: unknown): boolean {
   if (typeof cause !== 'object' || cause === null) return false;
