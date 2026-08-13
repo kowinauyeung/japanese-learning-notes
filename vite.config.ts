@@ -2,11 +2,13 @@ import { fileURLToPath, URL } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { buildInfo } from './build-info';
 
 const src = (path: string) => fileURLToPath(new URL(`./src/${path}`, import.meta.url));
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
+  define: buildInfo(mode),
   resolve: {
     // Array form, because the e2e override has to be matched before the bare
     // `@` prefix that would otherwise swallow it.
