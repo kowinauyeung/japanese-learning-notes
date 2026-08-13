@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { AppLayout } from './components/AppLayout';
+import { ErrorScreen } from './components/ErrorScreen';
 
 // Routes follow the handoff. AppLayout gates everything below it on auth.
 //
@@ -12,6 +13,10 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppLayout />,
+    // Every route under the gate shares one boundary. A lazy import that fails
+    // — a stale chunk after a deploy is the common one — throws here rather
+    // than leaving a blank page with a console message nobody sees.
+    errorElement: <ErrorScreen />,
     children: [
       { index: true, lazy: () => import('./routes/Dashboard') },
       { path: 'vocabulary', lazy: () => import('./routes/Browse') },
@@ -26,8 +31,16 @@ export const router = createBrowserRouter([
     ],
   },
   { path: '/login', lazy: () => import('./routes/Login') },
-  { path: '/about', lazy: () => import('./routes/public/About') },
-  { path: '/privacy', lazy: () => import('./routes/public/Privacy') },
-  { path: '/terms', lazy: () => import('./routes/public/Terms') },
-  { path: '/support', lazy: () => import('./routes/public/Support') },
+  { path: '/about', lazy: () => import('./routes/public/About'), errorElement: <ErrorScreen /> },
+  {
+    path: '/privacy',
+    lazy: () => import('./routes/public/Privacy'),
+    errorElement: <ErrorScreen />,
+  },
+  { path: '/terms', lazy: () => import('./routes/public/Terms'), errorElement: <ErrorScreen /> },
+  {
+    path: '/support',
+    lazy: () => import('./routes/public/Support'),
+    errorElement: <ErrorScreen />,
+  },
 ]);
