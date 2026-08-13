@@ -6,7 +6,9 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+import type { PracticeSessionDraft } from '@/domain/practice';
 import { emptyDraft } from '@/lib/draft';
+import { makeWordSet } from '../fixtures/wordSet';
 
 /**
  * Security rules are the only thing protecting this data: the app is pure
@@ -379,9 +381,13 @@ describe('bounds on what an owner may write', () => {
   it('refuses to rewrite createdAt on an existing row', async () => {
     const db = as(ALICE);
     await assertSucceeds(
-      db.doc(`users/${ALICE}/entries/dated`).set(entry(ALICE, { createdAt: '2026-01-01' })),
+      db
+        .doc(`users/${ALICE}/entries/dated`)
+        .set(entry(ALICE, { createdAt: new Date('2026-01-01') })),
     );
-    await assertFails(db.doc(`users/${ALICE}/entries/dated`).update({ createdAt: '2020-01-01' }));
+    await assertFails(
+      db.doc(`users/${ALICE}/entries/dated`).update({ createdAt: new Date('2020-01-01') }),
+    );
     await assertSucceeds(db.doc(`users/${ALICE}/entries/dated`).update({ headword: '別の語' }));
   });
 
@@ -415,6 +421,44 @@ describe('bounds on what an owner may write', () => {
     await assertFails(
       db.doc(`users/${ALICE}/progress/entries`).set({ ownerUid: ALICE, entries: {}, junk: 'x' }),
     );
+  });
+
+  /**
+   * Being on the allowlist is permission to send a field, not a limit on it.
+   *
+   * `hasOnly` closed the unknown-name half of the hole and left the other half
+   * exactly where it was: fifteen of the twenty-eight permitted names had no
+   * type or size check, so `{ ownerUid, headword: 'x', migrationKey: <a
+   * megabyte> }` passed for the same reason `junk` used to — nothing looked at
+   * the field that was large.
+   *
+   * `createdAt` is the sharpest of them. `keepsCreatedAt` pins it to the stored
+   * value on update and says nothing about the create that stored it, so before
+   * the `is timestamp` check a new entry could carry a string of any length on
+   * the one key the rules treat as bookkeeping.
+   */
+  it('refuses an oversized value in a field the allowlist permits', async () => {
+    const db = as(ALICE);
+    const path = `users/${ALICE}/entries/x`;
+    await assertFails(db.doc(path).set(entry(ALICE, { migrationKey: long(201) })));
+    await assertFails(db.doc(path).set(entry(ALICE, { learnedOn: long(11) })));
+    await assertFails(db.doc(path).set(entry(ALICE, { jlpt: long(11) })));
+    await assertFails(db.doc(path).set(entry(ALICE, { freq: 99 })));
+    // A string where the adapter writes a server timestamp.
+    await assertFails(db.doc(path).set(entry(ALICE, { createdAt: long(5000) })));
+  });
+
+  /**
+   * One document per account, and `entries` is all of it. `hasOnly` stops a
+   * stray key name and does not look inside the one key that matters, so the
+   * only ceiling here was Firestore's 1 MiB.
+   */
+  it('refuses a progress map holding more words than a notebook has', async () => {
+    const db = as(ALICE);
+    const entries = Object.fromEntries(
+      Array.from({ length: 5001 }, (_, i) => [`e${i}`, { status: 'wrong' }]),
+    );
+    await assertFails(db.doc(`users/${ALICE}/progress/entries`).set({ ownerUid: ALICE, entries }));
   });
 
   /**
@@ -473,28 +517,31 @@ describe('what the adapters write is what the rules accept', () => {
         publishedId: null,
         publishedVersion: 0,
         copiedFrom: null,
-        createdAt: '2026-08-13T00:00:00.000Z',
-        updatedAt: '2026-08-13T00:00:00.000Z',
+        // Dates, not ISO strings: `serverTimestamp()` lands as a Timestamp, and
+        // this test exists to send what the adapter sends. It said so and did
+        // not — the two stamps were the one part of the payload written by hand
+        // in a shape the adapter never produces.
+        createdAt: new Date('2026-08-13T00:00:00.000Z'),
+        updatedAt: new Date('2026-08-13T00:00:00.000Z'),
       }),
     );
   });
 
   it('accepts the document wordSetRepo.create sends', async () => {
     const db = as(ALICE);
+    // The stored document is `WordSet` minus its id — the adapter fills
+    // ownership, publication state and both stamps itself.
+    const { id: _id, createdAt, updatedAt, ...storedSet } = makeWordSet({ ownerUid: ALICE });
     await assertSucceeds(
+      // Through the factory rather than a literal, which is what makes this a
+      // drift guard: `makeWordSet` is typed `WordSet`, so a field added to the
+      // domain arrives here on its own and turns this red until it is
+      // allowlisted. A hand-written literal cannot do that, and the mistake it
+      // would miss is refused in production and nowhere else.
       db.doc(`users/${ALICE}/wordSets/real`).set({
-        // The literal WordSets.tsx sends; there is no factory for it.
-        name: '仕事',
-        description: '',
-        entryIds: [],
-        level: '',
-        topics: [],
-        ownerUid: ALICE,
-        publishedId: null,
-        publishedVersion: 0,
-        copiedFrom: null,
-        createdAt: '2026-08-13T00:00:00.000Z',
-        updatedAt: '2026-08-13T00:00:00.000Z',
+        ...storedSet,
+        createdAt: new Date(createdAt),
+        updatedAt: new Date(updatedAt),
       }),
     );
   });
@@ -593,16 +640,23 @@ describe('what the adapters write is what the rules accept', () => {
   /** `recordSession` writes both documents in one batch; both have to pass. */
   it('accepts both documents recordSession sends', async () => {
     const db = as(ALICE);
+    // Annotated rather than inferred, for the same reason the word set goes
+    // through its factory: a field added to `PracticeSessionDraft` makes this
+    // literal a type error, so the drift is caught at `yarn typecheck` instead
+    // of in production.
+    const draft: PracticeSessionDraft = {
+      mode: 'flashcard',
+      filterLabel: 'すべて',
+      total: 10,
+      correct: 8,
+      missed: ['e1', 'e2'],
+      startedAt: '2026-08-13T00:00:00.000Z',
+    };
     await assertSucceeds(
       db.doc(`users/${ALICE}/practiceSessions/real`).set({
-        mode: 'flashcard',
-        filterLabel: 'すべて',
-        total: 10,
-        correct: 8,
-        missed: ['e1', 'e2'],
-        startedAt: '2026-08-13T00:00:00.000Z',
+        ...draft,
         ownerUid: ALICE,
-        finishedAt: '2026-08-13T00:01:00.000Z',
+        finishedAt: new Date('2026-08-13T00:01:00.000Z'),
       }),
     );
     await assertSucceeds(
