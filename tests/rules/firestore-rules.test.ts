@@ -28,7 +28,55 @@ const MALLORY = 'uid-mallory';
 
 let testEnv: RulesTestEnvironment;
 
-const as = (uid: string) => testEnv.authenticatedContext(uid, { email_verified: true }).firestore();
+/**
+ * Signed in *and* allowed. The gate is a custom claim now rather than a
+ * document read, so a test that forgets it is denied for the right reason.
+ */
+const as = (uid: string) =>
+  testEnv.authenticatedContext(uid, { email_verified: true, allowed: true }).firestore();
+
+/** Signed in, verified, and not on the list. */
+const asStranger = (uid: string) =>
+  testEnv.authenticatedContext(uid, { email_verified: true }).firestore();
+
+/** A whole entry, the shape `sanitizeDraft` produces. Overrides go last. */
+const entry = (ownerUid: string, over: Record<string, unknown> = {}) => ({
+  ownerUid,
+  headword: '清高',
+  reading: 'せいこう',
+  definition: '清らかで気高いこと。',
+  definitionSub: '',
+  source: '',
+  citationForm: '',
+  pitchAccent: 0,
+  pos: ['名詞'],
+  tags: [],
+  senses: [],
+  examples: [],
+  related: [],
+  ...over,
+});
+
+const wordSet = (ownerUid: string, over: Record<string, unknown> = {}) => ({
+  ownerUid,
+  name: '仕事',
+  description: '',
+  entryIds: [],
+  topics: [],
+  ...over,
+});
+
+const session = (ownerUid: string, over: Record<string, unknown> = {}) => ({
+  ownerUid,
+  filterLabel: 'すべて',
+  total: 10,
+  correct: 8,
+  missed: ['e1'],
+  ...over,
+});
+
+/** `n` characters, for the length caps. */
+const long = (n: number) => 'あ'.repeat(n);
 
 const snapshotEntry = (ownerUid: string) => ({
   ownerUid,
@@ -64,7 +112,7 @@ beforeEach(async () => {
     await db.doc(`allowedUsers/${ALICE}`).set({ email: 'alice@example.com' });
     await db.doc(`allowedUsers/${BOB}`).set({ email: 'bob@example.com' });
 
-    await db.doc(`users/${ALICE}/entries/e1`).set({ ownerUid: ALICE, headword: '清高' });
+    await db.doc(`users/${ALICE}/entries/e1`).set(entry(ALICE));
     await db.doc(`publicEntries/pe-alice`).set(snapshotEntry(ALICE));
     await db.doc(`publicSets/set-alice`).set({ ...snapshotEntry(ALICE), entryCount: 1 });
     await db.doc(`publicSets/set-alice/entries/x1`).set(snapshotEntry(ALICE));
@@ -76,7 +124,7 @@ describe('private data under users/{uid}', () => {
   it('lets the owner read and write their own notebook', async () => {
     const db = as(ALICE);
     await assertSucceeds(db.doc(`users/${ALICE}/entries/e1`).get());
-    await assertSucceeds(db.doc(`users/${ALICE}/entries/e2`).set({ ownerUid: ALICE }));
+    await assertSucceeds(db.doc(`users/${ALICE}/entries/e2`).set(entry(ALICE)));
     await assertSucceeds(db.collection(`users/${ALICE}/entries`).get());
   });
 
@@ -86,7 +134,7 @@ describe('private data under users/{uid}', () => {
     await assertFails(db.collection(`users/${ALICE}/entries`).get());
     await assertFails(db.doc(`users/${ALICE}/entries/e1`).update({ headword: 'x' }));
     await assertFails(db.doc(`users/${ALICE}/entries/e1`).delete());
-    await assertFails(db.doc(`users/${ALICE}/entries/e9`).set({ ownerUid: BOB }));
+    await assertFails(db.doc(`users/${ALICE}/entries/e9`).set(entry(BOB)));
   });
 
   it('denies the subcollections too, not just the top document', async () => {
@@ -96,7 +144,7 @@ describe('private data under users/{uid}', () => {
     // word's progress, and one document per finished session.
     await assertFails(db.doc(`users/${ALICE}/progress/entries`).get());
     await assertFails(db.doc(`users/${ALICE}/progress/entries`).set({ entries: {} }));
-    await assertFails(db.doc(`users/${ALICE}/practiceSessions/p1`).set({ total: 1 }));
+    await assertFails(db.doc(`users/${ALICE}/practiceSessions/p1`).set(session(BOB)));
   });
 
   it('denies an unauthenticated client', async () => {
@@ -108,8 +156,8 @@ describe('private data under users/{uid}', () => {
 
 describe('the allowedUsers gate', () => {
   it('denies a signed-in user who is not on the allowlist', async () => {
-    const db = as(MALLORY);
-    await assertFails(db.doc(`users/${MALLORY}/entries/e1`).set({ ownerUid: MALLORY }));
+    const db = asStranger(MALLORY);
+    await assertFails(db.doc(`users/${MALLORY}/entries/e1`).set(entry(MALLORY)));
     await assertFails(db.doc(`users/${MALLORY}/entries/e1`).get());
     await assertFails(db.doc(`publicEntries/pe-alice`).get());
     await assertFails(db.doc(`publicSets/set-alice`).get());
@@ -132,11 +180,17 @@ describe('the allowedUsers gate', () => {
    * it had already put in front of other people — the one thing revocation is
    * for.
    */
+  /**
+   * Revocation is the claim going away, not a document being deleted.
+   *
+   * That is a real change in what "revoked" means and it is worth stating: the
+   * claim lives in the ID token, so clearing it takes effect when the token
+   * next refreshes — up to an hour — unless the refresh tokens are revoked at
+   * the same time, which forces re-authentication immediately. `admin/allow-user.ts`
+   * does both, and this test is the state *after* that has happened.
+   */
   it('revokes update and delete on already-published copies, not just create', async () => {
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await context.firestore().doc(`allowedUsers/${ALICE}`).delete();
-    });
-    const db = as(ALICE);
+    const db = asStranger(ALICE);
 
     await assertFails(db.doc(`publicEntries/pe-alice`).update({ searchText: 'edited' }));
     await assertFails(db.doc(`publicEntries/pe-alice`).delete());
@@ -256,4 +310,83 @@ describe('collections that no longer exist', () => {
       await assertFails(db.doc(path).set({ ownerUid: ALICE }));
     },
   );
+});
+
+/**
+ * Shape and size, which exist for one threat and it is not shape.
+ *
+ * A legitimately signed-in account can write as many documents as it likes, as
+ * large as it likes, and on a metered project that is the operator's bill.
+ * These are the bounds rules can actually see — **not a schema**: requiring
+ * every field to exist turns every schema change into a rules deploy, and a
+ * rules deploy that lags a client release denies writes from a version already
+ * shipped.
+ */
+describe('bounds on what an owner may write', () => {
+  it('accepts an ordinary entry, word set and session', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(db.doc(`users/${ALICE}/entries/ok`).set(entry(ALICE)));
+    await assertSucceeds(db.doc(`users/${ALICE}/wordSets/ok`).set(wordSet(ALICE)));
+    await assertSucceeds(db.doc(`users/${ALICE}/practiceSessions/ok`).set(session(ALICE)));
+  });
+
+  it('refuses an entry whose text is far past anything a person types', async () => {
+    const db = as(ALICE);
+    await assertFails(
+      db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { headword: long(201) })),
+    );
+    await assertFails(
+      db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { definition: long(20001) })),
+    );
+  });
+
+  it('refuses an entry carrying an unbounded number of rows', async () => {
+    const db = as(ALICE);
+    const many = Array.from({ length: 101 }, () => ({ label: 'x' }));
+    await assertFails(db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { senses: many })));
+  });
+
+  /** The one list a word set is made of, and the one that grows without limit. */
+  it('refuses a word set holding more ids than a notebook has words', async () => {
+    const db = as(ALICE);
+    const ids = Array.from({ length: 2001 }, (_, i) => `e${i}`);
+    await assertFails(db.doc(`users/${ALICE}/wordSets/big`).set(wordSet(ALICE, { entryIds: ids })));
+  });
+
+  it('refuses a session claiming more correct answers than questions', async () => {
+    const db = as(ALICE);
+    await assertFails(
+      db.doc(`users/${ALICE}/practiceSessions/x`).set(session(ALICE, { total: 3, correct: 9 })),
+    );
+  });
+
+  /**
+   * ownerUid is what a published snapshot copies, so a row claiming somebody
+   * else's uid inside one's own notebook is the seed of a snapshot attributed
+   * to a person who never wrote it.
+   */
+  it("refuses a row in your own notebook that claims somebody else's uid", async () => {
+    const db = as(ALICE);
+    await assertFails(db.doc(`users/${ALICE}/entries/x`).set(entry(BOB)));
+    await assertFails(db.doc(`users/${ALICE}/wordSets/x`).set(wordSet(BOB)));
+  });
+
+  it('refuses to rewrite createdAt on an existing row', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/entries/dated`).set(entry(ALICE, { createdAt: '2026-01-01' })),
+    );
+    await assertFails(db.doc(`users/${ALICE}/entries/dated`).update({ createdAt: '2020-01-01' }));
+    await assertSucceeds(db.doc(`users/${ALICE}/entries/dated`).update({ headword: '別の語' }));
+  });
+
+  /**
+   * The recursive wildcard is gone, so an unlisted path is denied rather than
+   * allowed. That is the intended direction and the thing most likely to
+   * surprise: adding a collection to the app now means adding it here.
+   */
+  it('denies a collection nobody listed, even to its owner', async () => {
+    const db = as(ALICE);
+    await assertFails(db.doc(`users/${ALICE}/somethingNew/x`).set({ ownerUid: ALICE }));
+  });
 });

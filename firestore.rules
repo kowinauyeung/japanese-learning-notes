@@ -68,17 +68,144 @@ service cloud.firestore {
     //
     // To open signups: delete this function and its call sites. Do that
     // together with App Check and a budget-alert kill switch, not before.
+    //
+    // **A custom claim, not a document read.** exists() here is billed as a
+    // document read on *every request to every path*, which on a public service
+    // doubles the read cost of the whole application to answer a question whose
+    // answer changes perhaps twice in an account's lifetime.
+    //
+    // What that trades away is immediacy, and it is worth stating: a claim
+    // lives in the ID token, so removing it takes effect when the token next
+    // refreshes — up to an hour. Revocation is therefore two steps, not one:
+    // clear the claim *and* revoke the refresh tokens, which forces the client
+    // to re-authenticate immediately. `admin/allow-user.ts` does both.
     function isAllowed() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.uid));
+      return signedIn() && request.auth.token.allowed == true;
     }
 
-    // Everything private, in one rule. No field-level conditions, no visibility
-    // flags, nothing to get subtly wrong.
+    // ---- shape and size ----
+    //
+    // These exist for one threat and it is not shape: an account that is
+    // legitimately signed in can write **as many documents as it likes, as
+    // large as it likes**, and on a metered project that is somebody else's
+    // bill. Firestore caps a document at 1 MiB, which is 1 MiB per document and
+    // no limit at all on how many.
+    //
+    // **What rules cannot check is worth knowing before trusting this.** There
+    // is no way to iterate a list, so the length of `senses[3].description` is
+    // invisible here — only the number of senses and the size of the top-level
+    // strings can be bounded. Anything relying on per-element limits has to
+    // enforce them somewhere that can see them.
+    //
+    // Deliberately not a full schema. Requiring every field to exist and match
+    // a type turns every schema change into a rules deploy, and a rules deploy
+    // that lags a client release denies writes from a version already shipped.
+    function str(value, max) {
+      return value is string && value.size() <= max;
+    }
+
+    function list(value, max) {
+      return value is list && value.size() <= max;
+    }
+
+    function ownedBy(uid) {
+      return request.resource.data.ownerUid == uid;
+    }
+
+    // Bookkeeping a client may never rewrite. On an update `request.resource`
+    // is the merged result, so an untouched field compares equal to itself.
+    //
+    // `resource == null` first, and not for tidiness: on a create there is no
+    // existing document, and reaching into `resource.data` there is a null
+    // dereference — which rules report as an evaluation error and treat as a
+    // denial, so every create was refused with a message about null rather than
+    // about ownership.
+    function keepsCreatedAt() {
+      return resource == null
+        || !('createdAt' in resource.data)
+        || request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function validEntry(uid) {
+      let d = request.resource.data;
+      return ownedBy(uid)
+        && d.keys().size() <= 40
+        && str(d.headword, 200) && d.headword.size() > 0
+        && str(d.reading, 200)
+        && str(d.definition, 20000)
+        && str(d.definitionSub, 20000)
+        && str(d.source, 500)
+        && str(d.citationForm, 200)
+        && list(d.pos, 20)
+        && list(d.tags, 50)
+        && list(d.senses, 100)
+        && list(d.examples, 100)
+        && list(d.related, 100)
+        && (d.pitchAccent == null || d.pitchAccent is int);
+    }
+
+    function validWordSet(uid) {
+      let d = request.resource.data;
+      return ownedBy(uid)
+        && d.keys().size() <= 20
+        && str(d.name, 200) && d.name.size() > 0
+        && str(d.description, 5000)
+        // The one unbounded list in the schema, and the one a set is made of.
+        && list(d.entryIds, 2000)
+        && list(d.topics, 50);
+    }
+
+    function validSession(uid) {
+      let d = request.resource.data;
+      return ownedBy(uid)
+        && d.keys().size() <= 20
+        && str(d.filterLabel, 500)
+        && d.total is int && d.total >= 0 && d.total <= 2000
+        && d.correct is int && d.correct >= 0 && d.correct <= d.total
+        && list(d.missed, 2000);
+    }
+
+    // Private data, one collection at a time.
+    //
+    // **There is deliberately no `match /{document=**}` here any more.** Rules
+    // are a union: a recursive wildcard granting write is an unconditional
+    // allow that every validation below would be evaluated *beside* rather than
+    // *after*, so leaving it in place while adding shape checks would have
+    // looked like hardening and enforced nothing.
+    //
+    // The cost of enumerating is that a collection nobody listed is denied
+    // rather than allowed. That is the right way round, and it is why adding a
+    // path to the app now means adding it here too.
     match /users/{uid} {
-      allow read, write: if isOwner(uid) && isAllowed();
-      match /{document=**} {
-        allow read, write: if isOwner(uid) && isAllowed();
+      function mine() {
+        return isOwner(uid) && isAllowed();
+      }
+
+      allow read: if mine();
+      allow write: if mine() && request.resource.data.keys().size() <= 20;
+
+      match /entries/{entryId} {
+        allow read, delete: if mine();
+        allow create, update: if mine() && validEntry(uid) && keepsCreatedAt();
+      }
+
+      match /wordSets/{setId} {
+        allow read, delete: if mine();
+        allow create, update: if mine() && validWordSet(uid) && keepsCreatedAt();
+      }
+
+      match /practiceSessions/{sessionId} {
+        allow read, delete: if mine();
+        allow create, update: if mine() && validSession(uid) && keepsCreatedAt();
+      }
+
+      // One document holding every entry's progress — see ProgressRepository
+      // for why it is a map rather than a collection. Its size is bounded by
+      // the 1 MiB document cap and by the notebook it mirrors, so the only
+      // thing worth asserting is that it belongs to the owner.
+      match /progress/{documentId} {
+        allow read, delete: if mine();
+        allow create, update: if mine();
       }
     }
 
