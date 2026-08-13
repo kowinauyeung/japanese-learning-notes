@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildInfo } from '../../build-info';
 import { buildLine, environmentOf } from '@/lib/build';
+import { buildInfo } from '../../build-info';
 
 /**
  * The line a bug report is read from. It is wrong in the way that matters if it
