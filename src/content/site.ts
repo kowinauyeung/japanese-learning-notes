@@ -1,21 +1,20 @@
 /**
  * The facts every public page repeats, in one place.
  *
- * **`contactEmail` and `feedbackFormUrl` are empty and the site is not ready to
- * be published until they are not.** They are left blank rather than filled with
- * a plausible-looking address on purpose: a wrong address in a privacy policy is
- * worse than a missing one, because it reads as a promise and delivers nothing —
- * and an invented one may belong to somebody real. Every page renders 準備中 in
- * their place, and `tests/unit/content.test.ts` states the rule so that shipping
- * without them is a decision rather than an oversight.
+ * Both contact details are real and were verified before being written here —
+ * the form link resolves to a live form. They were deliberately blank until
+ * then: a wrong address in a privacy policy is worse than a missing one,
+ * because it reads as a promise, delivers nothing, and may belong to somebody
+ * real. `orPending` and its test remain for the same reason, so emptying either
+ * value fails the suite rather than quietly publishing 準備中.
  */
 export const site = {
   /** The name the service is operated under. */
   operator: 'Kowin',
   /** Where a user reaches a person. Private, so it is safe for sensitive reports. */
-  contactEmail: '',
+  contactEmail: 'kowinauyeung@gmail.com',
   /** Feedback goes to a form, not to Firestore — an unauthenticated write path is spam and quota surface. */
-  feedbackFormUrl: '',
+  feedbackFormUrl: 'https://forms.gle/4TPufH5u3LNvWLLK9',
 } as const;
 
 /**

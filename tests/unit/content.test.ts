@@ -36,33 +36,6 @@ describe.each(DOCS)('%s', (_name, doc) => {
 });
 
 /**
- * The one thing that must not ship, stated as a test so it is a decision.
- *
- * A privacy policy naming no contact is not a privacy policy, and an invented
- * address is worse — it reads as a promise, delivers nothing, and may belong to
- * somebody real. Both are blank on purpose until real values exist; this fails
- * the moment somebody tries to release without them.
- */
-describe('contact details', () => {
-  it.skip('are filled in — unskip this when the address and the form exist', () => {
-    expect(site.contactEmail).toMatch(/@/);
-    expect(site.feedbackFormUrl).toMatch(/^https:\/\//);
-  });
-
-  it('degrade to 準備中 rather than to an empty gap in a sentence', () => {
-    expect(orPending('')).toBe('準備中');
-    expect(orPending('a@b.example')).toBe('a@b.example');
-  });
-
-  it('are visible as 準備中 in the pages that promise a contact', () => {
-    const text = [privacy, terms, support].flatMap((doc) =>
-      doc.sections.flatMap((section) => [...section.body, ...(section.list ?? [])]),
-    );
-    expect(text.some((line) => line.includes('準備中'))).toBe(true);
-  });
-});
-
-/**
  * Two things the public pages must not say.
  *
  * **The repository.** The pages linked it and the source is public, but a
@@ -92,5 +65,34 @@ describe('what the public pages must not disclose', () => {
 
   it.each(['App Check', 'reCAPTCHA'])('does not claim %s, which is not implemented', (needle) => {
     expect(everything).not.toContain(needle);
+  });
+});
+
+/**
+ * A privacy policy naming no contact is not a privacy policy, and an invented
+ * address is worse — it reads as a promise, delivers nothing, and may belong to
+ * somebody real. Both values were blank until real ones existed; these keep them
+ * that way, so emptying one fails here rather than publishing 準備中 to users.
+ */
+describe('contact details', () => {
+  it('are filled in with something usable', () => {
+    expect(site.contactEmail).toMatch(/^[^@\s]+@[^@\s]+\.[^@\s]+$/);
+    expect(site.feedbackFormUrl).toMatch(/^https:\/\//);
+  });
+
+  it('degrade to 準備中 rather than to an empty gap in a sentence', () => {
+    expect(orPending('')).toBe('準備中');
+    expect(orPending('a@b.example')).toBe('a@b.example');
+  });
+
+  /** The pages that promise a contact have to actually carry one. */
+  it('reach the pages that promise them, with no 準備中 left', () => {
+    const text = [privacy, terms, support]
+      .flatMap((doc) => doc.sections.flatMap((s) => [...s.body, ...(s.list ?? [])]))
+      .join('\n');
+
+    expect(text).not.toContain('準備中');
+    expect(text).toContain(site.contactEmail);
+    expect(text).toContain(site.feedbackFormUrl);
   });
 });
