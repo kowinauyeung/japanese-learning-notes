@@ -1,4 +1,5 @@
 import {
+  deleteDoc,
   collection,
   doc,
   documentId,
@@ -121,6 +122,30 @@ export function createProgressRepository(db: Firestore, uid: string): ProgressRe
             ? encodeCursor(lastFinishedAt, last.id)
             : null,
       };
+    },
+
+    /**
+     * The progress map and every session, in batches.
+     *
+     * Read then delete, in pages, rather than one query: a batch is capped at
+     * 500 writes, and a learner with a year of daily practice is past that. The
+     * loop re-queries each time because the previous batch has removed what it
+     * matched, so the first page is always the next unprocessed one.
+     *
+     * Not atomic, and it cannot be from a client. What that means for the
+     * caller is that a failure leaves the account partly emptied, which is why
+     * `deleteEverything` reports what it managed rather than claiming success.
+     */
+    async removeAll(): Promise<void> {
+      for (;;) {
+        const snapshot = await getDocs(query(sessionsPath(), limitTo(400)));
+        if (snapshot.empty) break;
+        const batch = writeBatch(db);
+        for (const document of snapshot.docs) batch.delete(document.ref);
+        await batch.commit();
+        if (snapshot.size < 400) break;
+      }
+      await deleteDoc(progressDoc());
     },
   };
 }

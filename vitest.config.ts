@@ -1,5 +1,6 @@
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
+import { buildInfo } from './build-info';
 
 /**
  * Kept separate from vite.config.ts so the test run does not pull in the React
@@ -20,6 +21,10 @@ export default defineConfig({
   // esbuild cannot discover `jsx: react-jsx` from it. Stating it here is what
   // lets a .tsx test compile without adding the React plugin.
   esbuild: { jsx: 'automatic' },
+  // The same values the bundle is built with — see build-info.ts. Without them
+  // anything importing lib/build.ts throws on load rather than failing an
+  // assertion, which reads as a broken test file rather than a missing define.
+  define: buildInfo('test'),
   test: {
     // Rules tests call clearFirestore() between cases, and the adapter tests
     // write to the same emulator. Running files in parallel would have one

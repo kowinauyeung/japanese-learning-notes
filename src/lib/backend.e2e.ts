@@ -119,6 +119,14 @@ export const authPort: AuthPort = {
     notify();
     return Promise.resolve();
   },
+  // The real adapter can refuse this on a stale session; the fake never does,
+  // because the end-to-end suite has no way to age a session and a test that
+  // cannot reach the happy path covers nothing.
+  deleteAccount(): Promise<void> {
+    currentUser = null;
+    notify();
+    return Promise.resolve();
+  },
 };
 
 // --------------------------------------------------------------- entry store
@@ -315,6 +323,14 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
         items,
         cursor: more ? (items[items.length - 1]?.id ?? null) : null,
       });
+    },
+
+    removeAll(): Promise<void> {
+      progress.clear();
+      sessions.length = 0;
+      save(`progress.${uid}`, []);
+      save(`sessions.${uid}`, []);
+      return Promise.resolve();
     },
   };
 };

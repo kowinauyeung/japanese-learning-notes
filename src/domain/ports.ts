@@ -78,6 +78,15 @@ export interface ProgressRepository {
    */
   recordSession(session: PracticeSessionDraft, progress: EntryProgress[]): Promise<string>;
   listSessions(q: PageQuery): Promise<Page<PracticeSession>>;
+  /**
+   * Everything this port owns, gone: the progress map and every session.
+   *
+   * One method rather than a delete per row because the two are one concept to
+   * the caller — "the practice history" — and because the map is a single
+   * document while the sessions are a collection, which is an asymmetry the
+   * caller has no reason to know about.
+   */
+  removeAll(): Promise<void>;
 }
 
 export interface UserRepository {
@@ -123,6 +132,16 @@ export interface AuthPort {
   onChange(fn: (user: AuthUser | null) => void): () => void;
   signIn(): Promise<void>;
   signOut(): Promise<void>;
+  /**
+   * Delete the account itself, not just its data.
+   *
+   * Providers generally refuse this on a stale session — Firebase raises
+   * `auth/requires-recent-login` — so a caller has to be prepared to ask the
+   * user to sign in again rather than treating a failure as fatal. The port
+   * says so here because the alternative is every caller discovering it from a
+   * support ticket.
+   */
+  deleteAccount(): Promise<void>;
 }
 
 // ------------------------------------------------------------------- search
