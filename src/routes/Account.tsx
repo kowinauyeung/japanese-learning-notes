@@ -2,7 +2,12 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
-import { deleteEverything, exportEverything, exportFilename } from '@/lib/accountData';
+import {
+  deleteEverything,
+  exportEverything,
+  exportFilename,
+  NothingDeleted,
+} from '@/lib/accountData';
 import { useAuth } from '@/lib/auth';
 import { authPort } from '@/lib/backend';
 import { appVersion, buildLine } from '@/lib/build';
@@ -80,22 +85,20 @@ export function Component() {
       await signOutUser();
     } catch (cause) {
       console.error(cause);
-      // The re-authentication now runs before the first delete, so these two
-      // messages describe genuinely different situations rather than the same
-      // half-finished one.
+      // Branching on what happened, not on which code the provider chose.
       //
-      // A cancelled or refused popup happens with **nothing deleted**, and the
-      // message says so plainly — the previous wording warned that some data
-      // might already be gone, which was true then and would be a false alarm
-      // now. Anything else still fails part-way, and still has to say so.
-      const code = (cause as { code?: string }).code;
-      const cancelled =
-        code === 'auth/popup-closed-by-user' ||
-        code === 'auth/cancelled-popup-request' ||
-        code === 'auth/user-cancelled' ||
-        code === 'auth/requires-recent-login';
+      // The list this replaces was wrong in both directions, and one of the
+      // errors was the dangerous kind. `auth/requires-recent-login` is
+      // `CREDENTIAL_TOO_OLD_LOGIN_AGAIN`, raised for a *sensitive operation* —
+      // which here is `deleteAccount()`, the last thing `deleteEverything`
+      // does. Treating it as "the popup was refused" meant telling a user
+      // 「データは削除されていません」 at the one moment everything already had
+      // been. It also missed `auth/user-mismatch`, `auth/popup-blocked` and the
+      // adapter's own error, which carries no `code` at all.
+      //
+      // `NothingDeleted` is thrown by the only code that knows.
       setError(
-        cancelled
+        cause instanceof NothingDeleted
           ? 'セキュリティのため、削除の前に本人確認が必要です。データは削除されていません。もう一度お試しください。'
           : // Deliberately not "failed": some of it may be gone. Saying so is
             // the difference between a user retrying and a user assuming their

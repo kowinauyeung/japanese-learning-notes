@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Page, PageQuery } from '@/domain/ports';
-import { deleteEverything, exportEverything, exportFilename } from '@/lib/accountData';
+import {
+  deleteEverything,
+  exportEverything,
+  exportFilename,
+  NothingDeleted,
+} from '@/lib/accountData';
 
 /** A repository holding `count` rows and serving them `PAGE` at a time. */
 const paged = <T>(items: T[]) => {
@@ -160,16 +165,48 @@ describe('deleteEverything', () => {
    */
   it('refuses to delete anything at all when the session cannot be proved', async () => {
     const p = ports(5, 5, 5);
+    // A code `reauthenticateWithPopup` actually raises. It is the one the
+    // adapter chose that call for: the user picked a different Google account,
+    // and the caller is about to delete everything belonging to this one.
     (p.auth.reauthenticate as ReturnType<typeof vi.fn>).mockRejectedValue(
-      Object.assign(new Error('stale'), { code: 'auth/requires-recent-login' }),
+      Object.assign(new Error('different account'), { code: 'auth/user-mismatch' }),
     );
 
-    await expect(deleteEverything(p)).rejects.toThrow('stale');
+    await expect(deleteEverything(p)).rejects.toBeInstanceOf(NothingDeleted);
 
     expect((p.entries.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     expect((p.wordSets.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     expect((p.progress.removeAll as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     expect((p.auth.deleteAccount as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+  });
+
+  /**
+   * The state a user must never be told is safe.
+   *
+   * `auth/requires-recent-login` is `CREDENTIAL_TOO_OLD_LOGIN_AGAIN`, which the
+   * backend returns for a sensitive operation — and the only sensitive
+   * operation here is `deleteAccount()`, which runs last. So this code can only
+   * reach a caller *after* every word set, entry, session and the progress map
+   * are already gone. Reading it as "the re-authentication was refused" and
+   * reporting 「データは削除されていません」 is the exact inverse of what
+   * happened, and it is unrecoverable: the reader retries later into an account
+   * holding nothing.
+   *
+   * The window is real rather than theoretical — the removals are one sequential
+   * `await` each, and nothing bounds how long that takes.
+   */
+  it('does not report a late refusal as nothing having been deleted', async () => {
+    const p = ports(5, 5, 5);
+    (p.auth.deleteAccount as ReturnType<typeof vi.fn>).mockRejectedValue(
+      Object.assign(new Error('stale'), { code: 'auth/requires-recent-login' }),
+    );
+
+    const failure = await deleteEverything(p).catch((cause: unknown) => cause);
+
+    expect(failure).not.toBeInstanceOf(NothingDeleted);
+    // ...because plenty was.
+    expect((p.entries.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(5);
+    expect((p.progress.removeAll as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
   });
 });
 
