@@ -15,13 +15,6 @@ export const support: Doc = {
       ],
     },
     {
-      heading: '公開しても問題ない場合',
-      body: [
-        `再現手順を公開しても問題のない不具合は、GitHub の Issue でも受け付けています。${site.repositoryUrl}/issues`,
-        'Issue は誰でも閲覧できます。登録した単語の内容やメールアドレスは書かないでください。',
-      ],
-    },
-    {
       heading: '脆弱性の報告',
       body: [
         `セキュリティに関する問題は、公開せず、${orPending(site.contactEmail)} まで直接お知らせください。`,

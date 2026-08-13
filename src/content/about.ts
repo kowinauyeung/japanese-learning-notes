@@ -39,13 +39,5 @@ export const about: Doc = {
         `連絡先は ${orPending(site.contactEmail)} です。`,
       ],
     },
-    {
-      heading: 'ソースコードと権利',
-      body: [
-        `アプリのソースコードは MIT ライセンスの下で公開しています。${site.repositoryUrl}`,
-        '利用者が登録した学習内容には、このライセンスは適用されません。権利は登録した本人に帰属します。',
-        'React、Vite、Tailwind CSS、Firebase など、多くのオープンソースソフトウェアを利用しています。',
-      ],
-    },
   ],
 };

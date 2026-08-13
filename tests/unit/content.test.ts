@@ -61,3 +61,36 @@ describe('contact details', () => {
     expect(text.some((line) => line.includes('準備中'))).toBe(true);
   });
 });
+
+/**
+ * Two things the public pages must not say.
+ *
+ * **The repository.** The pages linked it and the source is public, but a
+ * support page that names the repository hands the schema, the security rules,
+ * the collection paths and the project ids to whoever is probing the service.
+ * A reader who wants the source can find it; the crash screen should not be a
+ * map of the backend.
+ *
+ * **A technology the service does not use.** The policy claimed App Check and
+ * reCAPTCHA before either existed. A privacy policy naming a processor that
+ * processes nothing is not cautious, it is untrue — and it is the kind of
+ * untrue that survives, because nobody re-reads a policy looking for something
+ * that is not there. When App Check ships, add it back with what it sends.
+ */
+describe('what the public pages must not disclose', () => {
+  const everything = [about, privacy, terms, support]
+    .flatMap((doc) => [
+      doc.title,
+      doc.lead,
+      ...doc.sections.flatMap((s) => [s.heading, ...s.body, ...(s.list ?? [])]),
+    ])
+    .join('\n');
+
+  it.each(['github', 'GitHub', 'ソースコード', 'MIT'])('does not mention %s', (needle) => {
+    expect(everything).not.toContain(needle);
+  });
+
+  it.each(['App Check', 'reCAPTCHA'])('does not claim %s, which is not implemented', (needle) => {
+    expect(everything).not.toContain(needle);
+  });
+});

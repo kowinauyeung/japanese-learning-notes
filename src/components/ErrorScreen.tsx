@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { Link, useRouteError } from 'react-router-dom';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
-import { site } from '@/content/site';
 import { newErrorId } from '@/lib/diagnostics';
 
 /**
@@ -51,12 +50,6 @@ export function ErrorScreen() {
         <div className="mt-4">
           <CopyDiagnostics errorId={errorId} />
         </div>
-
-        <p className="mt-4 text-xs text-muted">
-          <a href={site.repositoryUrl} className="underline">
-            ソースコード
-          </a>
-        </p>
       </div>
     </main>
   );

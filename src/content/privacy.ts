@@ -48,7 +48,6 @@ export const privacy: Doc = {
       body: [
         'データは、Google が提供する Firebase（Cloud Firestore・Firebase Authentication・Firebase Hosting）に保管します。運営者は Google のインフラ上でデータを取り扱い、Google は本サービスにおけるデータ処理を担う事業者にあたります。',
         'サーバーは日本国外に所在する場合があります。本サービスを利用することにより、日本国外のサーバーでの保管を含むデータの取り扱いに同意したものとみなします。',
-        '不正アクセスおよび自動化されたアクセスを防止するため、Google の App Check および reCAPTCHA を利用することがあります。これらのサービスは、利用者の端末やアクセスの特性に関する情報を Google に送信します。',
       ],
     },
     {
