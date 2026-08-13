@@ -63,8 +63,18 @@ describe('what the public pages must not disclose', () => {
     expect(everything).not.toContain(needle);
   });
 
-  it.each(['App Check', 'reCAPTCHA'])('does not claim %s, which is not implemented', (needle) => {
-    expect(everything).not.toContain(needle);
+  /**
+   * The mirror of the rule this used to hold, and the reason it is worth
+   * keeping either way round.
+   *
+   * The policy once named App Check and reCAPTCHA before either existed, which
+   * was untrue; this test was written to stop that. Both are implemented now,
+   * and a policy that stays silent about a service sending a user's device and
+   * interaction signals to Google is untrue in the other direction — and it is
+   * the harder direction to notice, because nothing on screen is missing.
+   */
+  it.each(['reCAPTCHA', 'App Check'])('discloses %s, which is implemented now', (needle) => {
+    expect(privacy.sections.flatMap((s) => s.body).join('\n')).toContain(needle);
   });
 });
 
