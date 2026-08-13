@@ -8,8 +8,10 @@ import { useTheme } from '@/lib/theme';
 import { useClickOutside } from '@/lib/useClickOutside';
 import { VocabDialogProvider } from '@/lib/vocabDialog';
 import { WordSetsProvider } from '@/lib/wordSets';
+import { Component as Home } from '@/routes/Home';
 import { EntryFormModal } from './entry-form/EntryFormModal';
 import { LogoMark } from './Logo';
+import { PublicFooter } from './PublicLayout';
 
 /**
  * Ordered the way the notebook is used, not the way it was built: collect
@@ -40,9 +42,15 @@ export function AppLayout() {
       </div>
     );
   }
-  // The search string carries the entire Browse filter state, so dropping it
-  // would silently return a bookmarked filtered view to the unfiltered one.
   if (!user) {
+    // `/` is a public homepage, not a redirect to the login form. A visitor
+    // deciding whether to hand over a Google account has to be able to read
+    // what the app is for without handing it over first, and Google's OAuth
+    // review asks for the same thing.
+    if (location.pathname === '/') return <Home />;
+    // Every other route redirects, and the search string goes with it: it
+    // carries the entire Browse filter state, so dropping it would silently
+    // return a bookmarked filtered view to the unfiltered one.
     const from = `${location.pathname}${location.search}${location.hash}`;
     return <Navigate to="/login" replace state={{ from }} />;
   }
@@ -101,6 +109,14 @@ export function AppLayout() {
               <main className="mx-auto max-w-5xl px-4 py-6 pb-28 nav:pb-10">
                 <Outlet />
               </main>
+
+              {/* The same footer the public pages carry, so the two never
+                  disagree about where the policies live — and so the build line
+                  is one scroll away from any screen a bug is reported from.
+                  Hidden on phones, where the bottom nav already occupies it. */}
+              <div className="hidden nav:block">
+                <PublicFooter />
+              </div>
 
               <button
                 type="button"
