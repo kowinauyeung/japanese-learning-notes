@@ -251,8 +251,28 @@ service cloud.firestore {
     //  * `exportEverything()` does not include them either.
     //
     // **What has to come back with the feature**, restored as properties rather
-    // than as rules — the tests that covered them are named in
-    // `tests/rules/firestore-rules.test.ts` where this block used to be tested:
+    // than as rules. The twelve tests that covered them were removed with the
+    // rules and are not recoverable from this list — they are in pull request
+    // #30, which is where to read them, and their names are the specification.
+    //
+    // Reads first, because they are the access model rather than a detail:
+    //
+    //  * **A published copy is readable by any allowed account, not only its
+    //    owner.** That is the whole point of publishing and the first decision
+    //    somebody rebuilding this has to make; the old rule was
+    //    `allow read: if isAllowed()` on both collections.
+    //  * **A snapshot entry is readable only while its parent set exists** —
+    //    `allow read: if isAllowed() && exists(setPath(publicSetId))`. Firestore
+    //    does not cascade deletes, so without it an unpublish that fails
+    //    part-way leaves a snapshot readable from a path somebody already noted.
+    //    This is the half of the orphan story that fails **open**; the delete
+    //    exemption below is the half that fails closed.
+    //  * **The owner must be able to publish, republish and unpublish.** A list
+    //    of prohibitions with nothing that must succeed is how rules nobody can
+    //    publish through get written — which is exactly what the `getAfter`
+    //    point below exists to prevent.
+    //
+    // Then the writes:
     //
     //  * ownerUid may never be reassigned on an existing copy, and may never be
     //    somebody else's on a new one.
@@ -266,7 +286,12 @@ service cloud.firestore {
     //    account must lose the ability to edit what it has already put in front
     //    of other people.
     //  * Shape and size validation, which never existed here and must, on the
-    //    same `hasOnly` footing as the private collections above.
+    //    same footing as the private collections above — which by then means
+    //    `hasOnly` plus per-field bounds. That arrives in #29, not here: this
+    //    branch still bounds the private collections with `keys().size()`, and
+    //    the intended order is #29 first. The two merge cleanly either way; it
+    //    is this sentence that stops being true if they land the other way
+    //    round.
     //  * Deletion and export have to cover published copies before the feature
     //    is reachable, not after.
 

@@ -214,13 +214,16 @@ describe('the allowedUsers gate', () => {
  * to were the two that nothing writes.
  *
  * These tests are what stops that reopening by accident. When publishing is
- * built they are replaced by the properties named in `firestore.rules` where
- * the old block was: ownerUid never reassigned, the parent set checked with
- * `getAfter` so a first publish in one batch is not denied, delete on a
- * snapshot entry exempt from that check so orphans stay cleanable, every
- * mutation gated on `isAllowed()` rather than only create, `hasOnly`
- * validation, and deletion and export covering published copies before the
- * feature is reachable.
+ * built they are replaced by the properties listed in `firestore.rules` where
+ * the old block was — reads open to any allowed account, a snapshot entry
+ * readable only while its parent set exists, ownerUid never reassigned, the
+ * parent set checked with `getAfter`, delete exempt from that check, every
+ * mutation gated on `isAllowed()`, shape validation, and deletion and export
+ * covering published copies.
+ *
+ * The twelve tests that covered those properties are in pull request #30. This
+ * docblock points at the rules and the rules point at that pull request, so
+ * neither is a step in a circle.
  */
 describe('publishing, which is not built', () => {
   /**
