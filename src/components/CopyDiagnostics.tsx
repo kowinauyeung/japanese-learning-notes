@@ -28,12 +28,19 @@ export function CopyDiagnostics({ errorId }: { errorId: string }) {
       <pre className="mt-2 overflow-x-auto text-[11px] leading-relaxed text-muted">{text}</pre>
       {/*
         Both failure modes are handled, on the one screen whose entire purpose
-        is filing a report. `navigator.clipboard` is undefined outside a secure
-        context, so the property access throws synchronously — and React does
-        not route an event-handler error to an error boundary, so the button
-        would simply appear inert. `writeText` can also reject on a permission
-        or focus failure, which with no catch is an unhandled rejection and a
-        label that never changes.
+        is filing a report. `writeText` rejects on a permission or focus
+        failure, which with no catch is an unhandled rejection and a label that
+        never changes. `navigator.clipboard` is undefined outside a secure
+        context, and calling `writeText` on it throws synchronously — which
+        React does not route to an error boundary, so the button simply appears
+        inert.
+
+        The call is split rather than chained off `?.` because optional
+        chaining short-circuits **the whole rest of the chain**: written as
+        `navigator.clipboard?.writeText(t).then(…).catch(…)` the missing-
+        clipboard case evaluates to `undefined` and neither handler runs, which
+        is the same inert button with the throw removed. The `if` is what turns
+        it back into a visible failure.
 
         The `<pre>` above means the text is always selectable by hand. That is
         the saving grace, and it is only a saving grace if somebody says so.
@@ -41,8 +48,15 @@ export function CopyDiagnostics({ errorId }: { errorId: string }) {
       <button
         type="button"
         onClick={() => {
-          navigator.clipboard
-            ?.writeText(text)
+          const written = navigator.clipboard?.writeText(text);
+          // Compared against undefined rather than tested for truthiness: a
+          // promise is always truthy, and `no-misused-promises` is right that
+          // reading one as a boolean is a question nobody means to ask.
+          if (written === undefined) {
+            setState('failed');
+            return;
+          }
+          written
             .then(() => {
               setState('copied');
               setTimeout(() => setState('idle'), 1800);
