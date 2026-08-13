@@ -42,12 +42,25 @@ jobs:
       # A 40-character hex string cannot move. Everything downstream depends on
       # that and nothing downstream re-establishes it, which is why this is the
       # first step in the file.
+      #
+      # `[[ =~ ]]` and not `grep -Eq`. **grep is line-oriented**: `-q` exits 0
+      # when any *line* matches, so a value carrying a well-formed SHA on one
+      # line and a branch name on another satisfied it. Inputs arrive as JSON
+      # strings, so a newline is a shape that reaches here. That is the same
+      # failure this file already documents two steps down — `grep -q ""` — a
+      # line-oriented tool answering a question about a whole value.
+      #
+      # The value is deliberately not echoed back. By construction this branch
+      # runs only when the input failed to validate, so it is exactly the case
+      # where it may contain a newline, and a newline inside a `::error`
+      # workflow command ends the command and lets what follows be read as
+      # another one.
       - name: Refuse anything that is not a full commit SHA
         env:
           SHA: ${{ inputs.sha }}
         run: |
-          if ! printf '%s' "$SHA" | grep -Eq '^[0-9a-f]{40}$'; then
-            echo "::error title=Not a commit SHA::'$SHA' is not 40 lowercase hex characters. Branch names and short SHAs are refused because they resolve separately in each job."
+          if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error title=Not a commit SHA::The sha input is not 40 lowercase hex characters. Branch names, short SHAs and anything spanning more than one line are refused, because each job resolves this input separately and only an immutable value survives that."
             exit 1
           fi
 
