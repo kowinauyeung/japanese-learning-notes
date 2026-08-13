@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
 import { deleteEverything, exportEverything, exportFilename } from '@/lib/accountData';
 import { useAuth } from '@/lib/auth';
+import { authPort } from '@/lib/backend';
 import { appVersion, buildLine } from '@/lib/build';
 import { newErrorId } from '@/lib/diagnostics';
 import { useEntries } from '@/lib/entries';
@@ -21,6 +22,10 @@ export function Component() {
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // Minted once. Called during render it changed on every state change — and
+  // this component sets four — so the id a user reads off the screen was not
+  // the id in the text they had just copied.
+  const errorId = useMemo(() => newErrorId(), []);
 
   const initial = (user?.displayName || user?.email || '?').charAt(0).toUpperCase();
 
@@ -63,18 +68,30 @@ export function Component() {
     setError(null);
     setNote(null);
     try {
-      const removed = await deleteEverything({
+      await deleteEverything({
         entries: entries.repository,
         wordSets: wordSets.repository,
+        progress: progress.repository,
+        auth: authPort,
       });
-      setNote(`${removed.entries} 語と ${removed.wordSets} 個の単語集を削除しました。`);
+      // No success note: the account is gone, so there is nobody left to read
+      // it. An earlier version set one and signed out on the next line, which
+      // rendered for a frame and then vanished with the session.
       await signOutUser();
     } catch (cause) {
       console.error(cause);
-      // Deliberately not "failed": some of it may be gone. Saying so is the
-      // difference between a user retrying and a user assuming their data is
-      // intact when half of it is not.
-      setError('削除の途中で失敗しました。残っている可能性があります。もう一度お試しください。');
+      // `requires-recent-login` is not a failure the user can act on without
+      // being told what it is: the provider refuses to delete an account on a
+      // stale session, and the fix is to sign in again.
+      const code = (cause as { code?: string }).code;
+      setError(
+        code === 'auth/requires-recent-login'
+          ? 'セキュリティのため、一度ログインし直してから削除してください。データの一部はすでに削除されている可能性があります。'
+          : // Deliberately not "failed": some of it may be gone. Saying so is
+            // the difference between a user retrying and a user assuming their
+            // data is intact when half of it is not.
+            '削除の途中で失敗しました。残っている可能性があります。もう一度お試しください。',
+      );
     } finally {
       setBusy(null);
       setConfirming(false);
@@ -157,7 +174,7 @@ export function Component() {
           </Link>
         </div>
         <div className="mt-4">
-          <CopyDiagnostics errorId={newErrorId()} />
+          <CopyDiagnostics errorId={errorId} />
         </div>
       </div>
 

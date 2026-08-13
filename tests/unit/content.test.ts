@@ -1,8 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { about } from '@/content/about';
 import type { Doc } from '@/content/doc';
 import { privacy } from '@/content/privacy';
-import { orPending, site } from '@/content/site';
+import { site } from '@/content/site';
 import { support } from '@/content/support';
 import { terms } from '@/content/terms';
 
@@ -64,17 +65,31 @@ describe('what the public pages must not disclose', () => {
   });
 
   /**
-   * The mirror of the rule this used to hold, and the reason it is worth
-   * keeping either way round.
+   * The policy must name App Check **if and only if** the client initialises it.
    *
-   * The policy once named App Check and reCAPTCHA before either existed, which
-   * was untrue; this test was written to stop that. Both are implemented now,
-   * and a policy that stays silent about a service sending a user's device and
-   * interaction signals to Google is untrue in the other direction — and it is
-   * the harder direction to notice, because nothing on screen is missing.
+   * Both directions have already been wrong here. It named reCAPTCHA before
+   * either existed, which was untrue; then the paragraph was added when they
+   * did, on a branch where they still did not — the App Check client lives on
+   * `feat/security-hardening` and this file lives here, and the two share no
+   * file, so nothing would have conflicted to warn anybody.
+   *
+   * So this reads the client rather than hard-coding an expectation. That makes
+   * the ordering constraint mechanical instead of documented in two pull
+   * request descriptions: whichever branch adds App Check must add the
+   * disclosure with it, and this goes red until they arrive together.
+   *
+   * Reading a source file from a test is not the usual thing. It is right here
+   * because the claim *is* "the policy matches the implementation", and every
+   * cheaper version of it asserts one side and trusts the other.
    */
-  it.each(['reCAPTCHA', 'App Check'])('discloses %s, which is implemented now', (needle) => {
-    expect(privacy.sections.flatMap((s) => s.body).join('\n')).toContain(needle);
+  it('names App Check when, and only when, the client initialises it', () => {
+    const client = readFileSync('src/infra/firebase/client.ts', 'utf8');
+    const implemented = client.includes('initializeAppCheck');
+    const disclosed = privacy.sections
+      .flatMap((section) => section.body)
+      .some((line) => line.includes('App Check') || line.includes('reCAPTCHA'));
+
+    expect(disclosed).toBe(implemented);
   });
 });
 
@@ -113,10 +128,5 @@ describe('contact', () => {
       expect(links.length).toBeGreaterThan(0);
       for (const link of links) expect(link.href).toBe(site.feedbackFormUrl);
     }
-  });
-
-  it('degrades to 準備中 rather than to an empty gap in a sentence', () => {
-    expect(orPending('')).toBe('準備中');
-    expect(orPending('https://example.test')).toBe('https://example.test');
   });
 });

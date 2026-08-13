@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { isRouteErrorResponse, Link, useRouteError } from 'react-router-dom';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
 import { newErrorId } from '@/lib/diagnostics';
@@ -21,6 +21,16 @@ export function ErrorScreen() {
   const error = useRouteError();
   const errorId = useMemo(() => newErrorId(), []);
 
+  // In an effect, not the render body: StrictMode double-invokes render, so
+  // this logged twice per error and again on every re-render.
+  //
+  // Above the 404 branch below, because a hook behind an early return runs in
+  // a different order depending on the error — which is the rule, and here it
+  // is also the bug: a 404 would leave the previous error's log unrepeated.
+  useEffect(() => {
+    console.error(`[${errorId}]`, error);
+  }, [errorId, error]);
+
   /**
    * A mistyped address arrives here, not at a catch-all route.
    *
@@ -34,8 +44,6 @@ export function ErrorScreen() {
    * bar where they can see what went wrong.
    */
   if (isRouteErrorResponse(error) && error.status === 404) return <NotFound />;
-
-  console.error(`[${errorId}]`, error);
 
   return (
     <main className="grid min-h-dvh place-items-center bg-bg px-4">

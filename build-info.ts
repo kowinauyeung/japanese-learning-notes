@@ -24,10 +24,22 @@ import pkg from './package.json' with { type: 'json' };
  */
 const E2E_COMMIT = 'e2e0000';
 
+/**
+ * `DEPLOY_SHA` first, and it is not a preference.
+ *
+ * On a `workflow_dispatch` run `GITHUB_SHA` is the commit the *workflow* ran
+ * on — the default branch's head — not the one being released. The production
+ * workflow takes a SHA as input and builds that, so the two differ in exactly
+ * the case that matters: a rollback deploys an older commit while the footer
+ * claims the newer one, sending whoever reads a bug report to source that was
+ * never running.
+ */
+const deployedSha = () => process.env.DEPLOY_SHA || process.env.GITHUB_SHA;
+
 export const buildInfo = (mode: string) => ({
   __APP_VERSION__: JSON.stringify(pkg.version),
   __COMMIT_SHA__: JSON.stringify(
-    mode === 'e2e' ? E2E_COMMIT : (process.env.GITHUB_SHA ?? 'dev').slice(0, 7),
+    mode === 'e2e' ? E2E_COMMIT : (deployedSha() ?? 'dev').slice(0, 7),
   ),
   __BUILD_MODE__: JSON.stringify(mode),
 });

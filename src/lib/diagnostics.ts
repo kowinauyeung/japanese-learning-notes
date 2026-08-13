@@ -34,14 +34,26 @@ export function newErrorId(random = Math.random): string {
  * A vocabulary id is a Firestore document id and belongs to one person's
  * notebook; pasting it into a support form leaks which word was being read. The
  * screen is what a report needs.
+ *
+ * **By route, not by identifier shape.** The first version matched any segment
+ * of twelve characters or more, which covers every id this app mints today —
+ * all four sources are Firestore auto-ids, all twenty characters — and rests on
+ * a vendor's id length being stable. A human-readable slug like
+ * `/vocabulary/w-choukou` would walk straight through it, silently, in the one
+ * direction where silence is the whole problem. The routes are enumerable, so
+ * matching them costs nothing and stays true whatever an id looks like later.
+ *
+ * The guarantee this backs is stated without qualification in the privacy
+ * policy and under the copy button, and a guarantee resting on a heuristic is
+ * the kind that is true until it is not.
  */
 export function routePattern(pathname: string): string {
   return (
     pathname
-      // Long opaque ids — Firestore auto-ids and the migration slugs alike.
-      .replace(/\/[A-Za-z0-9_-]{12,}(?=\/|$)/g, '/:id')
-      // The two enumerable segments are safe and worth keeping.
-      .replace(/\/practice\/(?!flashcards|dictation)[^/]+/, '/practice/:mode') || '/'
+      .replace(/^\/vocabulary\/[^/]+/, '/vocabulary/:id')
+      .replace(/^\/wordsets\/[^/]+/, '/wordsets/:id')
+      // The two practice modes are enumerable and worth keeping.
+      .replace(/^\/practice\/(?!flashcards$|dictation$)[^/]+/, '/practice/:mode') || '/'
   );
 }
 

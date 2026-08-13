@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { VocabDialog } from '@/components/VocabDialog';
 import { useAuth } from '@/lib/auth';
@@ -8,7 +8,6 @@ import { useTheme } from '@/lib/theme';
 import { useClickOutside } from '@/lib/useClickOutside';
 import { VocabDialogProvider } from '@/lib/vocabDialog';
 import { WordSetsProvider } from '@/lib/wordSets';
-import { Component as Home } from '@/routes/Home';
 import { EntryFormModal } from './entry-form/EntryFormModal';
 import { LogoMark } from './Logo';
 import { PublicFooter } from './PublicLayout';
@@ -19,6 +18,13 @@ import { PublicFooter } from './PublicLayout';
  * because one is made out of the other, and the two drills sit together
  * because choosing between them is a single decision.
  */
+/**
+ * Lazy like every route below it. Imported eagerly it pulled the landing page
+ * and `content/about.ts` into the signed-in bundle, for users who by definition
+ * never see either.
+ */
+const Home = lazy(async () => ({ default: (await import('@/routes/Home')).Component }));
+
 const NAV = [
   { to: '/', label: 'ダッシュボード', end: true },
   { to: '/vocabulary', label: '単語', end: false },
@@ -47,7 +53,13 @@ export function AppLayout() {
     // deciding whether to hand over a Google account has to be able to read
     // what the app is for without handing it over first, and Google's OAuth
     // review asks for the same thing.
-    if (location.pathname === '/') return <Home />;
+    if (location.pathname === '/') {
+      return (
+        <Suspense fallback={null}>
+          <Home />
+        </Suspense>
+      );
+    }
     // Every other route redirects, and the search string goes with it: it
     // carries the entire Browse filter state, so dropping it would silently
     // return a bookmarked filtered view to the unfiltered one.

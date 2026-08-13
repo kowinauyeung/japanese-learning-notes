@@ -1,4 +1,5 @@
 import type {
+  AuthPort,
   EntryRepository,
   Page,
   PageQuery,
@@ -98,13 +99,23 @@ export function exportFilename(now = new Date()): string {
 }
 
 /**
- * Delete everything this account owns, one document at a time.
+ * Delete everything this account owns, one document at a time, then the account.
  *
  * **Firestore does not cascade.** Deleting `users/{uid}` leaves every
  * subcollection under it addressable, so the only correct order is bottom-up:
  * the rows first, the parent last. Nothing here is atomic — a failure part way
  * leaves the account partly emptied, which is why it reports what it removed
  * and asks the user to run it again rather than claiming success.
+ *
+ * **All four collections, and the account.** An earlier version drained words
+ * and word sets and stopped, while the button, the dialog and the privacy
+ * policy all promised more — so "deleting the account" signed the user out and
+ * left their practice history for the next sign-in with the same Google
+ * account. Practice records are the sensitive half: a session carries the ids
+ * it got wrong and a label built from the user's own tag names.
+ *
+ * The account itself goes last, because it is the one step that cannot be
+ * retried: once it is gone there is no session left to delete anything with.
  *
  * A Cloud Function doing this server-side is the shape Firebase recommends and
  * would make it recoverable. It needs the Blaze plan, and moving to Blaze
@@ -115,15 +126,27 @@ export function exportFilename(now = new Date()): string {
 export async function deleteEverything({
   entries,
   wordSets,
+  progress,
+  auth,
 }: {
   entries: EntryRepository;
   wordSets: WordSetRepository;
+  progress: ProgressRepository;
+  auth: AuthPort;
 }): Promise<{ entries: number; wordSets: number }> {
   const setList = await drain((q) => wordSets.list(q));
   for (const set of setList) await wordSets.remove(set.id);
 
   const entryList = await drain((q) => entries.list(q));
   for (const entry of entryList) await entries.remove(entry.id);
+
+  // The progress map and every session, which the count above does not cover:
+  // the map is one document and the sessions are a collection, and neither is
+  // something a user thinks of as a row.
+  await progress.removeAll();
+
+  // Last, and separately fallible: providers refuse this on a stale session.
+  await auth.deleteAccount();
 
   return { entries: entryList.length, wordSets: setList.length };
 }

@@ -1,5 +1,5 @@
 import type { User } from 'firebase/auth';
-import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { deleteUser, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import type { AuthPort, AuthUser } from '@/domain/ports';
 import { auth, googleProvider } from './client';
 
@@ -25,5 +25,17 @@ export const firebaseAuth: AuthPort = {
   },
   signOut: async () => {
     await signOut(auth);
+  },
+  /**
+   * Firebase refuses this on a session that is not recent, raising
+   * `auth/requires-recent-login`. The error is passed up rather than swallowed:
+   * the caller has to tell the user to sign in again, and a delete that
+   * silently did nothing is the worst possible outcome for this particular
+   * button.
+   */
+  deleteAccount: async () => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('ログインしていません。');
+    await deleteUser(user);
   },
 };

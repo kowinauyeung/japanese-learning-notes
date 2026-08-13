@@ -30,7 +30,9 @@ export const router = createBrowserRouter([
       { path: 'history', lazy: () => import('./routes/History') },
     ],
   },
-  { path: '/login', lazy: () => import('./routes/Login') },
+  // The boundary matters most here: a stale chunk on the one route back into
+  // the app leaves a visitor with React Router's default error page.
+  { path: '/login', lazy: () => import('./routes/Login'), errorElement: <ErrorScreen /> },
   { path: '/about', lazy: () => import('./routes/public/About'), errorElement: <ErrorScreen /> },
   {
     path: '/privacy',

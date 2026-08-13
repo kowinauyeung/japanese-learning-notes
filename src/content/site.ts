@@ -41,6 +41,3 @@ export const site = {
  * If it is ever linked again, link it from a page a signed-in user reaches, not
  * from the four public documents and not from the crash screen.
  */
-
-/** `準備中` wherever a contact detail has not been filled in yet. */
-export const orPending = (value: string): string => value || '準備中';

@@ -22,14 +22,17 @@ const ports = (entryCount: number, setCount: number, sessionCount: number) => {
   const progress = {
     listAll: vi.fn(() => Promise.resolve([{ entryId: 'e-0' }])),
     listSessions: paged(rows(sessionCount, 'p')),
+    removeAll: vi.fn(() => Promise.resolve()),
   };
+  const auth = { deleteAccount: vi.fn(() => Promise.resolve()) };
   // Only the methods under test are implemented; the ports are wider.
   return {
     entries,
     wordSets,
     progress,
+    auth,
     profile: { displayName: 'k' },
-  } as unknown as Parameters<typeof exportEverything>[0];
+  } as unknown as Parameters<typeof exportEverything>[0] & Parameters<typeof deleteEverything>[0];
 };
 
 /**
@@ -97,5 +100,47 @@ describe('deleteEverything', () => {
     expect(removed).toEqual({ entries: 140, wordSets: 30 });
     expect((p.entries.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(140);
     expect((p.wordSets.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(30);
+  });
+
+  /**
+   * The defect this shipped with: it drained words and word sets and stopped,
+   * while the button, the dialog and the privacy policy all promised more. So
+   * "deleting the account" signed the user out and left their practice history
+   * for the next sign-in with the same Google account — and a session record
+   * carries the ids it got wrong and a label built from the user's own tags.
+   */
+  it('removes the practice history too, which is the sensitive half', async () => {
+    const p = ports(1, 1, 40);
+    await deleteEverything(p);
+
+    expect((p.progress.removeAll as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+  });
+
+  it('deletes the account itself, not only its data', async () => {
+    const p = ports(0, 0, 0);
+    await deleteEverything(p);
+
+    expect((p.auth.deleteAccount as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+  });
+
+  /**
+   * Order matters in one direction only: once the account is gone there is no
+   * session left to delete anything with, so it has to be last.
+   */
+  it('deletes the account after the data, not before', async () => {
+    const order: string[] = [];
+    const p = ports(1, 0, 0);
+    (p.progress.removeAll as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      order.push('data');
+      return Promise.resolve();
+    });
+    (p.auth.deleteAccount as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      order.push('account');
+      return Promise.resolve();
+    });
+
+    await deleteEverything(p);
+
+    expect(order).toEqual(['data', 'account']);
   });
 });
