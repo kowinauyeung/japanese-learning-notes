@@ -69,6 +69,11 @@ jobs:
             exit 1
           fi
 
+      # VITE_RECAPTCHA_SITE_KEY is deliberately not PROD_-prefixed: one
+      # reCAPTCHA v3 site key covers both projects, because a v3 "site" is a
+      # list of domains and is not owned by a Firebase project. The App Check
+      # *registration* is per project and there are two of them, each holding
+      # the same secret. Enterprise keys would need splitting; v3 does not.
       - name: Build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.PROD_VITE_FIREBASE_API_KEY }}
@@ -80,9 +85,41 @@ jobs:
           VITE_RECAPTCHA_SITE_KEY: ${{ secrets.VITE_RECAPTCHA_SITE_KEY }}
         run: yarn build
 
+      # Every PROD_ secret must exist before anything is checked against it.
+      #
+      # This job has no `environment:`, so it reads repository-level secrets
+      # only — putting the production values in the `production` environment,
+      # which is the natural reading of "production secrets", hands this job
+      # empty strings instead. Nothing downstream would catch that: `client.ts`
+      # validates the config at runtime, and `vite build` never evaluates the
+      # module, so the build stays green and the bundle throws on first paint.
+      - name: Require every production value
+        env:
+          API_KEY: ${{ secrets.PROD_VITE_FIREBASE_API_KEY }}
+          AUTH_DOMAIN: ${{ secrets.PROD_VITE_FIREBASE_AUTH_DOMAIN }}
+          PROJECT_ID: ${{ secrets.PROD_VITE_FIREBASE_PROJECT_ID }}
+          STORAGE_BUCKET: ${{ secrets.PROD_VITE_FIREBASE_STORAGE_BUCKET }}
+          SENDER_ID: ${{ secrets.PROD_VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          APP_ID: ${{ secrets.PROD_VITE_FIREBASE_APP_ID }}
+        run: |
+          missing=''
+          for name in API_KEY AUTH_DOMAIN PROJECT_ID STORAGE_BUCKET SENDER_ID APP_ID; do
+            eval "value=\$$name"
+            if [ -z "$value" ]; then missing="$missing PROD_VITE_FIREBASE_$name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Missing secrets::Not set at repository level:$missing. Environment-scoped secrets are not visible to this job."
+            exit 1
+          fi
+
       # Proves the bundle is the one this run built, and that it points where
       # it is about to be deployed. A dist/ built against the dev project would
       # otherwise deploy happily and talk to the wrong database.
+      #
+      # `grep -q ""` matches every line and exits 0, so this check was a no-op
+      # whenever EXPECTED was empty — it failed open in exactly the case it
+      # existed for. The step above is what stops that, and this one no longer
+      # has to trust its input.
       - name: Check the bundle points at production
         env:
           EXPECTED: ${{ secrets.PROD_VITE_FIREBASE_PROJECT_ID }}

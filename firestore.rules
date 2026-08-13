@@ -74,11 +74,23 @@ service cloud.firestore {
     // doubles the read cost of the whole application to answer a question whose
     // answer changes perhaps twice in an account's lifetime.
     //
-    // What that trades away is immediacy, and it is worth stating: a claim
-    // lives in the ID token, so removing it takes effect when the token next
-    // refreshes — up to an hour. Revocation is therefore two steps, not one:
-    // clear the claim *and* revoke the refresh tokens, which forces the client
-    // to re-authenticate immediately. `admin/allow-user.ts` does both.
+    // **What it trades away is immediacy, and the trade is real.** The gate
+    // this replaces was re-evaluated on every request, so removing a document
+    // took effect on the next one. A claim lives inside the ID token the client
+    // is already holding, and Firestore rules have no revocation check — there
+    // is no rules equivalent of `verifyIdToken(..., checkRevoked: true)`. So a
+    // removed claim changes nothing until that token expires: **up to an hour.**
+    //
+    // Revoking the refresh tokens does not shorten it. It stops the *next*
+    // refresh from succeeding, which ends the session — but the ID token
+    // already in hand keeps its claims and keeps being accepted until it runs
+    // out. `admin/allow-user.ts` revokes them anyway, because ending the
+    // session is worth doing; it is not what makes a ban land.
+    //
+    // Closing the window properly means storing a revocation time and comparing
+    // `request.auth.token.auth_time` against it here, which reintroduces the
+    // per-request read this change removed. That is a decision worth making
+    // deliberately if abuse ever becomes a live problem, and not before.
     function isAllowed() {
       return signedIn() && request.auth.token.allowed == true;
     }
@@ -97,9 +109,24 @@ service cloud.firestore {
     // strings can be bounded. Anything relying on per-element limits has to
     // enforce them somewhere that can see them.
     //
-    // Deliberately not a full schema. Requiring every field to exist and match
-    // a type turns every schema change into a rules deploy, and a rules deploy
-    // that lags a client release denies writes from a version already shipped.
+    // Read "bounded" as cardinality, not size. 100 senses of 3,000 characters
+    // each is accepted, measured against the emulator. **The only size bound on
+    // a document here is Firestore's own 1 MiB**, which is a ceiling rather
+    // than a budget: it stops one document being enormous and says nothing
+    // about how many documents there are.
+    //
+    // Deliberately not a full schema, and `get` with a default is what makes
+    // that true rather than merely claimed. `d.field` on an absent key is an
+    // evaluation error, which rules treat as a denial — so naming a field is
+    // requiring it, and an earlier version of this file required every field it
+    // mentioned while the paragraph above said it did not.
+    //
+    // That matters in one direction in particular: `deploy-prod.yml` deploys
+    // rules before hosting, so rules rejecting a newly optional field would be
+    // live before the client that fills it.
+    //
+    // `headword` is the exception and is read directly: an entry without one is
+    // not an entry, and the form refuses it too.
     function str(value, max) {
       return value is string && value.size() <= max;
     }
@@ -131,17 +158,17 @@ service cloud.firestore {
       return ownedBy(uid)
         && d.keys().size() <= 40
         && str(d.headword, 200) && d.headword.size() > 0
-        && str(d.reading, 200)
-        && str(d.definition, 20000)
-        && str(d.definitionSub, 20000)
-        && str(d.source, 500)
-        && str(d.citationForm, 200)
-        && list(d.pos, 20)
-        && list(d.tags, 50)
-        && list(d.senses, 100)
-        && list(d.examples, 100)
-        && list(d.related, 100)
-        && (d.pitchAccent == null || d.pitchAccent is int);
+        && str(d.get('reading', ''), 200)
+        && str(d.get('definition', ''), 20000)
+        && str(d.get('definitionSub', ''), 20000)
+        && str(d.get('source', ''), 500)
+        && str(d.get('citationForm', ''), 200)
+        && list(d.get('pos', []), 20)
+        && list(d.get('tags', []), 50)
+        && list(d.get('senses', []), 100)
+        && list(d.get('examples', []), 100)
+        && list(d.get('related', []), 100)
+        && (d.get('pitchAccent', null) == null || d.get('pitchAccent', 0) is int);
     }
 
     function validWordSet(uid) {
@@ -149,20 +176,21 @@ service cloud.firestore {
       return ownedBy(uid)
         && d.keys().size() <= 20
         && str(d.name, 200) && d.name.size() > 0
-        && str(d.description, 5000)
+        && str(d.get('description', ''), 5000)
         // The one unbounded list in the schema, and the one a set is made of.
-        && list(d.entryIds, 2000)
-        && list(d.topics, 50);
+        && list(d.get('entryIds', []), 2000)
+        && list(d.get('topics', []), 50);
     }
 
     function validSession(uid) {
       let d = request.resource.data;
       return ownedBy(uid)
         && d.keys().size() <= 20
-        && str(d.filterLabel, 500)
-        && d.total is int && d.total >= 0 && d.total <= 2000
-        && d.correct is int && d.correct >= 0 && d.correct <= d.total
-        && list(d.missed, 2000);
+        && str(d.get('filterLabel', ''), 500)
+        && d.get('total', 0) is int && d.get('total', 0) >= 0 && d.get('total', 0) <= 2000
+        && d.get('correct', 0) is int && d.get('correct', 0) >= 0
+        && d.get('correct', 0) <= d.get('total', 0)
+        && list(d.get('missed', []), 2000);
     }
 
     // Private data, one collection at a time.
@@ -181,8 +209,14 @@ service cloud.firestore {
         return isOwner(uid) && isAllowed();
       }
 
-      allow read: if mine();
-      allow write: if mine() && request.resource.data.keys().size() <= 20;
+      allow read, delete: if mine();
+      // Split exactly as the subcollections are, and for the reason
+      // `keepsCreatedAt` documents: `write` covers delete, and on a delete
+      // `request.resource` is null, so reaching into it is an evaluation error.
+      // This document was the one place that kept the combined form, and
+      // deleting it therefore failed with a message about null rather than
+      // about permission — the failure mode account deletion would have hit.
+      allow create, update: if mine() && request.resource.data.keys().size() <= 20;
 
       match /entries/{entryId} {
         allow read, delete: if mine();
@@ -200,12 +234,20 @@ service cloud.firestore {
       }
 
       // One document holding every entry's progress — see ProgressRepository
-      // for why it is a map rather than a collection. Its size is bounded by
-      // the 1 MiB document cap and by the notebook it mirrors, so the only
-      // thing worth asserting is that it belongs to the owner.
-      match /progress/{documentId} {
+      // for why it is a map rather than a collection.
+      //
+      // `progress/entries` and not `progress/{id}`: the adapter addresses that
+      // one fixed id and nothing else, and a wildcard here was the one path in
+      // the file with no bound of any kind. An allowed account could create
+      // progress/junk-1, progress/junk-2 and so on, each holding as much as a
+      // document can — which is precisely the threat the section above names.
+      //
+      // `ownedBy` too, because `mine()` asserts the owner of the *path* and
+      // every sibling checks the field as well.
+      match /progress/entries {
         allow read, delete: if mine();
-        allow create, update: if mine();
+        allow create, update: if mine() && ownedBy(uid)
+                              && request.resource.data.keys().size() <= 5;
       }
     }
 

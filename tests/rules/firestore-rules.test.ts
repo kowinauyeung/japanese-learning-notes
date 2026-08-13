@@ -184,11 +184,15 @@ describe('the allowedUsers gate', () => {
   /**
    * Revocation is the claim going away, not a document being deleted.
    *
-   * That is a real change in what "revoked" means and it is worth stating: the
-   * claim lives in the ID token, so clearing it takes effect when the token
-   * next refreshes — up to an hour — unless the refresh tokens are revoked at
-   * the same time, which forces re-authentication immediately. `admin/allow-user.ts`
-   * does both, and this test is the state *after* that has happened.
+   * That is a real change in what "revoked" means: the claim lives in the ID
+   * token, and Firestore rules have no revocation check, so clearing it takes
+   * effect only when that token expires — up to an hour. Revoking the refresh
+   * tokens ends the session at the next refresh but does not invalidate the
+   * token already in hand.
+   *
+   * **This test is the state after the token has turned over**, which is the
+   * one this harness can express: `@firebase/rules-unit-testing` mints tokens
+   * directly, so the window itself is not reachable from here.
    */
   it('revokes update and delete on already-published copies, not just create', async () => {
     const db = asStranger(ALICE);
@@ -465,6 +469,75 @@ describe('what the adapters write is what the rules accept', () => {
           { ownerUid: ALICE, entries: { e1: { status: 'wrong', attempts: 1 } } },
           { merge: true },
         ),
+    );
+  });
+});
+
+/**
+ * The four things the review measured, kept measured.
+ *
+ * Each was true of an earlier version of this file and each contradicted a
+ * paragraph in it — which is the pattern worth guarding, not the four cases
+ * individually: a rules file whose comments describe a property it does not
+ * have is worse than one with no comments, because the next person stops
+ * checking.
+ */
+describe('what the comments in the rules claim', () => {
+  /** "Deliberately not a full schema" — which was false while every named field was required. */
+  it('accepts an entry missing every optional field', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/entries/minimal`).set({ ownerUid: ALICE, headword: '清高' }),
+    );
+  });
+
+  it('still refuses one with no headword at all', async () => {
+    const db = as(ALICE);
+    await assertFails(db.doc(`users/${ALICE}/entries/nameless`).set({ ownerUid: ALICE }));
+    await assertFails(
+      db.doc(`users/${ALICE}/entries/blank`).set({ ownerUid: ALICE, headword: '' }),
+    );
+  });
+
+  it('accepts a word set and a session missing their optional fields', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/minimal`).set({ ownerUid: ALICE, name: '仕事' }),
+    );
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/practiceSessions/minimal`).set({ ownerUid: ALICE }),
+    );
+  });
+
+  /**
+   * `write` covers delete, and on a delete `request.resource` is null — the
+   * same trap `keepsCreatedAt` guards. The parent document was the one place
+   * that kept the combined form, so deleting it failed with a message about
+   * null rather than about permission. Account deletion is the next caller.
+   */
+  it('lets the owner delete their own user document', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc(`users/${ALICE}`).set({ nickname: 'alice' });
+    });
+    await assertSucceeds(as(ALICE).doc(`users/${ALICE}`).delete());
+  });
+
+  /**
+   * `progress` was a wildcard with no bound of any kind — the one path in the
+   * file that was the threat the file names rather than a defence against it.
+   */
+  it('refuses a progress document other than the one the adapter writes', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/progress/entries`).set({ ownerUid: ALICE, entries: {} }),
+    );
+    await assertFails(db.doc(`users/${ALICE}/progress/junk`).set({ ownerUid: ALICE, entries: {} }));
+  });
+
+  it('refuses a progress document claiming another owner', async () => {
+    const db = as(ALICE);
+    await assertFails(
+      db.doc(`users/${ALICE}/progress/entries`).set({ ownerUid: BOB, entries: {} }),
     );
   });
 });
