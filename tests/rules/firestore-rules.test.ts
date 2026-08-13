@@ -394,6 +394,58 @@ describe('bounds on what an owner may write', () => {
     const db = as(ALICE);
     await assertFails(db.doc(`users/${ALICE}/somethingNew/x`).set({ ownerUid: ALICE }));
   });
+
+  /**
+   * The hole every size cap above left open.
+   *
+   * `keys().size()` counts fields and never looks at their names, so a document
+   * naming one field the rules check and one they have never heard of passed
+   * everything: the count was small, the strings named were short, and the
+   * large one was invisible. A megabyte under a key nobody validates is the
+   * same bill as a megabyte under `definition`, and only one of them was
+   * bounded.
+   */
+  it('refuses a field the schema has no name for, however small', async () => {
+    const db = as(ALICE);
+    await assertFails(db.doc(`users/${ALICE}/entries/x`).set(entry(ALICE, { junk: 'x' })));
+    await assertFails(db.doc(`users/${ALICE}/wordSets/x`).set(wordSet(ALICE, { junk: 'x' })));
+    await assertFails(
+      db.doc(`users/${ALICE}/practiceSessions/x`).set(session(ALICE, { junk: 'x' })),
+    );
+    await assertFails(
+      db.doc(`users/${ALICE}/progress/entries`).set({ ownerUid: ALICE, entries: {}, junk: 'x' }),
+    );
+  });
+
+  /**
+   * **`migrationKey` is not in the domain `Entry` and is on every migrated
+   * document.** `migration/upload.mjs` writes it as provenance, and an update
+   * sends the merged document — so an allowlist built from the TypeScript type
+   * would refuse every edit to all 67 migrated words. It would pass here, pass
+   * in review, and fail only in production, where the migration has been run.
+   *
+   * This is the test that says the list came from what is stored.
+   */
+  it('accepts migrationKey, which the migration writes and the domain type does not name', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/entries/migrated`).set(entry(ALICE, { migrationKey: 'ある-1' })),
+    );
+    // The update path is the one that actually breaks: it re-sends the stored
+    // key alongside the edit, whether or not the edit mentions it.
+    await assertSucceeds(db.doc(`users/${ALICE}/entries/migrated`).update({ headword: '別の語' }));
+  });
+
+  /**
+   * Nothing in the application writes `users/{uid}` itself — there is no
+   * profile and no adapter addresses the path — so the create it used to permit
+   * described a feature that does not exist while accepting any twenty fields
+   * of any names. Deleting stays, because account deletion needs it.
+   */
+  it('refuses to create the user document, which nothing writes', async () => {
+    const db = as(ALICE);
+    await assertFails(db.doc(`users/${ALICE}`).set({ displayName: 'x' }));
+  });
 });
 
 /**
