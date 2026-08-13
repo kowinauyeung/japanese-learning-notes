@@ -119,9 +119,10 @@ export const authPort: AuthPort = {
     notify();
     return Promise.resolve();
   },
-  // The real adapter can refuse this on a stale session; the fake never does,
-  // because the end-to-end suite has no way to age a session and a test that
-  // cannot reach the happy path covers nothing.
+  // The real adapter opens a popup here. The fake resolves, for the same reason
+  // it never refuses `deleteAccount`: the end-to-end suite has no way to age a
+  // session, and a test that cannot reach the happy path covers nothing.
+  reauthenticate: () => Promise.resolve(),
   deleteAccount(): Promise<void> {
     currentUser = null;
     notify();

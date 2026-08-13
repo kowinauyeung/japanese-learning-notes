@@ -80,13 +80,23 @@ export function Component() {
       await signOutUser();
     } catch (cause) {
       console.error(cause);
-      // `requires-recent-login` is not a failure the user can act on without
-      // being told what it is: the provider refuses to delete an account on a
-      // stale session, and the fix is to sign in again.
+      // The re-authentication now runs before the first delete, so these two
+      // messages describe genuinely different situations rather than the same
+      // half-finished one.
+      //
+      // A cancelled or refused popup happens with **nothing deleted**, and the
+      // message says so plainly — the previous wording warned that some data
+      // might already be gone, which was true then and would be a false alarm
+      // now. Anything else still fails part-way, and still has to say so.
       const code = (cause as { code?: string }).code;
+      const cancelled =
+        code === 'auth/popup-closed-by-user' ||
+        code === 'auth/cancelled-popup-request' ||
+        code === 'auth/user-cancelled' ||
+        code === 'auth/requires-recent-login';
       setError(
-        code === 'auth/requires-recent-login'
-          ? 'セキュリティのため、一度ログインし直してから削除してください。データの一部はすでに削除されている可能性があります。'
+        cancelled
+          ? 'セキュリティのため、削除の前に本人確認が必要です。データは削除されていません。もう一度お試しください。'
           : // Deliberately not "failed": some of it may be gone. Saying so is
             // the difference between a user retrying and a user assuming their
             // data is intact when half of it is not.

@@ -24,7 +24,10 @@ const ports = (entryCount: number, setCount: number, sessionCount: number) => {
     listSessions: paged(rows(sessionCount, 'p')),
     removeAll: vi.fn(() => Promise.resolve()),
   };
-  const auth = { deleteAccount: vi.fn(() => Promise.resolve()) };
+  const auth = {
+    reauthenticate: vi.fn(() => Promise.resolve()),
+    deleteAccount: vi.fn(() => Promise.resolve()),
+  };
   // Only the methods under test are implemented; the ports are wider.
   return {
     entries,
@@ -142,5 +145,58 @@ describe('deleteEverything', () => {
     await deleteEverything(p);
 
     expect(order).toEqual(['data', 'account']);
+  });
+
+  /**
+   * The state the order above cannot survive on its own.
+   *
+   * Providers refuse a sensitive operation on a stale session, so with the
+   * account deleted last a session old enough for `auth/requires-recent-login`
+   * succeeded at every irreversible step and failed only at the one that needed
+   * proving. The user pressed delete and was left holding an account with
+   * nothing in it — the worst of both outcomes, and unrecoverable.
+   *
+   * Proving the session first turns that into a popup.
+   */
+  it('refuses to delete anything at all when the session cannot be proved', async () => {
+    const p = ports(5, 5, 5);
+    (p.auth.reauthenticate as ReturnType<typeof vi.fn>).mockRejectedValue(
+      Object.assign(new Error('stale'), { code: 'auth/requires-recent-login' }),
+    );
+
+    await expect(deleteEverything(p)).rejects.toThrow('stale');
+
+    expect((p.entries.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect((p.wordSets.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect((p.progress.removeAll as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect((p.auth.deleteAccount as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+  });
+});
+
+/**
+ * A cursor that stops advancing is a query that has stopped working, and the
+ * page cap alone answered that with a million document reads.
+ *
+ * `drain` walked to its 10,000-page limit at 100 records a page before giving
+ * up — twenty times the free daily read allowance, spent proving something the
+ * second page already showed. `deleteEverything` drains twice as well, so the
+ * delete button reached it too.
+ */
+describe('drain, when the walk stops moving', () => {
+  it('stops on the second page rather than after ten thousand', async () => {
+    const stuck = vi.fn((_q: PageQuery) =>
+      // Always more, always from the same place.
+      Promise.resolve({ items: [{ id: 'e-0' }], cursor: 'same' }),
+    );
+    const p = ports(0, 0, 0);
+    (p.entries.list as unknown) = stuck;
+
+    await expect(exportEverything({ ...p, appVersion: '0.1.0' })).rejects.toThrow(
+      'エクスポートが終わりませんでした',
+    );
+
+    // Two: the first hands out `same`, the second hands it out again and is
+    // recognised. Anything higher means the cap is doing the work.
+    expect(stuck.mock.calls).toHaveLength(2);
   });
 });

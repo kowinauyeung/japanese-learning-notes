@@ -1,5 +1,11 @@
 import type { User } from 'firebase/auth';
-import { deleteUser, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import {
+  deleteUser,
+  onAuthStateChanged,
+  reauthenticateWithPopup,
+  signInWithPopup,
+  signOut,
+} from 'firebase/auth';
 import type { AuthPort, AuthUser } from '@/domain/ports';
 import { auth, googleProvider } from './client';
 
@@ -25,6 +31,18 @@ export const firebaseAuth: AuthPort = {
   },
   signOut: async () => {
     await signOut(auth);
+  },
+  /**
+   * The same popup as signing in, against the account already signed in.
+   *
+   * `reauthenticateWithPopup` rather than `signInWithPopup`: the latter would
+   * succeed for a *different* Google account, and the caller is about to delete
+   * everything belonging to the current one. Firebase refuses the swap here.
+   */
+  reauthenticate: async () => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('ログインしていません。');
+    await reauthenticateWithPopup(user, googleProvider);
   },
   /**
    * Firebase refuses this on a session that is not recent, raising

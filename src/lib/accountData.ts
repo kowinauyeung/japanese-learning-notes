@@ -45,10 +45,25 @@ const PAGE = 100;
 async function drain<T>(read: (q: PageQuery) => Promise<Page<T>>): Promise<T[]> {
   const all: T[] = [];
   let cursor: string | null = null;
+  // A cursor already handed out means the walk is not advancing. Recognising
+  // that is the guard; the page count below is only a backstop.
+  //
+  // It used to be the other way round, and the cost of that was the whole
+  // point: a stuck cursor ran the loop to its 10,000-page limit at 100 records
+  // a page, so the failure mode of "this query stopped moving" was a million
+  // document reads — twenty times the free daily allowance, spent proving
+  // something the second page already showed. Worse, `deleteEverything` drains
+  // twice too, so it was reachable from the delete button as well as from
+  // export.
+  const seen = new Set<string>();
   for (let page = 0; page < 10_000; page += 1) {
     const result: Page<T> = await read({ limit: PAGE, cursor });
     all.push(...result.items);
     if (!result.cursor) return all;
+    if (seen.has(result.cursor)) {
+      throw new Error('エクスポートが終わりませんでした。時間をおいて再度お試しください。');
+    }
+    seen.add(result.cursor);
     cursor = result.cursor;
   }
   throw new Error('エクスポートが終わりませんでした。時間をおいて再度お試しください。');
@@ -134,6 +149,20 @@ export async function deleteEverything({
   progress: ProgressRepository;
   auth: AuthPort;
 }): Promise<{ entries: number; wordSets: number }> {
+  // **First, and before anything irreversible.**
+  //
+  // The order below — data, then the account — is deliberate and stays: delete
+  // the account first and there is no session left to delete the data with.
+  // What that order cannot survive is the provider refusing the last step. On a
+  // session old enough for `auth/requires-recent-login`, every destructive write
+  // succeeded and only the account remained, so a user who pressed delete was
+  // left with an account holding nothing and a message telling them some of it
+  // was already gone.
+  //
+  // Proving the session up front costs a popup and moves that failure to the
+  // one place where nothing has happened yet.
+  await auth.reauthenticate();
+
   const setList = await drain((q) => wordSets.list(q));
   for (const set of setList) await wordSets.remove(set.id);
 

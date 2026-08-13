@@ -133,6 +133,18 @@ export interface AuthPort {
   signIn(): Promise<void>;
   signOut(): Promise<void>;
   /**
+   * Prove the session is current, before anything irreversible depends on it.
+   *
+   * Providers refuse a sensitive operation on a stale session, and `deleteAccount`
+   * is one — so a deletion that runs the data first and the account last will,
+   * on an old-enough session, succeed at every irreversible step and fail at the
+   * one that needed proving. The user is then left with an account and no data.
+   *
+   * Calling this first moves that failure to the front, where it costs a
+   * re-authentication prompt instead of everything the account had.
+   */
+  reauthenticate(): Promise<void>;
+  /**
    * Delete the account itself, not just its data.
    *
    * Providers generally refuse this on a stale session — Firebase raises
