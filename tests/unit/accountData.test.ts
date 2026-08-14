@@ -203,6 +203,13 @@ describe('deleteEverything', () => {
 
     const failure = await deleteEverything(p).catch((cause: unknown) => cause);
 
+    // Both, and the first is not redundant. `not.toBeInstanceOf` is satisfied by
+    // anything that is not that class — including `deleteEverything` returning
+    // normally, in which case `failure` is the `{ entries, wordSets }` result
+    // and the call counts below hold anyway. Without this line the test is
+    // equally happy with the account silently failing to delete, which is a
+    // neighbouring defect it is named to exclude.
+    expect(failure).toBeInstanceOf(Error);
     expect(failure).not.toBeInstanceOf(NothingDeleted);
     // ...because plenty was.
     expect((p.entries.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(5);
