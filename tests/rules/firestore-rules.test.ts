@@ -178,12 +178,6 @@ describe('the allowedUsers gate', () => {
   });
 
   /**
-   * The gap the first review round found: update and delete were gated on
-   * ownership alone, so revoking an account left it able to keep editing what
-   * it had already put in front of other people — the one thing revocation is
-   * for.
-   */
-  /**
    * Revocation is the claim going away, not a document being deleted.
    *
    * That is a real change in what "revoked" means: the claim lives in the ID
@@ -195,116 +189,91 @@ describe('the allowedUsers gate', () => {
    * **This test is the state after the token has turned over**, which is the
    * one this harness can express: `@firebase/rules-unit-testing` mints tokens
    * directly, so the window itself is not reachable from here.
+   *
+   * The published-copy version of this went with the publishing rules. The
+   * property survives it: revocation has to take away update and delete on what
+   * the account already wrote, not only create. Gating `create` alone would
+   * leave a revoked account editing its own notebook indefinitely, which is the
+   * gap the first review round found.
    */
-  it('revokes update and delete on already-published copies, not just create', async () => {
+  it('takes away update and delete on what a revoked account already wrote', async () => {
     const db = asStranger(ALICE);
 
-    await assertFails(db.doc(`publicEntries/pe-alice`).update({ searchText: 'edited' }));
+    await assertFails(db.doc(`users/${ALICE}/entries/e1`).update({ headword: 'edited' }));
+    await assertFails(db.doc(`users/${ALICE}/entries/e1`).delete());
+    // ...and reading it, which it could do a moment ago.
+    await assertFails(db.doc(`users/${ALICE}/entries/e1`).get());
+  });
+});
+
+/**
+ * Publishing is designed and unbuilt, and the paths it would use are shut.
+ *
+ * `PublicationRepository` is a port with no adapter and no interface in front
+ * of it, so nothing in the application has ever written here — while the rules
+ * permitted create, update and delete with **no shape or size validation at
+ * all**. The only collections an allowed account could write anything it liked
+ * to were the two that nothing writes.
+ *
+ * These tests are what stops that reopening by accident. When publishing is
+ * built they are replaced by the properties listed in `firestore.rules` where
+ * the old block was — reads open to any allowed account, a snapshot entry
+ * readable only while its parent set exists, ownerUid never reassigned, the
+ * parent set checked with `getAfter`, delete exempt from that check, every
+ * mutation gated on `isAllowed()`, shape validation, and deletion and export
+ * covering published copies.
+ *
+ * The twelve tests that covered those properties are in pull request #30. This
+ * docblock points at the rules and the rules point at that pull request, so
+ * neither is a step in a circle.
+ */
+describe('publishing, which is not built', () => {
+  /**
+   * The seeded documents exist — `beforeEach` writes them with rules disabled,
+   * as a partly-built feature or an earlier deploy would have left them. Being
+   * unreadable is therefore a fact about the rules and not about the fixture.
+   */
+  it('refuses to read a published copy, to its owner as much as to anyone else', async () => {
+    for (const db of [as(ALICE), as(BOB)]) {
+      await assertFails(db.doc(`publicEntries/pe-alice`).get());
+      await assertFails(db.doc(`publicSets/set-alice`).get());
+      await assertFails(db.doc(`publicSets/set-alice/entries/x1`).get());
+    }
+  });
+
+  it('refuses to create one, which is the write nothing in the app makes', async () => {
+    const db = as(ALICE);
+    await assertFails(db.doc(`publicEntries/pe-new`).set(snapshotEntry(ALICE)));
+    await assertFails(db.doc(`publicSets/set-new`).set({ ...snapshotEntry(ALICE), entryCount: 0 }));
+    await assertFails(db.doc(`publicSets/set-alice/entries/x2`).set(snapshotEntry(ALICE)));
+  });
+
+  /**
+   * Owning the document is not an exception. Ownership was the whole basis of
+   * the rules this replaces, so a check that let the owner through would leave
+   * the surface exactly as wide as it was.
+   */
+  it('refuses to update or delete one, including by its own owner', async () => {
+    const db = as(ALICE);
+    await assertFails(db.doc(`publicEntries/pe-alice`).update({ version: 2 }));
     await assertFails(db.doc(`publicEntries/pe-alice`).delete());
     await assertFails(db.doc(`publicSets/set-alice`).update({ entryCount: 99 }));
     await assertFails(db.doc(`publicSets/set-alice`).delete());
     await assertFails(db.doc(`publicSets/set-alice/entries/x1`).update({ searchText: 'e' }));
     await assertFails(db.doc(`publicSets/set-alice/entries/x1`).delete());
-    // ...and reading and creating stay denied, as they already were.
-    await assertFails(db.doc(`publicEntries/pe-alice`).get());
-    await assertFails(db.doc(`publicEntries/pe-new`).set(snapshotEntry(ALICE)));
-  });
-});
-
-describe('published copies', () => {
-  it("lets an allowlisted user read anyone's published content", async () => {
-    await assertSucceeds(as(BOB).doc(`publicEntries/pe-alice`).get());
-    await assertSucceeds(as(BOB).doc(`publicSets/set-alice`).get());
-    await assertSucceeds(as(BOB).doc(`publicSets/set-alice/entries/x1`).get());
-  });
-
-  it('lets the owner publish, republish and unpublish', async () => {
-    const db = as(ALICE);
-    await assertSucceeds(db.doc(`publicEntries/pe-2`).set(snapshotEntry(ALICE)));
-    await assertSucceeds(db.doc(`publicEntries/pe-alice`).update({ version: 2 }));
-    await assertSucceeds(db.doc(`publicEntries/pe-alice`).delete());
-  });
-
-  it('refuses to publish under someone else as owner', async () => {
-    await assertFails(as(ALICE).doc(`publicEntries/pe-3`).set(snapshotEntry(BOB)));
-  });
-
-  it('refuses to reassign ownerUid on an existing copy', async () => {
-    await assertFails(as(ALICE).doc(`publicEntries/pe-alice`).update({ ownerUid: BOB }));
-  });
-
-  it("refuses to touch another user's published copy", async () => {
-    const db = as(BOB);
-    await assertFails(db.doc(`publicEntries/pe-alice`).update({ searchText: 'x' }));
-    await assertFails(db.doc(`publicEntries/pe-alice`).delete());
-  });
-});
-
-describe('snapshot entries under a published set', () => {
-  /**
-   * The second gap the review found. Checking only the child's own ownerUid
-   * answers "who wrote this row" but not "may this row be in this set", so an
-   * allowlisted account could inject an entry into somebody else's published
-   * set, where it would be served and adopted as part of it.
-   */
-  it("refuses a create under another user's set", async () => {
-    await assertFails(
-      as(ALICE).doc(`publicSets/set-bob/entries/injected`).set(snapshotEntry(ALICE)),
-    );
-  });
-
-  it('refuses a create under a set that does not exist', async () => {
-    await assertFails(as(ALICE).doc(`publicSets/set-ghost/entries/x`).set(snapshotEntry(ALICE)));
   });
 
   /**
-   * A first publish writes the set and its first entries in one batch. Checking
-   * the parent with get() would evaluate the children against committed state,
-   * where the set does not exist yet, and deny every first publish — the parent
-   * check that fixed cross-user injection would have quietly broken publishing
-   * itself. getAfter() evaluates the batch's end state instead.
+   * The batch a first publish would have used. It is the one shape that could
+   * plausibly slip past a rule written only against single writes, which is why
+   * it is named here rather than folded into the create case above.
    */
-  it('allows a first publish creating the set and its first entry in one batch', async () => {
+  it('refuses the one-batch first publish the old getAfter check existed for', async () => {
     const db = as(ALICE);
     const batch = db.batch();
     batch.set(db.doc(`publicSets/set-first`), { ...snapshotEntry(ALICE), entryCount: 1 });
     batch.set(db.doc(`publicSets/set-first/entries/x1`), snapshotEntry(ALICE));
-    await assertSucceeds(batch.commit());
-  });
-
-  it('refuses a batch that creates the set under another owner', async () => {
-    const db = as(ALICE);
-    const batch = db.batch();
-    batch.set(db.doc(`publicSets/set-spoof`), { ...snapshotEntry(BOB), entryCount: 1 });
-    batch.set(db.doc(`publicSets/set-spoof/entries/x1`), snapshotEntry(ALICE));
     await assertFails(batch.commit());
-  });
-
-  it('allows a create under the writer own set', async () => {
-    await assertSucceeds(
-      as(ALICE).doc(`publicSets/set-alice/entries/x2`).set(snapshotEntry(ALICE)),
-    );
-  });
-
-  /**
-   * Firestore does not cascade deletes, so removing publicSets/{id} leaves this
-   * subcollection addressable by anyone who noted the id. Requiring the parent
-   * on read means a half-finished unpublish fails closed.
-   */
-  it('stops serving snapshot entries once the parent set is gone', async () => {
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await context.firestore().doc(`publicSets/set-alice`).delete();
-    });
-    await assertFails(as(BOB).doc(`publicSets/set-alice/entries/x1`).get());
-    await assertFails(as(ALICE).doc(`publicSets/set-alice/entries/x1`).get());
-  });
-
-  /** Deliberately exempt from the parent check, so orphans stay cleanable. */
-  it('still lets the owner delete an orphaned snapshot entry', async () => {
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await context.firestore().doc(`publicSets/set-alice`).delete();
-    });
-    await assertSucceeds(as(ALICE).doc(`publicSets/set-alice/entries/x1`).delete());
   });
 });
 
