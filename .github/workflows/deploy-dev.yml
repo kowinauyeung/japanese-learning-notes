@@ -3,7 +3,11 @@ name: Deploy (dev)
 on:
   push:
     branches: [develop]
-  # Every pull request except those into `main` and `release/*`.
+  # Every pull request except those into `main` and `release/**`.
+  #
+  # `release/**` and not `release/*`: GitHub's filter patterns follow the same
+  # rule as globs, so `*` stops at a `/` and `**` does not. `release/2026/q1`
+  # would be described by the narrower pattern and not matched by it.
   #
   # The deploy job checks out the pull request's **base** on purpose — it holds
   # a credential, so it must not run the pull request's own code — and that
