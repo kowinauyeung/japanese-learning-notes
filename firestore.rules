@@ -106,14 +106,23 @@ service cloud.firestore {
     // `headword` is the exception and is read directly: an entry without one is
     // not an entry, and the form refuses it too.
     //
-    // **`createdAt`, `updatedAt` and `finishedAt` are the other exceptions, and
-    // the reason is not schema tidiness.** Every `list()` in the adapters orders
-    // by one of them, and Firestore omits a document that lacks the field it is
-    // ordering by. So a row written without one is invisible to paging — which
+    // **`createdAt` and `finishedAt` are the other exceptions, and the reason is
+    // not schema tidiness.** Every `list()` in the adapters orders by one of
+    // them — `entryRepo` and `wordSetRepo` by `createdAt`, `progressRepo` by
+    // `finishedAt` — and Firestore omits a document that lacks the field it is
+    // ordering by. So a row written without one is invisible to paging, which
     // means it is never exported and never deleted, while the account screen and
     // the privacy policy both promise otherwise. Optional here and ordered-by
     // there is a combination that quietly breaks a legal claim, so they are
     // required at the only point that can enforce it.
+    //
+    // **`updatedAt` is required for a different reason, and the distinction is
+    // load-bearing:** nothing orders by it. Both adapters write it on every
+    // create and every update, so a document without one did not come from this
+    // application — which is worth refusing on its own, but is not the
+    // invisible-to-paging argument above. A reader auditing this later looks for
+    // the listing that orders by `updatedAt`, finds none, and is entitled to
+    // conclude that either the comment or the rule is wrong.
 
     // ---- which fields, not just how many ----
     //

@@ -177,9 +177,12 @@ split — `develop` for dev, `main` for production. Both are protected: changes
 land through a pull request with a green CI run, and neither accepts a force
 push.
 
-Pushing to `develop` deploys hosting and Firestore rules to `goitei-dev`, and
-every pull request gets its own Hosting preview channel that expires after seven
-days. Preview channels are hosting-only: rules are project-wide, so deploying
+Pushing to `develop` deploys hosting and Firestore rules to `goitei-dev`, and a
+pull request gets its own Hosting preview channel that expires after seven days
+— every pull request except one into `main` or a `release/*` branch, which get
+CI and no preview. The deploy job checks out the pull request's base, so it
+needs a base that carries the toolchain, and a release into `main` is the one
+case that does not. Preview channels are hosting-only: rules are project-wide, so deploying
 them from a pull request would change the rules every other preview runs under.
 A preview reads the real `goitei-dev` data, not a copy.
 

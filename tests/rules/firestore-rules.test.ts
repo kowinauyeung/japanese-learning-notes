@@ -452,6 +452,27 @@ describe('bounds on what an owner may write', () => {
     await assertFails(
       db.doc(`users/${ALICE}/wordSets/x`).set(wordSet(ALICE, { createdAt: long(5000) })),
     );
+    // The four the docblock named and the assertions did not reach. A bound
+    // that has never been red has an unknown failure mode, and these are the
+    // ones most easily dropped in a later edit precisely because nothing fails.
+    await assertFails(
+      db.doc(`users/${ALICE}/wordSets/x`).set(wordSet(ALICE, { publishedId: long(201) })),
+    );
+    await assertFails(
+      db.doc(`users/${ALICE}/wordSets/x`).set(wordSet(ALICE, { publishedVersion: -1 })),
+    );
+    await assertFails(
+      db.doc(`users/${ALICE}/wordSets/x`).set(
+        wordSet(ALICE, {
+          copiedFrom: Object.fromEntries(Array.from({ length: 11 }, (_, i) => [`k${i}`, 'v'])),
+        }),
+      ),
+    );
+    await assertFails(
+      db
+        .doc(`users/${ALICE}/practiceSessions/x`)
+        .set(session(ALICE, { finishedAt: '2026-08-13T00:01:00.000Z' })),
+    );
   });
 
   /**
@@ -711,7 +732,7 @@ describe('what the comments in the rules claim', () => {
    * passes every check, never appears in a page, and so is never exported and
    * never deleted. `Account.tsx` and the privacy policy both say otherwise.
    */
-  it('refuses a row with no createdAt, which no listing would ever return', async () => {
+  it('refuses a row with no ordered timestamp, which no listing would ever return', async () => {
     const db = as(ALICE);
     await assertFails(
       db.doc(`users/${ALICE}/entries/orphan`).set({ ownerUid: ALICE, headword: '清高' }),
