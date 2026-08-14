@@ -127,6 +127,67 @@ service cloud.firestore {
     //
     // `headword` is the exception and is read directly: an entry without one is
     // not an entry, and the form refuses it too.
+
+    // ---- which fields, not just how many ----
+    //
+    // `keys().size()` bounds the number of fields and says nothing about their
+    // names, so `{ headword: 'x', junk: <a megabyte> }` passed everything
+    // below: the count is two, every string named is within its limit, and
+    // `junk` is invisible to all of them.
+    //
+    // **Being on this list is permission to send a field, not a limit on it.**
+    // `hasOnly` closes the unknown-name half and the other half is closed by
+    // the checks in `validEntry` — which is why the short scalars, the two
+    // timestamps and the maps are all bounded there now rather than merely
+    // named here. An allowlisted-but-unchecked field is the same megabyte under
+    // a different key.
+    //
+    // **What still is not bounded, said plainly rather than left to be found.**
+    // `size()` on a map counts keys and `size()` on a list counts elements, so
+    // neither reaches the bytes inside one: a single `context` value, or one
+    // `senses[3].description`, can be as large as a document may be. Firestore
+    // rules cannot see either. Anything depending on per-element limits has to
+    // enforce them where they are visible.
+    //
+    // `hasOnly` is the allowlist Firestore documents for this. It does **not**
+    // make anything required — it constrains the key set to a subset, so an
+    // absent optional field stays absent. Requiredness is still where it was,
+    // in the `d.get(field, default)` calls further down, and the tests that
+    // assert an entry missing every optional field is accepted still pass.
+    //
+    // **`migrationKey` is on the entry list and is not in the domain `Entry`.**
+    // `migration/upload.mjs` writes it onto every migrated document as
+    // provenance, and an update sends the merged document — so omitting it here
+    // would refuse every edit to all 67 migrated words, in production only,
+    // where the migration has been run. Read the list off what is stored, not
+    // off the TypeScript type.
+    function entryFields() {
+      return [
+        'ownerUid', 'headword', 'reading', 'pitchAccent', 'pos', 'jlpt',
+        'origin', 'style', 'politeness', 'freq', 'citationForm', 'posInfo',
+        'definition', 'definitionSub', 'senses', 'examples', 'related',
+        'source', 'context', 'usage', 'tags', 'learnedOn',
+        'publishedId', 'publishedVersion', 'copiedFrom',
+        'createdAt', 'updatedAt',
+        'migrationKey'
+      ];
+    }
+
+    function wordSetFields() {
+      return [
+        'ownerUid', 'name', 'description', 'entryIds', 'level', 'topics',
+        'publishedId', 'publishedVersion', 'copiedFrom',
+        'createdAt', 'updatedAt'
+      ];
+    }
+
+    function sessionFields() {
+      return [
+        'ownerUid', 'mode', 'filterLabel', 'total', 'correct', 'missed',
+        'startedAt', 'finishedAt'
+      ];
+    }
+
     function str(value, max) {
       return value is string && value.size() <= max;
     }
@@ -156,7 +217,7 @@ service cloud.firestore {
     function validEntry(uid) {
       let d = request.resource.data;
       return ownedBy(uid)
-        && d.keys().size() <= 40
+        && d.keys().hasOnly(entryFields())
         && str(d.headword, 200) && d.headword.size() > 0
         && str(d.get('reading', ''), 200)
         && str(d.get('definition', ''), 20000)
@@ -168,13 +229,39 @@ service cloud.firestore {
         && list(d.get('senses', []), 100)
         && list(d.get('examples', []), 100)
         && list(d.get('related', []), 100)
-        && (d.get('pitchAccent', null) == null || d.get('pitchAccent', 0) is int);
+        && (d.get('pitchAccent', null) == null || d.get('pitchAccent', 0) is int)
+        // Short, closed-vocabulary scalars. Each is one line and each was
+        // previously unbounded, which `hasOnly` alone does not change: being on
+        // the allowlist is permission to send the field, not a limit on it.
+        && str(d.get('jlpt', ''), 10)
+        && str(d.get('origin', ''), 10)
+        && str(d.get('style', ''), 10)
+        && str(d.get('politeness', ''), 10)
+        && str(d.get('learnedOn', ''), 10)
+        && str(d.get('migrationKey', ''), 200)
+        && (d.get('publishedId', null) == null || str(d.get('publishedId', ''), 200))
+        && d.get('freq', 1) is int && d.get('freq', 1) >= 1 && d.get('freq', 1) <= 5
+        && d.get('publishedVersion', 0) is int && d.get('publishedVersion', 0) >= 0
+        // Timestamps, not strings. Both are written by the adapter from the
+        // server clock, so anything else on this key is a client sending a
+        // value of its own choosing — and before this line that value could be
+        // a string of any length. `keepsCreatedAt` pins createdAt to what is
+        // stored, which says nothing about the create that stored it.
+        && d.get('createdAt', request.time) is timestamp
+        && d.get('updatedAt', request.time) is timestamp
+        // Maps. `size()` counts keys, so this stops a key explosion and **not**
+        // a large value inside one — the same blind spot the note above records
+        // for list elements. Said plainly rather than left to be discovered.
+        && d.get('context', {}).size() <= 20
+        && d.get('usage', {}).size() <= 20
+        && (d.get('posInfo', null) == null || d.get('posInfo', {}).size() <= 20)
+        && (d.get('copiedFrom', null) == null || d.get('copiedFrom', {}).size() <= 10);
     }
 
     function validWordSet(uid) {
       let d = request.resource.data;
       return ownedBy(uid)
-        && d.keys().size() <= 20
+        && d.keys().hasOnly(wordSetFields())
         && str(d.name, 200) && d.name.size() > 0
         && str(d.get('description', ''), 5000)
         // The one unbounded list in the schema, and the one a set is made of.
@@ -185,7 +272,7 @@ service cloud.firestore {
     function validSession(uid) {
       let d = request.resource.data;
       return ownedBy(uid)
-        && d.keys().size() <= 20
+        && d.keys().hasOnly(sessionFields())
         && str(d.get('filterLabel', ''), 500)
         && d.get('total', 0) is int && d.get('total', 0) >= 0 && d.get('total', 0) <= 2000
         && d.get('correct', 0) is int && d.get('correct', 0) >= 0
@@ -209,14 +296,23 @@ service cloud.firestore {
         return isOwner(uid) && isAllowed();
       }
 
-      allow read, delete: if mine();
-      // Split exactly as the subcollections are, and for the reason
+      // Read and delete only. **Nothing in the application writes this
+      // document** — there is no profile, and no adapter addresses this path —
+      // so the create and update it used to carry described a feature that does
+      // not exist, while permitting any twenty fields of any names. That is the
+      // one place `hasOnly` cannot help, because there is no legitimate field to
+      // allow: the honest allowlist for a document nobody writes is empty.
+      //
+      // Delete stays, and stays split from the rest for the reason
       // `keepsCreatedAt` documents: `write` covers delete, and on a delete
       // `request.resource` is null, so reaching into it is an evaluation error.
       // This document was the one place that kept the combined form, and
       // deleting it therefore failed with a message about null rather than
       // about permission — the failure mode account deletion would have hit.
-      allow create, update: if mine() && request.resource.data.keys().size() <= 20;
+      //
+      // Adding a profile later means adding `create, update` back **with a
+      // `hasOnly` naming its fields**, not restoring what was here.
+      allow read, delete: if mine();
 
       match /entries/{entryId} {
         allow read, delete: if mine();
@@ -246,8 +342,13 @@ service cloud.firestore {
       // every sibling checks the field as well.
       match /progress/entries {
         allow read, delete: if mine();
+        // `entries` is the whole content of this document and `hasOnly` does not
+        // touch it, so before this bound the only ceiling on one account's
+        // progress map was Firestore's 1 MiB. 5,000 words is far past any
+        // notebook this design expects and far short of that ceiling.
         allow create, update: if mine() && ownedBy(uid)
-                              && request.resource.data.keys().size() <= 5;
+                              && request.resource.data.keys().hasOnly(['ownerUid', 'entries'])
+                              && request.resource.data.get('entries', {}).size() <= 5000;
       }
     }
 
