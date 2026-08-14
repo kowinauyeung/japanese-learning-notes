@@ -3,7 +3,32 @@ name: Deploy (dev)
 on:
   push:
     branches: [develop]
+  # Every pull request except those into `main` and `release/**`.
+  #
+  # `release/**` and not `release/*`: GitHub's filter patterns follow the same
+  # rule as globs, so `*` stops at a `/` and `**` does not. `release/2026/q1`
+  # would be described by the narrower pattern and not matched by it.
+  #
+  # The deploy job checks out the pull request's **base** on purpose — it holds
+  # a credential, so it must not run the pull request's own code — and that
+  # assumes the base carries the toolchain. A release pull request into `main`
+  # broke the assumption rather than the rule: `main` had no `.nvmrc`, so
+  # `setup-node` failed four seconds in and put a red check on the release. Not
+  # a required check, so it blocked nothing — worse than that, a red light
+  # nobody is meant to act on, on the one pull request where somebody should be
+  # reading every light.
+  #
+  # **`branches-ignore` rather than `branches: [develop]`, and stacked pull
+  # requests are why.** A pull request based on another feature branch has a
+  # base that does carry the toolchain; it was never broken, and an allowlist
+  # would have taken its preview away as collateral. `ci.yml` argues the same
+  # case for verification in so many words — filtering on the base leaves a
+  # stacked pull request unchecked until it is retargeted, which is exactly when
+  # it is easiest to merge something red. Verification and a preview deploy are
+  # different obligations, but not different enough to reach opposite
+  # conclusions here without saying so.
   pull_request:
+    branches-ignore: [main, 'release/**']
 
 permissions:
   contents: read

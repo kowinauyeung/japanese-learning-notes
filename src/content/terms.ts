@@ -5,17 +5,31 @@ import { site } from './site';
  * A first draft, not legal advice.
  *
  * One thing here is a deliberate legal position rather than a wording choice:
- * **there is no blanket disclaimer.** Japanese consumer contract law does not
- * enforce a clause excluding all liability for intentional acts or gross
- * negligence, and a clause that is void takes the reader's trust with it. The
- * limitation below is bounded instead.
+ * **there is no blanket disclaimer.** A clause that is void takes the reader's
+ * trust with it, so the limitation below is bounded rather than total.
+ *
+ * **It was total until review caught it**, and the gap is worth recording
+ * because this comment did not describe the text underneath it. The clause
+ * excluded liability except for intent and gross negligence — which, read the
+ * other way round, excluded *everything* for ordinary negligence. 消費者契約法
+ * 8条1項1号 is about exactly that shape: a clause wholly excluding a business's
+ * liability, not only one excluding it for intent and gross negligence. The
+ * carve-out that made the comment feel true was for the wrong half.
+ *
+ * What is here now bounds ordinary negligence by the *kind* of damage rather
+ * than removing it: ordinary damages remain, consequential and special damages
+ * and lost profits do not. Deliberately no monetary cap — the service is free,
+ * so a cap at "the amount paid" is a total exclusion wearing a number.
+ *
+ * Still not reviewed by a lawyer. This is the structure being defensible, not
+ * the wording being final.
  */
 const FORM = 'お問い合わせフォームを開く';
 
 export const terms: Doc = {
   title: '利用規約',
   lead: '本規約は、語彙庭の利用条件を定めるものです。ログインした時点で、本規約に同意したものとみなします。',
-  updated: '2026-08-13',
+  updated: '2026-08-14',
   sections: [
     {
       heading: 'サービスについて',
@@ -74,8 +88,9 @@ export const terms: Doc = {
     {
       heading: '責任について',
       body: [
-        '本サービスは無償で提供しています。運営者は、本サービスの利用により生じた損害について、運営者に故意または重過失がある場合を除き、責任を負いません。',
-        '運営者の故意または重過失により生じた損害については、前記の免責にかかわらず責任を負います。',
+        '本サービスは無償で提供しています。',
+        '運営者の故意または重過失により生じた損害については、運営者がその全部について責任を負います。',
+        '運営者の軽過失により生じた損害については、通常生じうる損害の範囲に限り責任を負います。特別の事情によって生じた損害、逸失利益および間接損害については、責任を負いません。',
       ],
     },
     {

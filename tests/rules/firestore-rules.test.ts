@@ -42,9 +42,21 @@ const as = (uid: string) =>
 const asStranger = (uid: string) =>
   testEnv.authenticatedContext(uid, { email_verified: true }).firestore();
 
-/** A whole entry, the shape `sanitizeDraft` produces. Overrides go last. */
+/**
+ * A whole entry, the shape `sanitizeDraft` produces plus what the adapter adds.
+ *
+ * The stamps are here because the adapter sends them and the rules require them
+ * — a fixture without them was a document no write path in the application can
+ * produce, which is the same way the ISO-string createdAt slipped past review.
+ */
+const STAMPS = {
+  createdAt: new Date('2026-08-13T00:00:00.000Z'),
+  updatedAt: new Date('2026-08-13T00:00:00.000Z'),
+};
+
 const entry = (ownerUid: string, over: Record<string, unknown> = {}) => ({
   ownerUid,
+  ...STAMPS,
   headword: '清高',
   reading: 'せいこう',
   definition: '清らかで気高いこと。',
@@ -62,6 +74,7 @@ const entry = (ownerUid: string, over: Record<string, unknown> = {}) => ({
 
 const wordSet = (ownerUid: string, over: Record<string, unknown> = {}) => ({
   ownerUid,
+  ...STAMPS,
   name: '仕事',
   description: '',
   entryIds: [],
@@ -71,6 +84,7 @@ const wordSet = (ownerUid: string, over: Record<string, unknown> = {}) => ({
 
 const session = (ownerUid: string, over: Record<string, unknown> = {}) => ({
   ownerUid,
+  finishedAt: new Date('2026-08-13T00:01:00.000Z'),
   filterLabel: 'すべて',
   total: 10,
   correct: 8,
@@ -418,6 +432,50 @@ describe('bounds on what an owner may write', () => {
   });
 
   /**
+   * The half of the allowlist argument that was only applied to entries.
+   *
+   * `validEntry` bounds every scalar it permits. `validWordSet` and
+   * `validSession` name theirs and check some — so `level`, `publishedId`,
+   * `copiedFrom`, `mode`, `startedAt`, `finishedAt` and both timestamp pairs
+   * were permitted and unread, which is the same megabyte under a different
+   * key that `hasOnly` was introduced to stop.
+   */
+  it('refuses an oversized value in a word set or session field too', async () => {
+    const db = as(ALICE);
+    await assertFails(db.doc(`users/${ALICE}/wordSets/x`).set(wordSet(ALICE, { level: long(11) })));
+    await assertFails(
+      db.doc(`users/${ALICE}/practiceSessions/x`).set(session(ALICE, { mode: long(21) })),
+    );
+    await assertFails(
+      db.doc(`users/${ALICE}/practiceSessions/x`).set(session(ALICE, { startedAt: long(5000) })),
+    );
+    await assertFails(
+      db.doc(`users/${ALICE}/wordSets/x`).set(wordSet(ALICE, { createdAt: long(5000) })),
+    );
+    // The four the docblock named and the assertions did not reach. A bound
+    // that has never been red has an unknown failure mode, and these are the
+    // ones most easily dropped in a later edit precisely because nothing fails.
+    await assertFails(
+      db.doc(`users/${ALICE}/wordSets/x`).set(wordSet(ALICE, { publishedId: long(201) })),
+    );
+    await assertFails(
+      db.doc(`users/${ALICE}/wordSets/x`).set(wordSet(ALICE, { publishedVersion: -1 })),
+    );
+    await assertFails(
+      db.doc(`users/${ALICE}/wordSets/x`).set(
+        wordSet(ALICE, {
+          copiedFrom: Object.fromEntries(Array.from({ length: 11 }, (_, i) => [`k${i}`, 'v'])),
+        }),
+      ),
+    );
+    await assertFails(
+      db
+        .doc(`users/${ALICE}/practiceSessions/x`)
+        .set(session(ALICE, { finishedAt: '2026-08-13T00:01:00.000Z' })),
+    );
+  });
+
+  /**
    * One document per account, and `entries` is all of it. `hasOnly` stops a
    * stray key name and does not look inside the one key that matters, so the
    * only ceiling here was Firestore's 1 MiB.
@@ -601,6 +659,7 @@ describe('what the adapters write is what the rules accept', () => {
         headword: '清高',
         ownerUid: ALICE,
         createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-08-01T00:00:00.000Z'),
       }),
     );
     await assertFails(ref.update({ headword: '清廉', createdAt: '2026-08-01T00:00:00.000Z' }));
@@ -653,7 +712,38 @@ describe('what the comments in the rules claim', () => {
   it('accepts an entry missing every optional field', async () => {
     const db = as(ALICE);
     await assertSucceeds(
-      db.doc(`users/${ALICE}/entries/minimal`).set({ ownerUid: ALICE, headword: '清高' }),
+      db.doc(`users/${ALICE}/entries/minimal`).set({
+        ownerUid: ALICE,
+        headword: '清高',
+        // Not optional, and the exception is deliberate: every `list()` orders by
+        // `createdAt`, and Firestore omits a document that lacks the field it
+        // orders by. A row without one is invisible to paging, so it is never
+        // exported and never deleted — while the account screen promises both.
+        createdAt: new Date('2026-08-14T00:00:00.000Z'),
+        updatedAt: new Date('2026-08-14T00:00:00.000Z'),
+      }),
+    );
+  });
+
+  /**
+   * The combination that breaks a promise rather than a query.
+   *
+   * Optional in the rules and ordered-by in the adapter is invisible data: it
+   * passes every check, never appears in a page, and so is never exported and
+   * never deleted. `Account.tsx` and the privacy policy both say otherwise.
+   */
+  it('refuses a row with no ordered timestamp, which no listing would ever return', async () => {
+    const db = as(ALICE);
+    await assertFails(
+      db.doc(`users/${ALICE}/entries/orphan`).set({ ownerUid: ALICE, headword: '清高' }),
+    );
+    await assertFails(
+      db.doc(`users/${ALICE}/wordSets/orphan`).set({ ownerUid: ALICE, name: '仕事' }),
+    );
+    await assertFails(
+      db
+        .doc(`users/${ALICE}/practiceSessions/orphan`)
+        .set({ ownerUid: ALICE, total: 1, correct: 1 }),
     );
   });
 
@@ -668,10 +758,16 @@ describe('what the comments in the rules claim', () => {
   it('accepts a word set and a session missing their optional fields', async () => {
     const db = as(ALICE);
     await assertSucceeds(
-      db.doc(`users/${ALICE}/wordSets/minimal`).set({ ownerUid: ALICE, name: '仕事' }),
+      // The stamps are not optional — see the rules, where they are the
+      // exception alongside `headword` and for a different reason: every
+      // listing orders by one of them.
+      db.doc(`users/${ALICE}/wordSets/minimal`).set({ ownerUid: ALICE, name: '仕事', ...STAMPS }),
     );
     await assertSucceeds(
-      db.doc(`users/${ALICE}/practiceSessions/minimal`).set({ ownerUid: ALICE }),
+      db.doc(`users/${ALICE}/practiceSessions/minimal`).set({
+        ownerUid: ALICE,
+        finishedAt: new Date('2026-08-13T00:01:00.000Z'),
+      }),
     );
   });
 
