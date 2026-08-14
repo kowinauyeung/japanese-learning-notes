@@ -105,6 +105,15 @@ service cloud.firestore {
     //
     // `headword` is the exception and is read directly: an entry without one is
     // not an entry, and the form refuses it too.
+    //
+    // **`createdAt`, `updatedAt` and `finishedAt` are the other exceptions, and
+    // the reason is not schema tidiness.** Every `list()` in the adapters orders
+    // by one of them, and Firestore omits a document that lacks the field it is
+    // ordering by. So a row written without one is invisible to paging — which
+    // means it is never exported and never deleted, while the account screen and
+    // the privacy policy both promise otherwise. Optional here and ordered-by
+    // there is a combination that quietly breaks a legal claim, so they are
+    // required at the only point that can enforce it.
 
     // ---- which fields, not just how many ----
     //
@@ -225,8 +234,8 @@ service cloud.firestore {
         // value of its own choosing — and before this line that value could be
         // a string of any length. `keepsCreatedAt` pins createdAt to what is
         // stored, which says nothing about the create that stored it.
-        && d.get('createdAt', request.time) is timestamp
-        && d.get('updatedAt', request.time) is timestamp
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp
         // Maps. `size()` counts keys, so this stops a key explosion and **not**
         // a large value inside one — the same blind spot the note above records
         // for list elements. Said plainly rather than left to be discovered.
@@ -244,7 +253,17 @@ service cloud.firestore {
         && str(d.get('description', ''), 5000)
         // The one unbounded list in the schema, and the one a set is made of.
         && list(d.get('entryIds', []), 2000)
-        && list(d.get('topics', []), 50);
+        && list(d.get('topics', []), 50)
+        // The rest of what `wordSetFields()` permits. Naming a field and never
+        // reading it is the hole `hasOnly` was added to close, and closing it
+        // for entries alone left the same megabyte reachable one collection over
+        // — measured, not inferred: `level` took 900,000 characters.
+        && str(d.get('level', ''), 10)
+        && (d.get('publishedId', null) == null || str(d.get('publishedId', ''), 200))
+        && d.get('publishedVersion', 0) is int && d.get('publishedVersion', 0) >= 0
+        && (d.get('copiedFrom', null) == null || d.get('copiedFrom', {}).size() <= 10)
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
     }
 
     function validSession(uid) {
@@ -255,7 +274,13 @@ service cloud.firestore {
         && d.get('total', 0) is int && d.get('total', 0) >= 0 && d.get('total', 0) <= 2000
         && d.get('correct', 0) is int && d.get('correct', 0) >= 0
         && d.get('correct', 0) <= d.get('total', 0)
-        && list(d.get('missed', []), 2000);
+        && list(d.get('missed', []), 2000)
+        // Same again. `mode` is one of four words and `startedAt` is an ISO
+        // instant the client sends; `finishedAt` comes from the server clock and
+        // is a timestamp or it is not this document.
+        && str(d.get('mode', ''), 20)
+        && str(d.get('startedAt', ''), 40)
+        && d.finishedAt is timestamp;
     }
 
     // Private data, one collection at a time.

@@ -3,7 +3,19 @@ name: Deploy (dev)
 on:
   push:
     branches: [develop]
+  # Pull requests into `develop` only. The deploy job checks out the pull
+  # request's **base** on purpose — it holds a credential, so it must not run
+  # the pull request's own code — and that assumes the base carries the
+  # toolchain. A release or hotfix pull request into `main` breaks the
+  # assumption rather than the rule: `main` had no `.nvmrc`, so `setup-node`
+  # failed four seconds in and put a red check on the release.
+  #
+  # It is not a required check there, so it never blocked anything. It was worse
+  # than that: a red light nobody is meant to act on, on the one pull request
+  # where somebody should be reading every light. A dev preview has no business
+  # on a release in the first place.
   pull_request:
+    branches: [develop]
 
 permissions:
   contents: read
