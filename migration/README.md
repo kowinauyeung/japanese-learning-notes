@@ -164,14 +164,21 @@ production has been loaded and verified.
 
 Production has never been written to and has no rules deployed. In order:
 
-1. `yarn rules:prod` — deploy `firestore.rules` first, so the collection is
-   never briefly writable by anyone but the owner. (Or run the production deploy
-   workflow, which deploys rules before hosting for the same reason.)
+1. Run _Deploy (production)_. It deploys rules **then** hosting, which is the
+   order that matters: a client briefly older than its rules fails closed, and
+   the other way round fails open.
+
+   **Hosting is what makes step 2 possible.** On a project that has never been
+   deployed there is no app to sign into, so this cannot be shortened to
+   `yarn rules:prod` — that deploys rules only, and leaves you at step 2 with
+   nothing to open. It is the right command later, when hosting is already live
+   and only the rules have changed.
+
 2. Sign into the production app once, so the account exists and `--owner` can
    resolve to a uid.
 3. `yarn allow you@example.com prod`, **then sign out and sign back in.** The
    rules gate on a custom claim, and a claim reaches a client only in a freshly
-   minted ID token — an open session stays denied for up to an hour. Step 4
+   minted ID token — an open session stays denied for up to an hour. Step 5
    refuses to run until the claim is set, but it cannot tell whether you have
    signed in again since.
 4. Fill the accents — see above. Cheap now, 67 hand edits later.

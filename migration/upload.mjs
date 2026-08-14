@@ -165,13 +165,28 @@ console.log(`件数  : ${entries.length}`);
 // minted ID token, so an account granted access while signed in still cannot
 // read anything until it signs in again. Nothing server-side can observe that,
 // which is why the message says it rather than checking it.
+//
+// **Both halves, because the gate is both.** `isAllowed()` is
+// `signedIn() && request.auth.token.allowed == true`, and `signedIn()` requires
+// `email_verified`. Standing in for one of them would report an account ready
+// when the rules will still refuse it — which is the same failure this block
+// replaces, in a smaller size.
+//
+// Low impact and worth saying so: `client.ts` registers Google as the only
+// provider and a Google account arrives verified. This is the check matching the
+// rule, not a case anyone is likely to hit.
+if (owner.emailVerified !== true) {
+  console.error(`許可    : ${ownerEmail} のメールアドレスが未確認です。`);
+  console.error('          ルールは email_verified を要求します。');
+  process.exit(1);
+}
 if (owner.customClaims?.allowed !== true) {
   console.error(`許可    : ${ownerEmail} に allowed クレームがありません。`);
   console.error(`          yarn allow ${ownerEmail}${env === 'prod' ? ' prod' : ''}`);
   console.error('          を実行し、サインアウトしてからサインインし直してください。');
   process.exit(1);
 }
-console.log(`許可    : allowed クレームを確認しました`);
+console.log('許可    : email_verified と allowed クレームを確認しました');
 console.log('          （付与直後の場合は、一度サインアウトして入り直す必要があります）');
 
 // One read of the collection buys idempotency: without the key -> id map a
