@@ -55,10 +55,18 @@ node migration/upload.mjs prod --owner you@example.com --confirm      # goitei
 
 `--owner` is mandatory. Entries live at `users/{uid}/entries/{autoId}`, and the
 uid is resolved from that address through the Admin SDK rather than guessed, so
-the account must have signed into the app at least once. The uploader also
-ensures `allowedUsers/{uid}` exists — the security rules gate every path on it
-and no client can write that collection, so uploading a notebook its owner would
-then be denied access to is the easy mistake to make.
+the account must have signed into the app at least once.
+
+**The uploader checks that the owner carries the `allowed` custom claim and
+refuses to run without it.** It used to _write_ `allowedUsers/{uid}`, back when
+the rules read that collection; they gate on the claim now and nothing reads it,
+so the write had stopped granting anything while still reporting that it had.
+Uploading a notebook its owner is then denied access to is the easy mistake, and
+the check is what stops it — before 67 documents are written rather than after.
+
+What it cannot check is the other half: a claim reaches a client only in a
+freshly minted ID token, so an account granted access while signed in still sees
+nothing until it signs out and back in. Nothing server-side can observe that.
 
 `upload.mjs` uses `set()` without merge, so a document is fully replaced and
 stale fields disappear. It is still idempotent, but by a different mechanism:
@@ -157,12 +165,21 @@ production has been loaded and verified.
 Production has never been written to and has no rules deployed. In order:
 
 1. `yarn rules:prod` — deploy `firestore.rules` first, so the collection is
-   never briefly writable by anyone but the owner.
+   never briefly writable by anyone but the owner. (Or run the production deploy
+   workflow, which deploys rules before hosting for the same reason.)
 2. Sign into the production app once, so the account exists and `--owner` can
    resolve to a uid.
-3. Fill the accents — see above. Cheap now, 67 hand edits later.
-4. `node migration/upload.mjs prod --owner you@example.com --confirm` — loads
-   the 67 entries and adds the `allowedUsers` record.
-5. Verify the count is 67 and spot-check one entry with a 📌 context section.
+3. `yarn allow you@example.com prod`, **then sign out and sign back in.** The
+   rules gate on a custom claim, and a claim reaches a client only in a freshly
+   minted ID token — an open session stays denied for up to an hour. Step 4
+   refuses to run until the claim is set, but it cannot tell whether you have
+   signed in again since.
+4. Fill the accents — see above. Cheap now, 67 hand edits later.
+5. `node migration/upload.mjs prod --owner you@example.com --confirm` — loads
+   the 67 entries.
+6. Verify the count is 67 and spot-check one entry with a 📌 context section.
+7. **Then use the app** — add, edit and delete a word. Everything above runs
+   through the Admin SDK, which bypasses rules entirely, so nothing before this
+   proves the paths, `ownerUid` and the deployed rules agree.
 
 Step 1 before step 2 is the whole point of the ordering; do not reverse it.
