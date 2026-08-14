@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Page, PageQuery } from '@/domain/ports';
-import { deleteEverything, exportEverything, exportFilename } from '@/lib/accountData';
+import {
+  deleteEverything,
+  exportEverything,
+  exportFilename,
+  NothingDeleted,
+} from '@/lib/accountData';
 
 /** A repository holding `count` rows and serving them `PAGE` at a time. */
 const paged = <T>(items: T[]) => {
@@ -24,7 +29,10 @@ const ports = (entryCount: number, setCount: number, sessionCount: number) => {
     listSessions: paged(rows(sessionCount, 'p')),
     removeAll: vi.fn(() => Promise.resolve()),
   };
-  const auth = { deleteAccount: vi.fn(() => Promise.resolve()) };
+  const auth = {
+    reauthenticate: vi.fn(() => Promise.resolve()),
+    deleteAccount: vi.fn(() => Promise.resolve()),
+  };
   // Only the methods under test are implemented; the ports are wider.
   return {
     entries,
@@ -142,5 +150,97 @@ describe('deleteEverything', () => {
     await deleteEverything(p);
 
     expect(order).toEqual(['data', 'account']);
+  });
+
+  /**
+   * The state the order above cannot survive on its own.
+   *
+   * Providers refuse a sensitive operation on a stale session, so with the
+   * account deleted last a session old enough for `auth/requires-recent-login`
+   * succeeded at every irreversible step and failed only at the one that needed
+   * proving. The user pressed delete and was left holding an account with
+   * nothing in it — the worst of both outcomes, and unrecoverable.
+   *
+   * Proving the session first turns that into a popup.
+   */
+  it('refuses to delete anything at all when the session cannot be proved', async () => {
+    const p = ports(5, 5, 5);
+    // A code `reauthenticateWithPopup` actually raises. It is the one the
+    // adapter chose that call for: the user picked a different Google account,
+    // and the caller is about to delete everything belonging to this one.
+    (p.auth.reauthenticate as ReturnType<typeof vi.fn>).mockRejectedValue(
+      Object.assign(new Error('different account'), { code: 'auth/user-mismatch' }),
+    );
+
+    await expect(deleteEverything(p)).rejects.toBeInstanceOf(NothingDeleted);
+
+    expect((p.entries.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect((p.wordSets.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect((p.progress.removeAll as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect((p.auth.deleteAccount as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+  });
+
+  /**
+   * The state a user must never be told is safe.
+   *
+   * `auth/requires-recent-login` is `CREDENTIAL_TOO_OLD_LOGIN_AGAIN`, which the
+   * backend returns for a sensitive operation — and the only sensitive
+   * operation here is `deleteAccount()`, which runs last. So this code can only
+   * reach a caller *after* every word set, entry, session and the progress map
+   * are already gone. Reading it as "the re-authentication was refused" and
+   * reporting 「データは削除されていません」 is the exact inverse of what
+   * happened, and it is unrecoverable: the reader retries later into an account
+   * holding nothing.
+   *
+   * The window is real rather than theoretical — the removals are one sequential
+   * `await` each, and nothing bounds how long that takes.
+   */
+  it('does not report a late refusal as nothing having been deleted', async () => {
+    const p = ports(5, 5, 5);
+    (p.auth.deleteAccount as ReturnType<typeof vi.fn>).mockRejectedValue(
+      Object.assign(new Error('stale'), { code: 'auth/requires-recent-login' }),
+    );
+
+    const failure = await deleteEverything(p).catch((cause: unknown) => cause);
+
+    // Both, and the first is not redundant. `not.toBeInstanceOf` is satisfied by
+    // anything that is not that class — including `deleteEverything` returning
+    // normally, in which case `failure` is the `{ entries, wordSets }` result
+    // and the call counts below hold anyway. Without this line the test is
+    // equally happy with the account silently failing to delete, which is a
+    // neighbouring defect it is named to exclude.
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(NothingDeleted);
+    // ...because plenty was.
+    expect((p.entries.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(5);
+    expect((p.progress.removeAll as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+  });
+});
+
+/**
+ * A cursor that stops advancing is a query that has stopped working, and the
+ * page cap alone answered that with a million document reads.
+ *
+ * `drain` walked to its 10,000-page limit at 100 records a page before giving
+ * up — twenty times the free daily read allowance, spent proving something the
+ * second page already showed. `deleteEverything` drains twice as well, so the
+ * delete button reached it too.
+ */
+describe('drain, when the walk stops moving', () => {
+  it('stops on the second page rather than after ten thousand', async () => {
+    const stuck = vi.fn((_q: PageQuery) =>
+      // Always more, always from the same place.
+      Promise.resolve({ items: [{ id: 'e-0' }], cursor: 'same' }),
+    );
+    const p = ports(0, 0, 0);
+    (p.entries.list as unknown) = stuck;
+
+    await expect(exportEverything({ ...p, appVersion: '0.1.0' })).rejects.toThrow(
+      'エクスポートが終わりませんでした',
+    );
+
+    // Two: the first hands out `same`, the second hands it out again and is
+    // recognised. Anything higher means the cap is doing the work.
+    expect(stuck.mock.calls).toHaveLength(2);
   });
 });

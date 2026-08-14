@@ -2,7 +2,12 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
-import { deleteEverything, exportEverything, exportFilename } from '@/lib/accountData';
+import {
+  deleteEverything,
+  exportEverything,
+  exportFilename,
+  NothingDeleted,
+} from '@/lib/accountData';
 import { useAuth } from '@/lib/auth';
 import { authPort } from '@/lib/backend';
 import { appVersion, buildLine } from '@/lib/build';
@@ -80,13 +85,21 @@ export function Component() {
       await signOutUser();
     } catch (cause) {
       console.error(cause);
-      // `requires-recent-login` is not a failure the user can act on without
-      // being told what it is: the provider refuses to delete an account on a
-      // stale session, and the fix is to sign in again.
-      const code = (cause as { code?: string }).code;
+      // Branching on what happened, not on which code the provider chose.
+      //
+      // The list this replaces was wrong in both directions, and one of the
+      // errors was the dangerous kind. `auth/requires-recent-login` is
+      // `CREDENTIAL_TOO_OLD_LOGIN_AGAIN`, raised for a *sensitive operation* —
+      // which here is `deleteAccount()`, the last thing `deleteEverything`
+      // does. Treating it as "the popup was refused" meant telling a user
+      // 「データは削除されていません」 at the one moment everything already had
+      // been. It also missed `auth/user-mismatch`, `auth/popup-blocked` and the
+      // adapter's own error, which carries no `code` at all.
+      //
+      // `NothingDeleted` is thrown by the only code that knows.
       setError(
-        code === 'auth/requires-recent-login'
-          ? 'セキュリティのため、一度ログインし直してから削除してください。データの一部はすでに削除されている可能性があります。'
+        cause instanceof NothingDeleted
+          ? 'セキュリティのため、削除の前に本人確認が必要です。データは削除されていません。もう一度お試しください。'
           : // Deliberately not "failed": some of it may be gone. Saying so is
             // the difference between a user retrying and a user assuming their
             // data is intact when half of it is not.

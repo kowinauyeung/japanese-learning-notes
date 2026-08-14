@@ -42,16 +42,36 @@ const PAGE = 100;
  * The guard is a page count rather than a timeout: a cursor that stops moving
  * would otherwise spin forever, and 10,000 pages is far past any real notebook.
  */
+/**
+ * One literal, because `deleteEverything` drains as well — so this string is
+ * already reachable from a path it does not describe. Two copies would drift,
+ * and the copy that drifts is the one nobody is looking at.
+ */
+const WALK_STOPPED = 'エクスポートが終わりませんでした。時間をおいて再度お試しください。';
+
 async function drain<T>(read: (q: PageQuery) => Promise<Page<T>>): Promise<T[]> {
   const all: T[] = [];
   let cursor: string | null = null;
+  // A cursor already handed out means the walk is not advancing. Recognising
+  // that is the guard; the page count below is only a backstop.
+  //
+  // It used to be the other way round, and the cost of that was the whole
+  // point: a stuck cursor ran the loop to its 10,000-page limit at 100 records
+  // a page, so the failure mode of "this query stopped moving" was a million
+  // document reads — twenty times the free daily allowance, spent proving
+  // something the second page already showed. Worse, `deleteEverything` drains
+  // twice too, so it was reachable from the delete button as well as from
+  // export.
+  const seen = new Set<string>();
   for (let page = 0; page < 10_000; page += 1) {
     const result: Page<T> = await read({ limit: PAGE, cursor });
     all.push(...result.items);
     if (!result.cursor) return all;
+    if (seen.has(result.cursor)) throw new Error(WALK_STOPPED);
+    seen.add(result.cursor);
     cursor = result.cursor;
   }
-  throw new Error('エクスポートが終わりませんでした。時間をおいて再度お試しください。');
+  throw new Error(WALK_STOPPED);
 }
 
 export async function exportEverything({
@@ -123,6 +143,33 @@ export function exportFilename(now = new Date()): string {
  * decision worth making on its own rather than as a side effect of adding a
  * delete button.
  */
+/**
+ * The session could not be proved, so **nothing was deleted**.
+ *
+ * This exists because the caller was inferring that from a provider error code
+ * and could not. `auth/requires-recent-login` is the clearest case: it is
+ * `CREDENTIAL_TOO_OLD_LOGIN_AGAIN`, which the backend returns for a *sensitive
+ * operation* — here `deleteAccount()`, the last statement below. Reading it as
+ * "the re-authentication was refused" inverts the truth exactly: by the time it
+ * can be raised, every word set, entry, session and the progress map are gone.
+ *
+ * `reauthenticateWithPopup` raises `auth/user-mismatch`, `auth/popup-blocked`
+ * and the cancellation codes; `authAdapter` can also throw with no `code` at
+ * all. That list is provider-defined and moves between SDK versions. This
+ * function is the only place that knows which half it got through, so it says
+ * so and the caller stops guessing.
+ */
+export class NothingDeleted extends Error {
+  /** What the provider actually raised, for the console. */
+  readonly reason: unknown;
+
+  constructor(reason: unknown) {
+    super('reauthentication failed, so nothing was deleted');
+    this.name = 'NothingDeleted';
+    this.reason = reason;
+  }
+}
+
 export async function deleteEverything({
   entries,
   wordSets,
@@ -134,6 +181,24 @@ export async function deleteEverything({
   progress: ProgressRepository;
   auth: AuthPort;
 }): Promise<{ entries: number; wordSets: number }> {
+  // **First, and before anything irreversible.**
+  //
+  // The order below — data, then the account — is deliberate and stays: delete
+  // the account first and there is no session left to delete the data with.
+  // What that order cannot survive is the provider refusing the last step. On a
+  // session old enough for `auth/requires-recent-login`, every destructive write
+  // succeeded and only the account remained, so a user who pressed delete was
+  // left with an account holding nothing and a message telling them some of it
+  // was already gone.
+  //
+  // Proving the session up front costs a popup and moves that failure to the
+  // one place where nothing has happened yet.
+  try {
+    await auth.reauthenticate();
+  } catch (cause) {
+    throw new NothingDeleted(cause);
+  }
+
   const setList = await drain((q) => wordSets.list(q));
   for (const set of setList) await wordSets.remove(set.id);
 
