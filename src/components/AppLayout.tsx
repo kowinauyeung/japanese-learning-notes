@@ -1,11 +1,16 @@
 import { lazy, Suspense, useCallback, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { VocabDialog } from '@/components/VocabDialog';
+import type { UiLanguage } from '@/domain/user';
+import { useI18n } from '@/i18n/context';
+import { I18nProvider } from '@/i18n/I18nProvider';
+import type { MessageKey } from '@/i18n/messages';
 import { useAuth } from '@/lib/auth';
 import { EntriesProvider } from '@/lib/entries';
 import { ProgressProvider } from '@/lib/progress';
-import { useTheme } from '@/lib/theme';
 import { useClickOutside } from '@/lib/useClickOutside';
+import { UserSettingsProvider } from '@/lib/userSettings';
+import { useUserSettings } from '@/lib/userSettingsContext';
 import { VocabDialogProvider } from '@/lib/vocabDialog';
 import { WordSetsProvider } from '@/lib/wordSets';
 import { EntryFormModal } from './entry-form/EntryFormModal';
@@ -26,25 +31,23 @@ import { PublicFooter } from './PublicLayout';
 const Home = lazy(async () => ({ default: (await import('@/routes/Home')).Component }));
 
 const NAV = [
-  { to: '/', label: 'ダッシュボード', end: true },
-  { to: '/vocabulary', label: '単語', end: false },
-  { to: '/wordsets', label: '単語集', end: false },
-  { to: '/practice/flashcards', label: 'フラッシュカード', end: false },
-  { to: '/practice/dictation', label: '書き取り練習', end: false },
-  { to: '/history', label: '履歴', end: false },
-];
+  { to: '/', label: 'nav.dashboard', end: true },
+  { to: '/vocabulary', label: 'nav.vocabulary', end: false },
+  { to: '/wordsets', label: 'nav.wordSets', end: false },
+  { to: '/practice/flashcards', label: 'nav.flashcards', end: false },
+  { to: '/practice/dictation', label: 'nav.dictation', end: false },
+  { to: '/history', label: 'nav.history', end: false },
+] satisfies ReadonlyArray<{ to: string; label: MessageKey; end: boolean }>;
 
 export function AppLayout() {
+  const { t } = useI18n();
   const { user, loading } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [adding, setAdding] = useState(false);
 
   if (loading) {
     return (
       <div className="grid min-h-dvh place-items-center bg-bg">
-        <p className="text-sm text-muted">読み込み中…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       </div>
     );
   }
@@ -68,9 +71,37 @@ export function AppLayout() {
   }
 
   return (
-    <EntriesProvider uid={user.uid}>
-      <ProgressProvider uid={user.uid}>
-        <WordSetsProvider uid={user.uid}>
+    <UserSettingsProvider uid={user.uid} displayName={user.displayName} email={user.email}>
+      <LocalizedApp uid={user.uid} />
+    </UserSettingsProvider>
+  );
+}
+
+function LocalizedApp({ uid }: { uid: string }) {
+  const { profile } = useUserSettings();
+  return (
+    <I18nProvider locale={profile.language}>
+      <AuthenticatedLayout uid={uid} translationLanguage={profile.translationLanguage} />
+    </I18nProvider>
+  );
+}
+
+function AuthenticatedLayout({
+  uid,
+  translationLanguage,
+}: {
+  uid: string;
+  translationLanguage: UiLanguage;
+}) {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  return (
+    <EntriesProvider uid={uid}>
+      <ProgressProvider uid={uid}>
+        <WordSetsProvider uid={uid}>
           {/* Below the data providers because the dialog reads the notebook
               they hold, and above the outlet because any page may open it. */}
           <VocabDialogProvider>
@@ -85,14 +116,14 @@ export function AppLayout() {
                     className="mr-1 flex items-center gap-1.5 font-display text-lg font-bold text-accent"
                   >
                     <LogoMark className="h-7 w-7" />
-                    語彙庭
+                    {t('brand.name')}
                   </NavLink>
 
                   {/* Desktop: the full pill row. */}
                   <nav className="hidden flex-1 items-center gap-1 nav:flex">
                     {NAV.map((item) => (
                       <NavLink key={item.to} to={item.to} end={item.end} className={pillClass}>
-                        {item.label}
+                        {t(item.label)}
                       </NavLink>
                     ))}
                   </nav>
@@ -101,7 +132,7 @@ export function AppLayout() {
                     <button
                       type="button"
                       onClick={() => setMenuOpen((open) => !open)}
-                      aria-label="メニュー"
+                      aria-label={t('nav.menu')}
                       aria-expanded={menuOpen}
                       className="grid h-11 w-11 place-items-center rounded-pill text-xl hover:bg-bg-alt nav:hidden"
                     >
@@ -112,7 +143,7 @@ export function AppLayout() {
                       onClick={() => setAdding(true)}
                       className="hidden rounded-pill bg-accent px-4 py-2 text-sm font-semibold text-on-accent nav:block"
                     >
-                      ＋追加
+                      {t('action.add')}
                     </button>
                     <AvatarMenu />
                   </div>
@@ -136,7 +167,7 @@ export function AppLayout() {
               <button
                 type="button"
                 onClick={() => setAdding(true)}
-                aria-label="単語を追加"
+                aria-label={t('action.addVocabulary')}
                 className="fixed right-5 bottom-5 z-20 grid h-14 w-14 place-items-center rounded-pill bg-accent text-2xl text-on-accent shadow-panel nav:hidden"
               >
                 ＋
@@ -144,6 +175,7 @@ export function AppLayout() {
 
               <EntryFormModal
                 open={adding}
+                translationLanguage={translationLanguage}
                 onClose={() => setAdding(false)}
                 onSaved={(id) => void navigate(`/vocabulary/${id}`)}
               />
@@ -164,6 +196,7 @@ function pillClass({ isActive }: { isActive: boolean }) {
 }
 
 function MobileNav({ onNavigate }: { onNavigate: () => void }) {
+  const { t } = useI18n();
   return (
     <nav className="border-t border-line bg-card px-3 py-2 nav:hidden">
       {NAV.map((item) => (
@@ -178,7 +211,7 @@ function MobileNav({ onNavigate }: { onNavigate: () => void }) {
             }`
           }
         >
-          {item.label}
+          {t(item.label)}
         </NavLink>
       ))}
     </nav>
@@ -186,8 +219,8 @@ function MobileNav({ onNavigate }: { onNavigate: () => void }) {
 }
 
 function AvatarMenu() {
+  const { t } = useI18n();
   const { user, signOutUser } = useAuth();
-  const { theme, toggle } = useTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -203,7 +236,7 @@ function AvatarMenu() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        aria-label="アカウントメニュー"
+        aria-label={t('account.menu')}
         aria-expanded={open}
         className="grid h-10 w-10 place-items-center rounded-pill bg-accent text-sm font-bold text-on-accent"
       >
@@ -220,22 +253,24 @@ function AvatarMenu() {
             }}
             className="flex min-h-11 w-full items-center rounded-panel px-3 text-sm hover:bg-bg-alt"
           >
-            アカウント
+            {t('account.account')}
           </button>
           <button
             type="button"
-            onClick={toggle}
-            className="flex min-h-11 w-full items-center justify-between rounded-panel px-3 text-sm hover:bg-bg-alt"
+            onClick={() => {
+              void navigate('/settings');
+              setOpen(false);
+            }}
+            className="flex min-h-11 w-full items-center rounded-panel px-3 text-sm hover:bg-bg-alt"
           >
-            <span>テーマ</span>
-            <span className="text-muted">{theme === 'dark' ? '🌙 ダーク' : '☀️ ライト'}</span>
+            {t('account.settings')}
           </button>
           <button
             type="button"
             onClick={() => void signOutUser()}
             className="flex min-h-11 w-full items-center rounded-panel px-3 text-sm text-danger hover:bg-danger-soft"
           >
-            ログアウト
+            {t('account.signOut')}
           </button>
         </div>
       )}

@@ -4,6 +4,7 @@ import type {
   Page,
   PageQuery,
   ProgressRepository,
+  UserRepository,
   WordSetRepository,
 } from '@/domain/ports';
 
@@ -15,7 +16,7 @@ import type {
  * means. That rule is the whole difficulty — see `drain`.
  */
 
-export const EXPORT_SCHEMA_VERSION = 1;
+export const EXPORT_SCHEMA_VERSION = 2;
 
 export interface ExportBundle {
   schemaVersion: number;
@@ -84,9 +85,8 @@ export async function exportEverything({
 }: {
   appVersion: string;
   /**
-   * The signed-in identity, passed in rather than read through a port: there is
-   * no `UserRepository` adapter yet, and what a user would expect to find here
-   * is the Google profile the app displays — which the caller already holds.
+   * The signed-in identity and persisted settings. The caller already holds
+   * both, so exporting them does not spend another Firestore read.
    */
   profile: unknown;
   entries: EntryRepository;
@@ -185,11 +185,15 @@ export async function deleteEverything({
   entries,
   wordSets,
   progress,
+  userProfiles,
+  uid,
   auth,
 }: {
   entries: EntryRepository;
   wordSets: WordSetRepository;
   progress: ProgressRepository;
+  userProfiles: UserRepository;
+  uid: string;
   auth: AuthPort;
 }): Promise<{ entries: number; wordSets: number }> {
   // **First, and before anything irreversible.**
@@ -220,6 +224,10 @@ export async function deleteEverything({
   // the map is one document and the sessions are a collection, and neither is
   // something a user thinks of as a row.
   await progress.removeAll();
+
+  // Firestore does not cascade. The parent profile comes after every
+  // subcollection, but before Auth removes the identity needed to retry it.
+  await userProfiles.remove(uid);
 
   // Last, and separately fallible: providers refuse this on a stale session.
   await auth.deleteAccount();

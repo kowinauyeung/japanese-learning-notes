@@ -177,6 +177,13 @@ service cloud.firestore {
       ];
     }
 
+    function userFields() {
+      return [
+        'uid', 'nickname', 'language', 'translationLanguage', 'theme',
+        'createdAt', 'updatedAt'
+      ];
+    }
+
     function sessionFields() {
       return [
         'ownerUid', 'mode', 'filterLabel', 'total', 'correct', 'missed',
@@ -254,6 +261,18 @@ service cloud.firestore {
         && (d.get('copiedFrom', null) == null || d.get('copiedFrom', {}).size() <= 10);
     }
 
+    function validUser(uid) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(userFields())
+        && d.uid == uid
+        && str(d.nickname, 50) && d.nickname.size() > 0
+        && d.language in ['en', 'ja', 'zh-Hant', 'ko', 'es']
+        && d.translationLanguage in ['en', 'ja', 'zh-Hant', 'ko', 'es']
+        && d.theme in ['light', 'dark', 'system']
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
     function validWordSet(uid) {
       let d = request.resource.data;
       return ownedBy(uid)
@@ -321,23 +340,8 @@ service cloud.firestore {
         return isOwner(uid) && isAllowed();
       }
 
-      // Read and delete only. **Nothing in the application writes this
-      // document** — there is no profile, and no adapter addresses this path —
-      // so the create and update it used to carry described a feature that does
-      // not exist, while permitting any twenty fields of any names. That is the
-      // one place `hasOnly` cannot help, because there is no legitimate field to
-      // allow: the honest allowlist for a document nobody writes is empty.
-      //
-      // Delete stays, and stays split from the rest for the reason
-      // `keepsCreatedAt` documents: `write` covers delete, and on a delete
-      // `request.resource` is null, so reaching into it is an evaluation error.
-      // This document was the one place that kept the combined form, and
-      // deleting it therefore failed with a message about null rather than
-      // about permission — the failure mode account deletion would have hit.
-      //
-      // Adding a profile later means adding `create, update` back **with a
-      // `hasOnly` naming its fields**, not restoring what was here.
       allow read, delete: if mine();
+      allow create, update: if mine() && validUser(uid) && keepsCreatedAt();
 
       match /entries/{entryId} {
         allow read, delete: if mine();

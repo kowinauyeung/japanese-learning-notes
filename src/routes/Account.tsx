@@ -9,12 +9,13 @@ import {
   NothingDeleted,
 } from '@/lib/accountData';
 import { useAuth } from '@/lib/auth';
-import { authPort } from '@/lib/backend';
+import { authPort, userRepository } from '@/lib/backend';
 import { appVersion, buildLine } from '@/lib/build';
 import { newErrorId } from '@/lib/diagnostics';
 import { useEntries } from '@/lib/entries';
 import { projectId } from '@/lib/env';
 import { useProgress } from '@/lib/progress';
+import { useUserSettings } from '@/lib/userSettingsContext';
 import { useWordSets } from '@/lib/wordSets';
 
 export function Component() {
@@ -22,6 +23,7 @@ export function Component() {
   const entries = useEntries();
   const wordSets = useWordSets();
   const progress = useProgress();
+  const settings = useUserSettings();
 
   const [busy, setBusy] = useState<'export' | 'delete' | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -41,7 +43,11 @@ export function Component() {
     try {
       const bundle = await exportEverything({
         appVersion,
-        profile: { displayName: user?.displayName ?? null, email: user?.email ?? null },
+        profile: {
+          displayName: user?.displayName ?? null,
+          email: user?.email ?? null,
+          settings: settings.profile,
+        },
         entries: entries.repository,
         wordSets: wordSets.repository,
         progress: progress.repository,
@@ -77,6 +83,8 @@ export function Component() {
         entries: entries.repository,
         wordSets: wordSets.repository,
         progress: progress.repository,
+        userProfiles: userRepository,
+        uid: settings.profile.uid,
         auth: authPort,
       });
       // No success note: the account is gone, so there is nobody left to read

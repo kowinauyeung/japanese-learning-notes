@@ -2,12 +2,14 @@ import type {
   AuthPort,
   EntryRepository,
   ProgressRepository,
+  UserRepository,
   WordSetRepository,
 } from '@/domain/ports';
 import { firebaseAuth } from '@/infra/firebase/authAdapter';
 import { db } from '@/infra/firebase/client';
 import { createEntryRepository } from '@/infra/firebase/entryRepo';
 import { createProgressRepository } from '@/infra/firebase/progressRepo';
+import { createUserRepository } from '@/infra/firebase/userRepo';
 import { createWordSetRepository } from '@/infra/firebase/wordSetRepo';
 
 /**
@@ -28,6 +30,8 @@ export const entryRepositoryFor = (uid: string): EntryRepository => createEntryR
 
 export const progressRepositoryFor = (uid: string): ProgressRepository =>
   createProgressRepository(db, uid);
+
+export const userRepository: UserRepository = createUserRepository(db);
 
 export const wordSetRepositoryFor = (uid: string): WordSetRepository =>
   createWordSetRepository(db, uid);

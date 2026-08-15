@@ -6,9 +6,11 @@ import type {
   Page,
   PageQuery,
   ProgressRepository,
+  UserRepository,
   WordSetRepository,
 } from '@/domain/ports';
 import type { EntryProgress, PracticeSession, PracticeSessionDraft } from '@/domain/practice';
+import type { UserProfile, UserProfileDraft } from '@/domain/user';
 import type { WordSet, WordSetDraft } from '@/domain/wordSet';
 import { sanitizeEntry, sanitizeSession, sanitizeWordSet } from './sanitize';
 
@@ -39,6 +41,8 @@ interface Seed {
   wordSets?: unknown[];
   /** Finished sessions, so 履歴 can be reached without drilling first. */
   sessions?: unknown[];
+  /** Raw persisted profile; absent means first sign-in. */
+  profile?: unknown;
 }
 
 declare global {
@@ -126,6 +130,59 @@ export const authPort: AuthPort = {
   deleteAccount(): Promise<void> {
     currentUser = null;
     notify();
+    return Promise.resolve();
+  },
+};
+
+// --------------------------------------------------------------- user profile
+
+const profileStores = new Map<string, UserProfile>();
+
+function persistedProfile(uid: string): UserProfile | null {
+  const existing = profileStores.get(uid);
+  if (existing) return existing;
+  const persisted = load<UserProfile | null>(`profile.${uid}`, null);
+  if (persisted) {
+    profileStores.set(uid, persisted);
+    return persisted;
+  }
+  const raw = seed().profile;
+  if (typeof raw !== 'object' || raw === null) return null;
+  const now = new Date().toISOString();
+  const record = raw as Partial<UserProfile>;
+  const profile: UserProfile = {
+    uid,
+    nickname: typeof record.nickname === 'string' ? record.nickname : '',
+    language: record.language ?? 'en',
+    translationLanguage: record.translationLanguage ?? 'en',
+    theme: record.theme ?? 'system',
+    createdAt: now,
+    updatedAt: now,
+  };
+  profileStores.set(uid, profile);
+  return profile;
+}
+
+export const userRepository: UserRepository = {
+  get(uid): Promise<UserProfile | null> {
+    return Promise.resolve(persistedProfile(uid));
+  },
+  save(uid, draft: UserProfileDraft): Promise<void> {
+    const existing = persistedProfile(uid);
+    const now = new Date().toISOString();
+    const profile: UserProfile = {
+      ...draft,
+      uid,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    profileStores.set(uid, profile);
+    save(`profile.${uid}`, profile);
+    return Promise.resolve();
+  },
+  remove(uid): Promise<void> {
+    profileStores.delete(uid);
+    save(`profile.${uid}`, null);
     return Promise.resolve();
   },
 };

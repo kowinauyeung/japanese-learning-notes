@@ -22,7 +22,9 @@
       // Applied before first paint so the page never flashes the wrong theme.
       (() => {
         const saved = localStorage.getItem('theme');
-        const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+        const dark =
+          saved === 'dark' ||
+          ((!saved || saved === 'system') && matchMedia('(prefers-color-scheme: dark)').matches);
         const theme = dark ? 'dark' : 'light';
         document.documentElement.dataset.theme = theme;
         const meta = document.querySelector('meta[name="theme-color"]');

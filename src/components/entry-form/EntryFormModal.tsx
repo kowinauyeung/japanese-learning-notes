@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Entry, EntryDraft } from '@/domain/entry';
+import type { UiLanguage } from '@/domain/user';
 import { draftError, emptyDraft, parseTags, toDraft } from '@/lib/draft';
 import { useEntries } from '@/lib/entries';
 import { jsonToDraft } from '@/lib/jsonImport';
@@ -24,12 +25,15 @@ const TABS: { id: Tab; label: string }[] = [
 export function EntryFormModal({
   open,
   entry,
+  translationLanguage,
   onClose,
   onSaved,
 }: {
   open: boolean;
   /** Present when editing; absent when adding. */
   entry?: Entry;
+  /** Saved default for the JSON tab; the text field remains editable. */
+  translationLanguage?: UiLanguage | null | undefined;
   onClose: () => void;
   onSaved?: (id: string) => void;
 }) {
@@ -51,15 +55,15 @@ export function EntryFormModal({
    * its own resting place so it slid 16px on the last of the scroll. The footer
    * is outside the scrollport and already `shrink-0`, so nothing about it moves.
    */
-  const [json, setJson] = useState<JsonImportState>(emptyJsonImport);
+  const [json, setJson] = useState<JsonImportState>(() => emptyJsonImport(translationLanguage));
 
   useEffect(() => {
     if (!open) return;
     setDraft(entry ? toDraft(entry) : emptyDraft());
     setTab(entry ? 'full' : 'simple');
-    setJson(emptyJsonImport());
+    setJson(emptyJsonImport(translationLanguage));
     setError(null);
-  }, [open, entry]);
+  }, [open, entry, translationLanguage]);
 
   const loadJson = () => {
     const { draft: loaded, error: failure } = jsonToDraft(json.raw, {

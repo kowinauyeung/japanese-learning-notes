@@ -1,28 +1,22 @@
 import type { Doc } from './doc';
+import { homeContent } from './home';
 import { site } from './site';
+
+const home = homeContent.ja;
 
 export const about: Doc = {
   title: '語彙庭について',
-  lead: '出会った日本語を、忘れないための単語帳です。',
+  lead: home.lead,
   updated: '2026-08-13',
   sections: [
     {
-      heading: 'つくった理由',
-      body: [
-        '会議や本で出会った言葉を書き留めても、記録する場所と復習する場所が別々だと、書いただけで終わりがちです。語彙庭は、記録・整理・練習・振り返りを一か所にまとめた単語帳です。',
-        '単語には、読み方に加え、アクセント、品詞、語種、文体、丁寧さ、出会った文の中での働きまで記録できます。辞書に載っている語だけでなく、その場で覚えた言い回しも記録できます。',
-      ],
+      heading: home.purpose.heading,
+      body: [...home.purpose.body],
     },
     {
-      heading: 'できること',
+      heading: home.features.heading,
       body: [],
-      list: [
-        '単語を登録・検索できます。読み方、タグ、意味、例文のどこからでも探せます。',
-        '単語集を作り、学ぶ順番を自分で決められます。',
-        'フラッシュカードと書き取りで練習できます。間違えた単語は「苦手な語」として残ります。',
-        '履歴とダッシュボードで、いつ、何に、どのくらい取り組んだかを確認できます。',
-        'AI に渡すプロンプトを作成し、返された JSON をそのまま取り込めます。',
-      ],
+      list: [...home.features.list],
     },
     {
       heading: '今の状態',

@@ -1,5 +1,19 @@
 import type { EntryDraft } from '@/domain/entry';
+import type { UiLanguage } from '@/domain/user';
 import { sanitizeDraft } from './sanitize';
+
+const PROMPT_LANGUAGE_NAMES = {
+  en: '英語',
+  ja: '日本語',
+  'zh-Hant': '繁体字中国語',
+  ko: '韓国語',
+  es: 'スペイン語',
+} as const satisfies Record<UiLanguage, string>;
+
+/** Convert a persisted language code into wording for the Japanese AI prompt. */
+export function promptLanguageName(language?: UiLanguage | null): string {
+  return language ? PROMPT_LANGUAGE_NAMES[language] : '廣東語';
+}
 
 /** The shape shown in the app and asked of the assistant. */
 export const SCHEMA = `{

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPrompt, jsonToDraft, SCHEMA } from '@/lib/jsonImport';
+import { buildPrompt, jsonToDraft, promptLanguageName, SCHEMA } from '@/lib/jsonImport';
 
 /**
  * The import box takes JSON an assistant wrote somewhere else and a human
@@ -242,5 +242,22 @@ describe('buildPrompt', () => {
     expect(buildPrompt('兆候', '廣東話', { original: '   ', source: '  ' })).toContain(
       '出会った文がないため',
     );
+  });
+});
+
+describe('promptLanguageName', () => {
+  it('maps every supported UI language to an unambiguous prompt language', () => {
+    expect([
+      promptLanguageName('en'),
+      promptLanguageName('ja'),
+      promptLanguageName('zh-Hant'),
+      promptLanguageName('ko'),
+      promptLanguageName('es'),
+    ]).toEqual(['英語', '日本語', '繁体字中国語', '韓国語', 'スペイン語']);
+  });
+
+  it('keeps the existing Cantonese fallback when no preference is available', () => {
+    expect(promptLanguageName()).toBe('廣東語');
+    expect(promptLanguageName(null)).toBe('廣東語');
   });
 });

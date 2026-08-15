@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { buildPrompt, SCHEMA } from '@/lib/jsonImport';
+import type { UiLanguage } from '@/domain/user';
+import { buildPrompt, promptLanguageName, SCHEMA } from '@/lib/jsonImport';
 import { Area, Field, inputClass } from './fields';
 
 /**
@@ -14,9 +15,9 @@ export interface JsonImportState {
   raw: string;
 }
 
-export const emptyJsonImport = (): JsonImportState => ({
+export const emptyJsonImport = (translationLanguage?: UiLanguage | null): JsonImportState => ({
   word: '',
-  language: '廣東語',
+  language: promptLanguageName(translationLanguage),
   original: '',
   source: '',
   raw: '',
