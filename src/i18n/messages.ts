@@ -3,7 +3,7 @@ import type { SupportedLocale } from './locales';
 const en = {
   'common.loading': 'Loading…',
   'brand.name': '語彙庭',
-  'nav.dashboard': 'Dashboard',
+  'nav.dashboard': 'My progress',
   'nav.vocabulary': 'Vocabulary',
   'nav.wordSets': 'Word sets',
   'nav.flashcards': 'Flashcards',
@@ -55,7 +55,7 @@ type Messages = Record<MessageKey, string>;
 const ja: Messages = {
   'common.loading': '読み込み中…',
   'brand.name': '語彙庭',
-  'nav.dashboard': 'ダッシュボード',
+  'nav.dashboard': '学習サマリー',
   'nav.vocabulary': '単語',
   'nav.wordSets': '単語集',
   'nav.flashcards': 'フラッシュカード',
@@ -104,7 +104,7 @@ const ja: Messages = {
 const zhHant: Messages = {
   'common.loading': '載入中…',
   'brand.name': '語彙庭',
-  'nav.dashboard': '儀表板',
+  'nav.dashboard': '學習總覽',
   'nav.vocabulary': '單字',
   'nav.wordSets': '單字集',
   'nav.flashcards': '單字卡',
@@ -153,7 +153,7 @@ const zhHant: Messages = {
 const ko: Messages = {
   'common.loading': '불러오는 중…',
   'brand.name': '語彙庭',
-  'nav.dashboard': '대시보드',
+  'nav.dashboard': '학습 현황',
   'nav.vocabulary': '단어',
   'nav.wordSets': '단어 모음',
   'nav.flashcards': '플래시카드',
@@ -202,7 +202,7 @@ const ko: Messages = {
 const es: Messages = {
   'common.loading': 'Cargando…',
   'brand.name': '語彙庭',
-  'nav.dashboard': 'Panel',
+  'nav.dashboard': 'Mi progreso',
   'nav.vocabulary': 'Vocabulario',
   'nav.wordSets': 'Listas de palabras',
   'nav.flashcards': 'Tarjetas',

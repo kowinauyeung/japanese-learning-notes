@@ -127,7 +127,7 @@ test.describe('navigation', () => {
     await page.goto('/');
 
     await expect(page.getByRole('navigation').first().getByRole('link')).toHaveText([
-      'ダッシュボード',
+      '学習サマリー',
       '単語',
       '単語集',
       'フラッシュカード',

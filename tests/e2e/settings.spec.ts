@@ -33,7 +33,7 @@ test('saves user settings across a reload and applies the durable theme', async 
 
   await expect(page.getByText('已儲存。')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.getByRole('link', { name: '儀表板' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '學習總覽' })).toBeVisible();
 
   await page.getByRole('button', { name: '＋新增', exact: true }).click();
   await page.getByRole('button', { name: 'JSON', exact: true }).click();
@@ -66,11 +66,11 @@ test('previews language and theme without persisting them before save', async ({
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
   await page.getByLabel('表示言語').selectOption('zh-Hant');
-  await expect(page.getByRole('link', { name: '儀表板' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '學習總覽' })).toBeVisible();
   await expect(page.getByLabel('暱稱')).toHaveValue('Before');
 
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(page.getByRole('link', { name: 'ダッシュボード' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '学習サマリー' })).toBeVisible();
   await expect(page.getByLabel('ニックネーム')).toHaveValue('Before');
 });

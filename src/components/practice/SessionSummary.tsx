@@ -84,7 +84,7 @@ export function SessionSummary({
           to="/"
           className="grid min-h-11 flex-1 place-items-center rounded-pill px-4 text-sm text-muted hover:bg-bg-alt"
         >
-          ダッシュボードに戻る
+          学習サマリーに戻る
         </Link>
       </div>
     </section>
