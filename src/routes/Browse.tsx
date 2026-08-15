@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { EntryCard } from '@/components/browse/EntryCard';
 import { FilterPanel } from '@/components/browse/FilterPanel';
 import { VocabularySearch } from '@/components/browse/VocabularySearch';
+import { useI18n } from '@/i18n/context';
 import { useEntries } from '@/lib/entries';
 import {
   EMPTY_FILTERS,
@@ -18,6 +19,7 @@ import { recentTags } from '@/lib/tags';
 export function Component() {
   const { entries, loading, error } = useEntries();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { t } = useI18n();
 
   const filters = useMemo(() => fromSearchParams(searchParams), [searchParams]);
   const update = (next: Filters) => setSearchParams(toSearchParams(next), { replace: true });
@@ -33,9 +35,10 @@ export function Component() {
     [entries, filters],
   );
 
-  const active = activeChips(filters);
+  const active = activeChips(filters, (stars) => t('vocabulary.frequencyAtLeastChip', { stars }));
 
-  if (loading) return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
+  if (loading)
+    return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
   if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
 
   return (
@@ -61,12 +64,12 @@ export function Component() {
             onClick={() => update({ ...EMPTY_FILTERS, sort: filters.sort })}
             className="px-2 text-xs text-muted underline hover:text-ink"
           >
-            すべて解除
+            {t('vocabulary.clearFilters')}
           </button>
         </div>
       )}
 
-      <p className="text-xs text-muted">{results.length} 語</p>
+      <p className="text-xs text-muted">{t('vocabulary.resultCount', { count: results.length })}</p>
 
       {results.length ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
@@ -75,14 +78,14 @@ export function Component() {
           ))}
         </div>
       ) : (
-        <p className="py-16 text-center text-sm text-muted">条件に合う単語がありません</p>
+        <p className="py-16 text-center text-sm text-muted">{t('vocabulary.noResults')}</p>
       )}
     </div>
   );
 }
 
 /** Removable summary of what is currently narrowing the list. */
-function activeChips(filters: Filters) {
+function activeChips(filters: Filters, frequencyLabel: (stars: string) => string) {
   const chips: { key: string; label: string; clear: (f: Filters) => Filters }[] = [];
 
   if (filters.q) {
@@ -113,7 +116,7 @@ function activeChips(filters: Filters) {
   if (filters.minFreq) {
     chips.push({
       key: 'freq',
-      label: `${'★'.repeat(filters.minFreq)} 以上`,
+      label: frequencyLabel('★'.repeat(filters.minFreq)),
       clear: (f) => ({ ...f, minFreq: 0 }),
     });
   }

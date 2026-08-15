@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
+import { renderWithI18n as render } from '../helpers/renderWithI18n';
 
 /**
  * The copy button on the screen a user reaches when something is already

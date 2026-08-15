@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
+import { useI18n } from '@/i18n/context';
 import {
   deleteEverything,
   exportEverything,
@@ -24,6 +25,7 @@ export function Component() {
   const wordSets = useWordSets();
   const progress = useProgress();
   const settings = useUserSettings();
+  const { t } = useI18n();
 
   const [busy, setBusy] = useState<'export' | 'delete' | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -64,11 +66,19 @@ export function Component() {
       link.click();
       URL.revokeObjectURL(url);
       setNote(
-        `${bundle.entries.length} 語、${bundle.wordSets.length} 個の単語集、${bundle.practiceSessions.length} 件の練習記録を書き出しました。`,
+        t('account.exported', {
+          entries: bundle.entries.length,
+          sets: bundle.wordSets.length,
+          sessions: bundle.practiceSessions.length,
+        }),
       );
     } catch (cause) {
       console.error(cause);
-      setError(cause instanceof Error ? cause.message : 'エクスポートできませんでした。');
+      setError(
+        cause instanceof Error && cause.message.startsWith('エクスポートが終わりませんでした')
+          ? t('load.exportWalk')
+          : t('account.exportError'),
+      );
     } finally {
       setBusy(null);
     }
@@ -107,11 +117,11 @@ export function Component() {
       // `NothingDeleted` is thrown by the only code that knows.
       setError(
         cause instanceof NothingDeleted
-          ? 'セキュリティのため、削除の前に本人確認が必要です。データは削除されていません。もう一度お試しください。'
+          ? t('account.reauthError')
           : // Deliberately not "failed": some of it may be gone. Saying so is
             // the difference between a user retrying and a user assuming their
             // data is intact when half of it is not.
-            '削除の途中で失敗しました。残っている可能性があります。もう一度お試しください。',
+            t('account.deletePartialError'),
       );
     } finally {
       setBusy(null);
@@ -128,15 +138,15 @@ export function Component() {
 
         <dl className="mt-8 space-y-4 text-sm">
           <div>
-            <dt className="text-xs text-muted">表示名</dt>
+            <dt className="text-xs text-muted">{t('account.displayName')}</dt>
             <dd className="mt-1">{settings.profile.nickname || '—'}</dd>
           </div>
           <div>
-            <dt className="text-xs text-muted">メールアドレス</dt>
+            <dt className="text-xs text-muted">{t('account.email')}</dt>
             <dd className="mt-1">{user?.email ?? '—'}</dd>
           </div>
           <div>
-            <dt className="text-xs text-muted">バージョン</dt>
+            <dt className="text-xs text-muted">{t('account.version')}</dt>
             <dd className="mt-1 tabular-nums">{buildLine(projectId)}</dd>
           </div>
         </dl>
@@ -146,23 +156,20 @@ export function Component() {
           onClick={() => void signOutUser()}
           className="mt-8 min-h-11 w-full rounded-pill bg-bg-alt text-sm font-semibold text-ink"
         >
-          ログアウト
+          {t('account.signOut')}
         </button>
       </div>
 
       <div className="rounded-card bg-card p-6 shadow-panel">
-        <h2 className="font-display text-sm font-bold">データ</h2>
-        <p className="mt-2 text-xs text-muted">
-          登録した単語、単語集、練習記録をすべて JSON
-          で書き出します。個人の学習内容が含まれるので、保存先にご注意ください。
-        </p>
+        <h2 className="font-display text-sm font-bold">{t('account.data')}</h2>
+        <p className="mt-2 text-xs text-muted">{t('account.exportDescription')}</p>
         <button
           type="button"
           onClick={() => void runExport()}
           disabled={busy !== null}
           className="mt-4 min-h-11 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
         >
-          {busy === 'export' ? '書き出しています…' : 'データをエクスポート'}
+          {busy === 'export' ? t('account.exporting') : t('account.export')}
         </button>
 
         <button
@@ -171,7 +178,7 @@ export function Component() {
           disabled={busy !== null}
           className="mt-2 min-h-11 w-full rounded-pill bg-danger-soft text-sm font-semibold text-danger disabled:opacity-60"
         >
-          アカウントとデータを削除
+          {t('account.delete')}
         </button>
 
         {note && <p className="mt-3 text-xs text-accent">{note}</p>}
@@ -179,19 +186,19 @@ export function Component() {
       </div>
 
       <div className="rounded-card bg-card p-6 shadow-panel">
-        <h2 className="font-display text-sm font-bold">サポート</h2>
+        <h2 className="font-display text-sm font-bold">{t('account.support')}</h2>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-accent">
           <Link to="/support" className="hover:underline">
-            問題を報告する
+            {t('account.reportIssue')}
           </Link>
           <Link to="/privacy" className="hover:underline">
-            プライバシーポリシー
+            {t('public.privacyPolicy')}
           </Link>
           <Link to="/terms" className="hover:underline">
-            利用規約
+            {t('public.terms')}
           </Link>
           <Link to="/about" className="hover:underline">
-            語彙庭について
+            {t('public.about')}
           </Link>
         </div>
         <div className="mt-4">
@@ -201,9 +208,9 @@ export function Component() {
 
       <ConfirmDialog
         open={confirming}
-        title="アカウントとデータを削除"
-        message="登録した単語、単語集、練習記録をすべて削除します。取り消せません。先にエクスポートすることをおすすめします。"
-        confirmLabel="削除する"
+        title={t('account.delete')}
+        message={t('account.deleteMessage')}
+        confirmLabel={t('account.deleteConfirm')}
         busy={busy === 'delete'}
         onConfirm={() => void runDelete()}
         onClose={() => setConfirming(false)}

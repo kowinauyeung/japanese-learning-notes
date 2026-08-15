@@ -2,6 +2,8 @@ import { LogoMark } from '@/components/Logo';
 import { Ruby } from '@/components/Ruby';
 import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
+import { useI18n } from '@/i18n/context';
+import { useEntryLabel } from '@/i18n/useEntryLabel';
 
 /**
  * Same word all day, a different one tomorrow, with nothing persisted: the
@@ -21,6 +23,8 @@ export function pickWordOfDay(entries: Entry[], todayKey: string): Entry | null 
  * headword, and the logomark bled off the corner as a watermark.
  */
 export function TodayWord({ entry }: { entry: Entry }) {
+  const { t } = useI18n();
+  const entryLabel = useEntryLabel();
   const summary = entry.senses[0]?.description || entry.definition;
 
   return (
@@ -33,7 +37,9 @@ export function TodayWord({ entry }: { entry: Entry }) {
 
       <div className="relative">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold tracking-wide text-accent">📅 今日の単語</p>
+          <p className="text-xs font-semibold tracking-wide text-accent">
+            📅 {t('dashboard.todayWord')}
+          </p>
           <span className="shrink-0 rounded-pill bg-card/70 px-2 py-0.5 text-[11px] font-semibold text-accent">
             {entry.jlpt}
           </span>
@@ -50,7 +56,7 @@ export function TodayWord({ entry }: { entry: Entry }) {
         <div className="mt-4 flex flex-wrap items-center gap-1.5">
           {entry.pos.slice(0, 2).map((part) => (
             <span key={part} className="rounded-pill bg-card/70 px-2 py-0.5 text-[11px] text-muted">
-              {part}
+              {entryLabel(part)}
             </span>
           ))}
           {entry.tags.slice(0, 2).map((tag) => (
@@ -58,7 +64,9 @@ export function TodayWord({ entry }: { entry: Entry }) {
               #{tag}
             </span>
           ))}
-          <span className="ml-auto text-xs font-semibold text-accent">詳しく見る →</span>
+          <span className="ml-auto text-xs font-semibold text-accent">
+            {t('dashboard.viewDetails')}
+          </span>
         </div>
       </div>
     </VocabLink>

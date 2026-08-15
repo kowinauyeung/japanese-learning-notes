@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Ruby } from '@/components/Ruby';
 import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
+import { useI18n } from '@/i18n/context';
 
 /**
  * End of a session: the score, what was missed, and the two ways back in.
@@ -27,20 +28,21 @@ export function SessionSummary({
   onRestart: () => void;
   onRetryMissed: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <section className="mx-auto max-w-2xl space-y-5 rounded-card bg-card p-6 shadow-panel">
       <header className="text-center">
-        <h1 className="text-xs font-semibold tracking-wide text-muted">結果</h1>
+        <h1 className="text-xs font-semibold tracking-wide text-muted">{t('practice.result')}</h1>
         <p className="mt-2 font-display text-4xl font-bold tabular-nums">
           {correct} <span className="text-muted">/ {total}</span>
         </p>
-        {saving && <p className="mt-1 text-xs text-muted">記録中…</p>}
+        {saving && <p className="mt-1 text-xs text-muted">{t('practice.saving')}</p>}
         {saveError && <p className="mt-1 text-xs text-danger">{saveError}</p>}
       </header>
 
       {missed.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[11px] text-muted">間違えた語</p>
+          <p className="text-[11px] text-muted">{t('practice.missed')}</p>
           <ul className="divide-y divide-line">
             {missed.map((entry) => (
               <li key={entry.id}>
@@ -69,7 +71,7 @@ export function SessionSummary({
           onClick={onRestart}
           className="min-h-11 flex-1 rounded-pill bg-accent px-4 text-sm font-semibold text-on-accent"
         >
-          もう一度
+          {t('practice.again')}
         </button>
         {missed.length > 0 && (
           <button
@@ -77,14 +79,14 @@ export function SessionSummary({
             onClick={onRetryMissed}
             className="min-h-11 flex-1 rounded-pill bg-accent-soft px-4 text-sm font-semibold text-accent"
           >
-            間違えた語だけ
+            {t('practice.retryMissed')}
           </button>
         )}
         <Link
           to="/"
           className="grid min-h-11 flex-1 place-items-center rounded-pill px-4 text-sm text-muted hover:bg-bg-alt"
         >
-          学習サマリーに戻る
+          {t('practice.backToProgress')}
         </Link>
       </div>
     </section>

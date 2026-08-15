@@ -1,4 +1,9 @@
+import { authenticatedMessages } from './authenticatedMessages';
+import { formMessages } from './formMessages';
+import { learningMessages } from './learningMessages';
 import type { SupportedLocale } from './locales';
+import { metadataMessages } from './metadataMessages';
+import { vocabularyMessages } from './vocabularyMessages';
 
 const en = {
   'common.loading': 'Loading…',
@@ -47,10 +52,12 @@ const en = {
   'settings.save': 'Save settings',
   'settings.saving': 'Saving…',
   'settings.saved': 'Saved.',
+  'settings.unsaved': 'You have unsaved changes.',
+  'settings.unsavedLeave': 'Leave without saving your settings?',
 } as const;
 
-export type MessageKey = keyof typeof en;
-type Messages = Record<MessageKey, string>;
+type BaseMessageKey = keyof typeof en;
+type Messages = Record<BaseMessageKey, string>;
 
 const ja: Messages = {
   'common.loading': '読み込み中…',
@@ -99,6 +106,8 @@ const ja: Messages = {
   'settings.save': '設定を保存',
   'settings.saving': '保存しています…',
   'settings.saved': '保存しました。',
+  'settings.unsaved': '保存していない変更があります。',
+  'settings.unsavedLeave': '設定を保存せずに移動しますか？',
 };
 
 const zhHant: Messages = {
@@ -148,6 +157,8 @@ const zhHant: Messages = {
   'settings.save': '儲存設定',
   'settings.saving': '正在儲存…',
   'settings.saved': '已儲存。',
+  'settings.unsaved': '有尚未儲存的變更。',
+  'settings.unsavedLeave': '設定尚未儲存，確定要離開嗎？',
 };
 
 const ko: Messages = {
@@ -197,6 +208,8 @@ const ko: Messages = {
   'settings.save': '설정 저장',
   'settings.saving': '저장 중…',
   'settings.saved': '저장했습니다.',
+  'settings.unsaved': '저장하지 않은 변경 사항이 있습니다.',
+  'settings.unsavedLeave': '설정을 저장하지 않고 나갈까요?',
 };
 
 const es: Messages = {
@@ -246,12 +259,52 @@ const es: Messages = {
   'settings.save': 'Guardar configuración',
   'settings.saving': 'Guardando…',
   'settings.saved': 'Guardado.',
+  'settings.unsaved': 'Tienes cambios sin guardar.',
+  'settings.unsavedLeave': '¿Salir sin guardar la configuración?',
 };
 
-export const messages: Record<SupportedLocale, Messages> = {
-  en,
-  ja,
-  'zh-Hant': zhHant,
-  ko,
-  es,
-};
+const allMessages = {
+  en: {
+    ...en,
+    ...authenticatedMessages.en,
+    ...vocabularyMessages.en,
+    ...learningMessages.en,
+    ...formMessages.en,
+    ...metadataMessages.en,
+  },
+  ja: {
+    ...ja,
+    ...authenticatedMessages.ja,
+    ...vocabularyMessages.ja,
+    ...learningMessages.ja,
+    ...formMessages.ja,
+    ...metadataMessages.ja,
+  },
+  'zh-Hant': {
+    ...zhHant,
+    ...authenticatedMessages['zh-Hant'],
+    ...vocabularyMessages['zh-Hant'],
+    ...learningMessages['zh-Hant'],
+    ...formMessages['zh-Hant'],
+    ...metadataMessages['zh-Hant'],
+  },
+  ko: {
+    ...ko,
+    ...authenticatedMessages.ko,
+    ...vocabularyMessages.ko,
+    ...learningMessages.ko,
+    ...formMessages.ko,
+    ...metadataMessages.ko,
+  },
+  es: {
+    ...es,
+    ...authenticatedMessages.es,
+    ...vocabularyMessages.es,
+    ...learningMessages.es,
+    ...formMessages.es,
+    ...metadataMessages.es,
+  },
+} satisfies Record<SupportedLocale, Record<string, string>>;
+
+export type MessageKey = keyof (typeof allMessages)['en'];
+export const messages: Record<SupportedLocale, Record<MessageKey, string>> = allMessages;

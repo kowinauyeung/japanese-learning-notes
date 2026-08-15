@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { Modal } from '@/components/Modal';
 import { PitchAccent } from '@/components/PitchAccent';
 import { Ruby } from '@/components/Ruby';
+import { useI18n } from '@/i18n/context';
+import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { useEntries } from '@/lib/entries';
 import { accentKana } from '@/lib/mora';
 import { useVocabDialog } from '@/lib/vocabDialog';
@@ -20,6 +22,8 @@ import { useVocabDialog } from '@/lib/vocabDialog';
  * frame with nothing in it.
  */
 export function VocabDialog() {
+  const { t } = useI18n();
+  const entryLabel = useEntryLabel();
   const { openId, close } = useVocabDialog();
   const { entries } = useEntries();
 
@@ -28,8 +32,8 @@ export function VocabDialog() {
 
   if (!entry) {
     return (
-      <Modal open title="単語" onClose={close}>
-        <p className="py-6 text-center text-sm text-muted">単語が見つかりません</p>
+      <Modal open title={t('vocabDialog.title')} onClose={close}>
+        <p className="py-6 text-center text-sm text-muted">{t('vocabDialog.notFound')}</p>
       </Modal>
     );
   }
@@ -40,7 +44,7 @@ export function VocabDialog() {
   return (
     <Modal
       open
-      title="単語"
+      title={t('vocabDialog.title')}
       onClose={close}
       footer={
         <Link
@@ -55,7 +59,7 @@ export function VocabDialog() {
           replace
           className="grid min-h-10 w-full place-items-center rounded-pill bg-accent text-sm font-semibold text-on-accent"
         >
-          詳細を見る
+          {t('vocabDialog.viewDetails')}
         </Link>
       }
     >
@@ -79,7 +83,7 @@ export function VocabDialog() {
             </span>
             {entry.pos.map((part) => (
               <span key={part} className="rounded-pill bg-bg-alt px-2.5 py-1 text-muted">
-                {part}
+                {entryLabel(part)}
               </span>
             ))}
             <span className="text-muted tabular-nums">{entry.learnedOn}</span>

@@ -3,6 +3,7 @@ import { SessionDialog } from '@/components/history/SessionDialog';
 import { SessionRow } from '@/components/history/SessionRow';
 import { WeakWords } from '@/components/history/WeakWords';
 import type { PracticeSession } from '@/domain/practice';
+import { useI18n } from '@/i18n/context';
 import { useEntries } from '@/lib/entries';
 import { weakWords } from '@/lib/history';
 import { loadErrorMessage } from '@/lib/loadError';
@@ -29,6 +30,7 @@ const PAGE_SIZE = 20;
 export function Component() {
   const { entries, loading: entriesLoading, error: entriesError } = useEntries();
   const { weakIds, loading: progressLoading, error: progressError, repository } = useProgress();
+  const { t } = useI18n();
 
   const [sessions, setSessions] = useState<PracticeSession[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -61,12 +63,12 @@ export function Component() {
       } catch (cause) {
         console.error(cause);
         if (walk.current === mine)
-          setError(loadErrorMessage(cause, '練習履歴を読み込めませんでした。'));
+          setError(loadErrorMessage(cause, t('history.loadError'), t('load.accessDenied')));
       } finally {
         if (walk.current === mine) setLoading(false);
       }
     },
-    [repository],
+    [repository, t],
   );
 
   useEffect(() => {
@@ -88,7 +90,7 @@ export function Component() {
   }, [openId]);
 
   if (entriesLoading || progressLoading)
-    return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
+    return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
   // Both feed this page: the sessions name entry ids, and 苦手な語 is the
   // progress map resolved against the notebook. Either failing leaves rows that
   // would silently render short.
@@ -97,13 +99,13 @@ export function Component() {
 
   return (
     <div className="space-y-4">
-      <h1 className="font-display text-2xl font-bold">履歴</h1>
+      <h1 className="font-display text-2xl font-bold">{t('history.title')}</h1>
 
       {/* 苦手のみ, so the button drills the list printed above it. */}
       <WeakWords words={weak} filters={{ ...EMPTY_PRACTICE_FILTERS, weakOnly: true }} />
 
       <section className="space-y-2 rounded-card bg-card p-5 shadow-panel">
-        <h2 className="text-sm font-semibold">練習履歴</h2>
+        <h2 className="text-sm font-semibold">{t('history.practiceHistory')}</h2>
 
         {error && <p className="text-sm text-danger">{error}</p>}
 
@@ -115,12 +117,12 @@ export function Component() {
           </ul>
         ) : (
           !loading &&
-          !error && (
-            <p className="py-8 text-center text-sm text-muted">まだ練習の記録がありません</p>
-          )
+          !error && <p className="py-8 text-center text-sm text-muted">{t('history.empty')}</p>
         )}
 
-        {loading && <p className="py-4 text-center text-sm text-muted">読み込み中…</p>}
+        {loading && (
+          <p className="py-4 text-center text-sm text-muted">{t('vocabulary.loading')}</p>
+        )}
 
         {cursor !== null && !loading && (
           <button
@@ -128,7 +130,7 @@ export function Component() {
             onClick={() => void loadPage(cursor)}
             className="min-h-11 w-full rounded-pill bg-bg-alt text-sm font-semibold text-ink"
           >
-            もっと見る
+            {t('history.more')}
           </button>
         )}
       </section>

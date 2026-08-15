@@ -37,8 +37,9 @@ test('saves user settings across a reload and applies the durable theme', async 
 
   await page.getByRole('button', { name: '＋新增', exact: true }).click();
   await page.getByRole('button', { name: 'JSON', exact: true }).click();
-  await expect(page.getByLabel('訳の言語')).toHaveValue('廣東話');
-  await page.getByRole('button', { name: 'キャンセル' }).click();
+  const addWordDialog = page.getByRole('dialog', { name: '新增單字' });
+  await expect(addWordDialog.getByLabel('翻譯語言')).toHaveValue('廣東話');
+  await addWordDialog.getByRole('button', { name: '取消' }).click();
 
   await page.reload();
   await expect(page.getByLabel('暱稱')).toHaveValue('Kowin');
@@ -73,4 +74,35 @@ test('previews language and theme without persisting them before save', async ({
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await expect(page.getByRole('link', { name: '学習サマリー' })).toBeVisible();
   await expect(page.getByLabel('ニックネーム')).toHaveValue('Before');
+});
+
+test('warns before leaving settings with unsaved changes', async ({ page }) => {
+  await seed(page, {
+    signedIn: true,
+    profile: {
+      nickname: 'Before',
+      language: 'ja',
+      translationLanguage: 'en',
+      theme: 'light',
+    },
+  });
+  await page.goto('/settings');
+
+  await page.getByLabel('ニックネーム').fill('After');
+  await expect(page.getByText('保存していない変更があります。')).toBeVisible();
+
+  await Promise.all([
+    page.waitForEvent('dialog').then(async (dialog) => {
+      expect(dialog.message()).toBe('設定を保存せずに移動しますか？');
+      await dialog.dismiss();
+    }),
+    page.getByRole('link', { name: '単語', exact: true }).click(),
+  ]);
+  await expect(page).toHaveURL(/\/settings$/);
+
+  await Promise.all([
+    page.waitForEvent('dialog').then((dialog) => dialog.accept()),
+    page.getByRole('link', { name: '単語', exact: true }).click(),
+  ]);
+  await expect(page).toHaveURL(/\/vocabulary$/);
 });

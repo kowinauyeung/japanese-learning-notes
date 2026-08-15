@@ -157,7 +157,7 @@ export interface Entry {
   related: RelatedWord[];
 
   // --- where it came from
-  /** 出處 — 会議, 同僚, 小説「海辺のカフカ」, YouTube … */
+  /** 出典 — 会議, 同僚, 小説「海辺のカフカ」, YouTube … */
   source: string;
   context: EntryContext;
 

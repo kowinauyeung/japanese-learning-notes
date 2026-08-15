@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Ruby } from '@/components/Ruby';
 import type { Entry } from '@/domain/entry';
+import { useI18n } from '@/i18n/context';
 import { isCorrectAnswer, spokenForm } from '@/lib/dictation';
 import { useJapaneseSpeech } from '@/lib/speech';
 import { SessionHeader } from './SessionHeader';
@@ -25,6 +26,7 @@ export function DictationSession({
   onAnswer: (correct: boolean) => void;
   onQuit: () => void;
 }) {
+  const { t } = useI18n();
   const [typed, setTyped] = useState('');
   /** Null until 答え合わせ; the answer afterwards. */
   const [result, setResult] = useState<boolean | null>(null);
@@ -106,7 +108,7 @@ export function DictationSession({
 
   return (
     <section className="mx-auto max-w-2xl space-y-4">
-      <SessionHeader title="書き取り練習" index={index} total={total} onQuit={onQuit} />
+      <SessionHeader title={t('practice.dictation')} index={index} total={total} onQuit={onQuit} />
 
       <div className="space-y-5 rounded-card bg-card p-6 shadow-panel">
         <div className="text-center">
@@ -116,26 +118,21 @@ export function DictationSession({
             disabled={!speakable}
             className="min-h-12 rounded-pill bg-accent px-6 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
-            🔊 単語を聞く
+            {t('practice.listen')}
           </button>
           {status === 'unsupported' && (
-            <p className="mt-2 text-xs text-danger">このブラウザは音声読み上げに対応していません</p>
+            <p className="mt-2 text-xs text-danger">{t('practice.speechUnsupported')}</p>
           )}
           {status === 'no-japanese-voice' && (
-            <p className="mt-2 text-xs text-danger">
-              日本語の音声が見つかりません。システム設定 → アクセシビリティ → 読み上げコンテンツ →
-              システムの声 から日本語の声を追加してください。
-            </p>
+            <p className="mt-2 text-xs text-danger">{t('practice.voiceMissing')}</p>
           )}
           {status === 'failed' && (
-            <p className="mt-2 text-xs text-danger">
-              音声を再生できませんでした。もう一度お試しください。
-            </p>
+            <p className="mt-2 text-xs text-danger">{t('practice.speechError')}</p>
           )}
         </div>
 
         <label className="block space-y-1">
-          <span className="text-[11px] text-muted">聞こえた語</span>
+          <span className="text-[11px] text-muted">{t('practice.heardWord')}</span>
           <input
             ref={inputRef}
             value={typed}
@@ -157,7 +154,7 @@ export function DictationSession({
             className={`space-y-2 rounded-panel p-4 ${result ? 'bg-accent-soft' : 'bg-danger-soft'}`}
           >
             <p className={`text-sm font-semibold ${result ? 'text-accent' : 'text-danger'}`}>
-              {result ? '✅ 正解' : '❌ 不正解'}
+              {result ? t('practice.correct') : t('practice.incorrect')}
             </p>
             <Ruby
               headword={entry.headword}
@@ -175,7 +172,7 @@ export function DictationSession({
           onClick={check}
           className="min-h-12 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent"
         >
-          答え合わせ
+          {t('practice.check')}
         </button>
       ) : (
         <button
@@ -183,7 +180,7 @@ export function DictationSession({
           onClick={next}
           className="min-h-12 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent"
         >
-          次へ
+          {t('practice.next')}
         </button>
       )}
     </section>

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -6,6 +6,7 @@ import {
   JsonImport,
   type JsonImportState,
 } from '@/components/entry-form/JsonImport';
+import { renderWithI18n as render } from '../helpers/renderWithI18n';
 
 const withClipboard = (clipboard: unknown) => {
   Object.defineProperty(navigator, 'clipboard', {

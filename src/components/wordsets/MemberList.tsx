@@ -1,6 +1,7 @@
 import { Ruby } from '@/components/Ruby';
 import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
+import { useI18n } from '@/i18n/context';
 import type { ListDrag } from '@/lib/listDrag';
 import { DragHandle } from './DragHandle';
 
@@ -42,14 +43,15 @@ export function MemberList({
   onMoveBy: (index: number, delta: number) => void;
 }) {
   const at = drag.at?.list === list ? drag.at.index : null;
+  const { t } = useI18n();
 
   return (
     <section className="flex min-h-0 flex-1 flex-col rounded-card bg-card shadow-panel">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line p-4">
         <h2 className="text-sm font-semibold">
-          収録語
+          {t('wordSets.members')}
           <span className="ml-2 text-xs font-normal text-muted tabular-nums">
-            {members.length} 語
+            {t('wordSets.count', { count: members.length })}
           </span>
         </h2>
         {/* Mirrors 表示中の N 語を追加 across the gap, and names its own count
@@ -61,7 +63,7 @@ export function MemberList({
           disabled={busy || members.length === 0}
           className="min-h-9 rounded-pill bg-danger-soft px-4 text-xs font-semibold text-danger disabled:opacity-60"
         >
-          表示中の {members.length} 語を削除
+          {t('wordSets.removeShown', { count: members.length })}
         </button>
       </div>
 
@@ -124,7 +126,7 @@ export function MemberList({
               disabled={busy}
               className="min-h-9 shrink-0 rounded-pill bg-danger-soft px-4 text-xs font-semibold text-danger disabled:opacity-60"
             >
-              削除
+              {t('common.delete')}
             </button>
           </li>
         ))}
@@ -135,7 +137,7 @@ export function MemberList({
               at === 0 ? 'border-accent text-accent' : 'border-line'
             }`}
           >
-            ここに単語をドラッグ、または「＋ 追加」で入れてください
+            {t('wordSets.emptyMembers')}
           </li>
         )}
       </ul>

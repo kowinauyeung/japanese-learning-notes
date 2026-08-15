@@ -10,6 +10,7 @@ import {
 import type { ReactNode } from 'react';
 import type { WordSetRepository } from '@/domain/ports';
 import type { WordSet } from '@/domain/wordSet';
+import { useI18n } from '@/i18n/context';
 import { wordSetRepositoryFor } from '@/lib/backend';
 import { loadErrorMessage } from '@/lib/loadError';
 
@@ -44,6 +45,7 @@ const PAGE_SIZE = 200;
  * of it, and the practice filter builds its chips from it.
  */
 export function WordSetsProvider({ uid, children }: { uid: string; children: ReactNode }) {
+  const { t } = useI18n();
   const [sets, setSets] = useState<WordSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,11 +91,11 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
     } catch (cause) {
       console.error(cause);
       if (walk.current === mine)
-        setError(loadErrorMessage(cause, '単語集を読み込めませんでした。'));
+        setError(loadErrorMessage(cause, t('load.wordSets'), t('load.accessDenied')));
     } finally {
       if (walk.current === mine) setLoading(false);
     }
-  }, [repository]);
+  }, [repository, t]);
 
   useEffect(() => {
     setLoading(true);

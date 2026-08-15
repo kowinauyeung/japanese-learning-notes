@@ -59,6 +59,7 @@ export const WORDS: Record<string, unknown>[] = [
     pitchAccent: 0,
     definition: '何かが起こる前ぶれ。',
     definitionSub: '徵兆',
+    source: 'NHK News',
     pos: ['名詞'],
     jlpt: 'N1',
     origin: '漢語',

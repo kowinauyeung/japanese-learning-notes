@@ -229,12 +229,30 @@ export function shuffle<T>(items: readonly T[], random: () => number): T[] {
  * Stored rather than recomputed because 履歴 has to keep describing a session
  * after the tag it was filtered by has been renamed or deleted.
  */
-export function describeFilters(filters: PracticeFilters, sets: readonly WordSet[] = []): string {
+export interface PracticeFilterLabels {
+  set: (name: string) => string;
+  unknown: string;
+  weakOnly: string;
+  all: string;
+}
+
+const JAPANESE_FILTER_LABELS: PracticeFilterLabels = {
+  set: (name) => `単語集:${name}`,
+  unknown: '不明',
+  weakOnly: '苦手のみ',
+  all: 'すべての語',
+};
+
+export function describeFilters(
+  filters: PracticeFilters,
+  sets: readonly WordSet[] = [],
+  labels: PracticeFilterLabels = JAPANESE_FILTER_LABELS,
+): string {
   // Named, not by id: 履歴 is read by a person. A set deleted between the
   // session and the reading is named as missing rather than dropped, because
   // silently omitting a filter misdescribes what was drilled.
-  const setNames = filters.sets.map(
-    (id) => `単語集:${sets.find((set) => set.id === id)?.name ?? '不明'}`,
+  const setNames = filters.sets.map((id) =>
+    labels.set(sets.find((set) => set.id === id)?.name ?? labels.unknown),
   );
   // The bounds are written out rather than as 「直近1ヶ月」: a quick range is
   // relative to the day it was picked, and a label read back a month later has
@@ -247,9 +265,9 @@ export function describeFilters(filters: PracticeFilters, sets: readonly WordSet
     ...(filters.pos ? [filters.pos] : []),
     ...(filters.origin ? [filters.origin] : []),
     ...range,
-    ...(filters.weakOnly ? ['苦手のみ'] : []),
+    ...(filters.weakOnly ? [labels.weakOnly] : []),
   ];
-  return parts.length ? parts.join(' / ') : 'すべての語';
+  return parts.length ? parts.join(' / ') : labels.all;
 }
 
 export interface Answer {

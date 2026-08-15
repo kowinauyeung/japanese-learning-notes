@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Ruby } from '@/components/Ruby';
 import type { Entry } from '@/domain/entry';
+import { useI18n } from '@/i18n/context';
 import { SessionHeader } from './SessionHeader';
 
 const isEditable = (node: unknown): boolean => {
@@ -70,6 +71,7 @@ export function FlashcardSession({
   onAnswer: (correct: boolean) => void;
   onQuit: () => void;
 }) {
+  const { t } = useI18n();
   const [flipped, setFlipped] = useState(false);
 
   const answer = (correct: boolean) => {
@@ -130,7 +132,7 @@ export function FlashcardSession({
 
   return (
     <section className="mx-auto max-w-2xl space-y-4">
-      <SessionHeader title="フラッシュカード" index={index} total={total} onQuit={onQuit} />
+      <SessionHeader title={t('practice.flashcard')} index={index} total={total} onQuit={onQuit} />
 
       <div className="min-h-64 space-y-5 rounded-card bg-card p-6 text-center shadow-panel">
         <Ruby
@@ -160,7 +162,7 @@ export function FlashcardSession({
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted">意味を思い出してから裏を見てください</p>
+          <p className="text-sm text-muted">{t('practice.recallHint')}</p>
         )}
       </div>
 
@@ -171,7 +173,7 @@ export function FlashcardSession({
             onClick={() => answer(false)}
             className="min-h-12 rounded-pill bg-danger-soft text-sm font-semibold text-danger"
           >
-            もう一度
+            {t('practice.again')}
             <Key>←</Key>
           </button>
           <button
@@ -179,7 +181,7 @@ export function FlashcardSession({
             onClick={() => answer(true)}
             className="min-h-12 rounded-pill bg-accent text-sm font-semibold text-on-accent"
           >
-            わかった
+            {t('practice.gotIt')}
             <Key>→</Key>
           </button>
         </div>
@@ -189,7 +191,7 @@ export function FlashcardSession({
           onClick={() => setFlipped(true)}
           className="min-h-12 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent"
         >
-          裏を見る
+          {t('practice.reveal')}
           <Key>Space</Key>
         </button>
       )}

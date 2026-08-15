@@ -6,6 +6,7 @@ import { MemberPicker } from '@/components/wordsets/MemberPicker';
 import { PickerToolbar } from '@/components/wordsets/PickerToolbar';
 import { WordSetEditModal } from '@/components/wordsets/WordSetEditModal';
 import type { WordSetDraft } from '@/domain/wordSet';
+import { useI18n } from '@/i18n/context';
 import { useEntries } from '@/lib/entries';
 import { EMPTY_FILTERS } from '@/lib/filters';
 import type { Filters } from '@/lib/filters';
@@ -42,6 +43,7 @@ export function Component() {
   const navigate = useNavigate();
   const { sets, loading, error, refresh, repository } = useWordSets();
   const { entries, loading: entriesLoading, error: entriesError } = useEntries();
+  const { t } = useI18n();
 
   const [busy, setBusy] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export function Component() {
       return true;
     } catch (cause) {
       console.error(cause);
-      setWriteError('保存できませんでした。もう一度お試しください。');
+      setWriteError(t('wordSets.saveError'));
       return false;
     } finally {
       setBusy(false);
@@ -110,7 +112,7 @@ export function Component() {
       void navigate('/wordsets', { replace: true });
     } catch (cause) {
       console.error(cause);
-      setDeleteError('削除できませんでした。もう一度お試しください。');
+      setDeleteError(t('wordSets.deleteError'));
     } finally {
       setBusy(false);
     }
@@ -166,7 +168,7 @@ export function Component() {
   });
 
   if (loading || entriesLoading)
-    return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
+    return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
   /**
    * The notebook's error counts as much as the set's. Every count and every row
    * on this page is derived from `entries` rather than from the set, so a failed
@@ -179,9 +181,9 @@ export function Component() {
   if (!set) {
     return (
       <div className="py-16 text-center">
-        <p className="text-sm text-muted">単語集が見つかりません</p>
+        <p className="text-sm text-muted">{t('wordSets.notFound')}</p>
         <Link to="/wordsets" className="mt-2 inline-block text-sm text-accent underline">
-          単語集一覧へ戻る
+          {t('wordSets.back')}
         </Link>
       </div>
     );
@@ -194,7 +196,7 @@ export function Component() {
   return (
     <div className="space-y-4">
       <Link to="/wordsets" className="inline-block text-sm text-muted hover:text-ink">
-        ← 単語集一覧へ戻る
+        ← {t('wordSets.back')}
       </Link>
 
       <header className="rounded-card bg-card p-5 shadow-panel">
@@ -203,7 +205,7 @@ export function Component() {
             <h1 className="font-display text-2xl font-bold">
               {set.name}
               <span className="ml-2 text-sm font-normal text-muted tabular-nums">
-                {members.length} 語
+                {t('wordSets.count', { count: members.length })}
               </span>
             </h1>
             {set.description && (
@@ -215,7 +217,7 @@ export function Component() {
             onClick={() => setEditing(true)}
             className="min-h-9 shrink-0 rounded-pill bg-bg-alt px-4 text-xs font-semibold text-ink"
           >
-            編集
+            {t('common.edit')}
           </button>
         </div>
       </header>
@@ -270,7 +272,7 @@ export function Component() {
         onClick={() => setConfirmingDelete(true)}
         className="min-h-10 w-full rounded-pill bg-danger-soft text-sm font-semibold text-danger"
       >
-        この単語集を削除
+        {t('wordSets.deleteSet')}
       </button>
 
       <WordSetEditModal
@@ -288,9 +290,9 @@ export function Component() {
 
       <ConfirmDialog
         open={clearing !== null}
-        title="表示中の単語を削除"
-        message={`この単語集から ${clearing?.length ?? 0} 語を外しますか？\n単語そのものは削除されません。`}
-        confirmLabel="外す"
+        title={t('wordSets.clearTitle')}
+        message={t('wordSets.clearMessage', { count: clearing?.length ?? 0 })}
+        confirmLabel={t('wordSets.remove')}
         busy={busy}
         error={writeError}
         onClose={() => setClearing(null)}
@@ -302,9 +304,9 @@ export function Component() {
 
       <ConfirmDialog
         open={confirmingDelete}
-        title="単語集を削除"
-        message={`「${set.name}」を削除しますか？\n収録されている単語そのものは削除されません。`}
-        confirmLabel="削除する"
+        title={t('wordSets.deleteTitle')}
+        message={t('wordSets.deleteMessage', { name: set.name })}
+        confirmLabel={t('wordSets.deleteConfirm')}
         busy={busy}
         error={deleteError}
         onClose={() => {

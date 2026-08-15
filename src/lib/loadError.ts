@@ -71,6 +71,10 @@ export function isAccessDenied(cause: unknown): boolean {
  * a fact about the account, identical on every screen, and saying it four
  * different ways would suggest four different problems.
  */
-export function loadErrorMessage(cause: unknown, fallback: string): string {
-  return isAccessDenied(cause) ? ACCESS_DENIED_MESSAGE : fallback;
+export function loadErrorMessage(
+  cause: unknown,
+  fallback: string,
+  accessDenied = ACCESS_DENIED_MESSAGE,
+): string {
+  return isAccessDenied(cause) ? accessDenied : fallback;
 }

@@ -32,7 +32,7 @@ export const SCHEMA = `{
   "citationForm": "",
   "definition": "意味・説明（必須）",
   "definitionSub": "補足・注記",
-  "source": "出處",
+  "source": "出典",
   "context": { "original": "", "ja": "", "translation": "" },
   "senses": [
     { "label": "", "description": "", "example": "",

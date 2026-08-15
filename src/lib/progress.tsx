@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import type { ProgressRepository } from '@/domain/ports';
 import type { EntryProgress, PracticeSessionDraft } from '@/domain/practice';
+import { useI18n } from '@/i18n/context';
 import { progressRepositoryFor } from '@/lib/backend';
 import { loadErrorMessage } from '@/lib/loadError';
 import { weakIdsOf } from '@/lib/practice';
@@ -41,6 +42,7 @@ const ProgressContext = createContext<ProgressValue | null>(null);
  * should still be able to drill.
  */
 export function ProgressProvider({ uid, children }: { uid: string; children: ReactNode }) {
+  const { t } = useI18n();
   const [progress, setProgress] = useState<EntryProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +60,8 @@ export function ProgressProvider({ uid, children }: { uid: string; children: Rea
       })
       .catch((cause: unknown) => {
         console.error(cause);
-        if (!cancelled) setError(loadErrorMessage(cause, '練習の記録を読み込めませんでした。'));
+        if (!cancelled)
+          setError(loadErrorMessage(cause, t('load.progress'), t('load.accessDenied')));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -66,7 +69,7 @@ export function ProgressProvider({ uid, children }: { uid: string; children: Rea
     return () => {
       cancelled = true;
     };
-  }, [repository]);
+  }, [repository, t]);
 
   const record = useCallback(
     async (session: PracticeSessionDraft, rows: EntryProgress[]) => {

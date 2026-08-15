@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { WordSet } from '@/domain/wordSet';
+import { useI18n } from '@/i18n/context';
 
 /**
  * One 単語集 in the list.
@@ -10,6 +11,7 @@ import type { WordSet } from '@/domain/wordSet';
  * will actually list.
  */
 export function WordSetCard({ set, count }: { set: WordSet; count: number }) {
+  const { t } = useI18n();
   return (
     <Link
       to={`/wordsets/${set.id}`}
@@ -19,7 +21,7 @@ export function WordSetCard({ set, count }: { set: WordSet; count: number }) {
       {set.description && (
         <p className="prose-cjk line-clamp-2 text-sm text-muted">{set.description}</p>
       )}
-      <p className="mt-auto text-xs text-muted tabular-nums">{count} 語</p>
+      <p className="mt-auto text-xs text-muted tabular-nums">{t('wordSets.count', { count })}</p>
     </Link>
   );
 }

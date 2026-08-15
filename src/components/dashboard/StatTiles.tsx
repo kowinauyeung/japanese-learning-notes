@@ -6,10 +6,11 @@
  * whatever height the neighbouring card sets, so the two stay level.
  */
 export function StatTiles({ week, month, year }: { week: number; month: number; year: number }) {
+  const { t } = useI18n();
   const tiles = [
-    { label: '今週学んだ語', value: week },
-    { label: '今月学んだ語', value: month },
-    { label: '今年学んだ語', value: year },
+    { label: t('dashboard.week'), value: week },
+    { label: t('dashboard.month'), value: month },
+    { label: t('dashboard.year'), value: year },
   ];
 
   return (
@@ -26,3 +27,4 @@ export function StatTiles({ week, month, year }: { week: number; month: number; 
     </div>
   );
 }
+import { useI18n } from '@/i18n/context';

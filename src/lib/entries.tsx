@@ -10,6 +10,7 @@ import {
 import type { ReactNode } from 'react';
 import type { Entry } from '@/domain/entry';
 import type { EntryRepository } from '@/domain/ports';
+import { useI18n } from '@/i18n/context';
 import { entryRepositoryFor } from '@/lib/backend';
 import { loadErrorMessage } from '@/lib/loadError';
 
@@ -55,6 +56,7 @@ const PAGE_SIZE = 200;
  * every write site.
  */
 export function EntriesProvider({ uid, children }: { uid: string; children: ReactNode }) {
+  const { t } = useI18n();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,11 +106,12 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
       if (walk.current === mine) setEntries(all);
     } catch (cause) {
       console.error(cause);
-      if (walk.current === mine) setError(loadErrorMessage(cause, '単語を読み込めませんでした。'));
+      if (walk.current === mine)
+        setError(loadErrorMessage(cause, t('load.entries'), t('load.accessDenied')));
     } finally {
       if (walk.current === mine) setLoading(false);
     }
-  }, [repository]);
+  }, [repository, t]);
 
   useEffect(() => {
     setLoading(true);

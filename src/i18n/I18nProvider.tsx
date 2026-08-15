@@ -17,7 +17,16 @@ export function I18nProvider({
 }) {
   const resolvedLocale = useMemo(() => locale ?? detectBrowserLocale(), [locale]);
   const value = useMemo<I18nValue>(
-    () => ({ locale: resolvedLocale, t: (key) => messages[resolvedLocale][key] }),
+    () => ({
+      locale: resolvedLocale,
+      t: (key, params) => {
+        const message = messages[resolvedLocale][key];
+        if (!params) return message;
+        return message.replaceAll(/\{([^}]+)\}/g, (token, name: string) =>
+          Object.hasOwn(params, name) ? String(params[name]) : token,
+        );
+      },
+    }),
     [resolvedLocale],
   );
 

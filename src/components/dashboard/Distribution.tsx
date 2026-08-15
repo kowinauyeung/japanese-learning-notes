@@ -10,6 +10,7 @@ export function Distribution({
   title: string;
   rows: { label: string; count: number }[];
 }) {
+  const { t } = useI18n();
   const max = Math.max(1, ...rows.map((row) => row.count));
 
   return (
@@ -30,8 +31,9 @@ export function Distribution({
             <span className="w-7 shrink-0 text-right text-muted tabular-nums">{row.count}</span>
           </li>
         ))}
-        {!rows.length && <li className="text-sm text-muted">データがありません</li>}
+        {!rows.length && <li className="text-sm text-muted">{t('dashboard.noData')}</li>}
       </ul>
     </section>
   );
 }
+import { useI18n } from '@/i18n/context';

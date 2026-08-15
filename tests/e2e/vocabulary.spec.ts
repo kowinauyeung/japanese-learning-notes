@@ -75,7 +75,7 @@ test.describe('browsing', () => {
     await page.reload();
 
     await expect(page.getByRole('dialog', { name: '単語' })).toBeHidden();
-    await expect(page.getByRole('heading', { name: /MANIFEST/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '概要' })).toBeVisible();
   });
 
   /** Back closes it and leaves you where you were, which is what a dialog owes. */
@@ -96,7 +96,7 @@ test.describe('browsing', () => {
     await page.getByRole('link', { name: /兆候/ }).click();
     await page.getByRole('link', { name: '詳細を見る' }).click();
 
-    await expect(page.getByRole('heading', { name: /MANIFEST/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '概要' })).toBeVisible();
     await expect(page.getByRole('dialog', { name: '単語' })).toBeHidden();
 
     /**

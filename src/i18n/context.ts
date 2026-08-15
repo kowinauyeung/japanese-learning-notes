@@ -4,7 +4,7 @@ import type { MessageKey } from './messages';
 
 export interface I18nValue {
   locale: SupportedLocale;
-  t: (key: MessageKey) => string;
+  t: (key: MessageKey, params?: Readonly<Record<string, string | number>>) => string;
 }
 
 export const I18nContext = createContext<I18nValue | null>(null);

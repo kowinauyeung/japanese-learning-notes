@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useBlocker } from 'react-router-dom';
 import { THEME_PREFERENCES, TRANSLATION_LANGUAGES, UI_LANGUAGES } from '@/domain/user';
 import type {
   ThemePreference,
@@ -64,9 +65,28 @@ function SettingsForm({
     translationLanguage: profile.translationLanguage,
     theme: profile.theme,
   });
+  const [baseline, setBaseline] = useState<UserProfileDraft>(draft);
   const [saved, setSaved] = useState(false);
+  const dirty = !sameSettings(draft, baseline);
+  const blocker = useBlocker(dirty);
 
   useEffect(() => () => preview(null), [preview]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [dirty]);
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    if (window.confirm(t('settings.unsavedLeave'))) blocker.proceed();
+    else blocker.reset();
+  }, [blocker, t]);
 
   const update = <K extends keyof UserProfileDraft>(key: K, value: UserProfileDraft[K]) => {
     const next = { ...draft, [key]: value };
@@ -85,7 +105,10 @@ function SettingsForm({
           const next = { ...draft, nickname: draft.nickname.trim() };
           setDraft(next);
           preview(next);
-          void save(next).then(() => setSaved(true));
+          void save(next).then(() => {
+            setBaseline(next);
+            setSaved(true);
+          });
         }}
       >
         <Field label={t('settings.nickname')} hint={t('settings.nicknameHint')}>
@@ -136,10 +159,22 @@ function SettingsForm({
         >
           {saving ? t('settings.saving') : t('settings.save')}
         </button>
+        {dirty && (
+          <p className="text-center text-xs font-medium text-danger">{t('settings.unsaved')}</p>
+        )}
         {saved && <p className="text-center text-xs text-accent">{t('settings.saved')}</p>}
         {error && <p className="text-center text-xs text-danger">{error}</p>}
       </form>
     </section>
+  );
+}
+
+function sameSettings(left: UserProfileDraft, right: UserProfileDraft): boolean {
+  return (
+    left.nickname === right.nickname &&
+    left.language === right.language &&
+    left.translationLanguage === right.translationLanguage &&
+    left.theme === right.theme
   );
 }
 

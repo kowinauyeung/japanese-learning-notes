@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { UserProfileDraft } from '@/domain/user';
+import { useI18n } from '@/i18n/context';
 import { userRepository } from '@/lib/backend';
 import { loadErrorMessage } from '@/lib/loadError';
 import { applyThemePreference } from '@/lib/theme';
@@ -36,6 +37,7 @@ function UserSettingsState({
   email: string;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   const defaults = useMemo(
     () =>
       defaultUserProfile(
@@ -72,7 +74,8 @@ function UserSettingsState({
       })
       .catch((cause: unknown) => {
         console.error(cause);
-        if (!cancelled) setError(loadErrorMessage(cause, '設定を読み込めませんでした。'));
+        if (!cancelled)
+          setError(loadErrorMessage(cause, t('load.settings'), t('load.accessDenied')));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -80,7 +83,7 @@ function UserSettingsState({
     return () => {
       cancelled = true;
     };
-  }, [uid, defaults]);
+  }, [uid, defaults, t]);
 
   useEffect(() => {
     const profile = previewDraft ? { ...storedProfile, ...previewDraft } : storedProfile;
@@ -105,13 +108,13 @@ function UserSettingsState({
         }
       } catch (cause) {
         console.error(cause);
-        setError('設定を保存できませんでした。');
+        setError(t('load.settingsSave'));
         throw cause;
       } finally {
         setSaving(false);
       }
     },
-    [uid],
+    [uid, t],
   );
 
   const profile = useMemo(
