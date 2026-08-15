@@ -19,6 +19,7 @@ import {
 } from '@/lib/practice';
 import type { Answer, PracticeFilters } from '@/lib/practice';
 import { useProgress } from '@/lib/progress';
+import { recentTags } from '@/lib/tags';
 import { membersOf } from '@/lib/wordSetMembers';
 import { useWordSets } from '@/lib/wordSets';
 
@@ -94,11 +95,7 @@ function Practice({ mode }: { mode: PracticeMode }) {
   // re-render happened to cross midnight.
   const now = useMemo(() => new Date(), []);
 
-  const allTags = useMemo(
-    () =>
-      [...new Set(entries.flatMap((entry) => entry.tags))].sort((a, b) => a.localeCompare(b, 'ja')),
-    [entries],
-  );
+  const visibleTags = useMemo(() => recentTags(entries), [entries]);
 
   /**
    * Counted over the entries in hand, not over progress rows. A word answered
@@ -216,7 +213,7 @@ function Practice({ mode }: { mode: PracticeMode }) {
       <PracticeSetup
         mode={mode}
         filters={filters}
-        allTags={allTags}
+        allTags={visibleTags}
         allSets={setChips}
         now={now}
         matchCount={matches.length}

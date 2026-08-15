@@ -12,6 +12,7 @@ import {
   toSearchParams,
 } from '@/lib/filters';
 import type { Filters } from '@/lib/filters';
+import { recentTags } from '@/lib/tags';
 
 export function Component() {
   const { entries, loading, error } = useEntries();
@@ -20,11 +21,7 @@ export function Component() {
   const filters = useMemo(() => fromSearchParams(searchParams), [searchParams]);
   const update = (next: Filters) => setSearchParams(toSearchParams(next), { replace: true });
 
-  const allTags = useMemo(
-    () =>
-      [...new Set(entries.flatMap((entry) => entry.tags))].sort((a, b) => a.localeCompare(b, 'ja')),
-    [entries],
-  );
+  const visibleTags = useMemo(() => recentTags(entries), [entries]);
 
   const results = useMemo(
     () =>
@@ -50,7 +47,7 @@ export function Component() {
         className="min-h-12 w-full rounded-pill border border-line bg-card px-5 text-sm text-ink placeholder:text-muted"
       />
 
-      <FilterPanel filters={filters} allTags={allTags} onChange={update} />
+      <FilterPanel filters={filters} allTags={visibleTags} onChange={update} />
 
       {!isDefault(filters) && (
         <div className="flex flex-wrap items-center gap-1.5">
