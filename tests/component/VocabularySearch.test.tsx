@@ -44,6 +44,24 @@ describe('VocabularySearch — IME composition', () => {
     expect(input).toHaveValue(final);
   });
 
+  it('deduplicates a final change after compositionend without swallowing later input', () => {
+    const { input, searched } = setup();
+
+    fireEvent.compositionStart(input);
+    fireEvent.change(input, { target: { value: 'か' } });
+    fireEvent.compositionEnd(input, { target: { value: '家' } });
+    // Some browsers emit the committed value as a final input event after
+    // compositionend. It is the same edit, not a second search navigation.
+    fireEvent.change(input, { target: { value: '家' } });
+
+    expect(searched).toHaveBeenCalledTimes(1);
+    expect(searched).toHaveBeenLastCalledWith('家');
+
+    fireEvent.change(input, { target: { value: '家族' } });
+    expect(searched).toHaveBeenCalledTimes(2);
+    expect(searched).toHaveBeenLastCalledWith('家族');
+  });
+
   it('searches ordinary non-IME input immediately', () => {
     const { input, searched } = setup();
 
