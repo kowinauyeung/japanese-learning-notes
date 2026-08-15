@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { EntryCard } from '@/components/browse/EntryCard';
 import { FilterPanel } from '@/components/browse/FilterPanel';
+import { VocabularySearch } from '@/components/browse/VocabularySearch';
 import { useEntries } from '@/lib/entries';
 import {
   EMPTY_FILTERS,
@@ -39,13 +40,7 @@ export function Component() {
 
   return (
     <div className="space-y-4">
-      <input
-        type="search"
-        value={filters.q}
-        onChange={(event) => update({ ...filters, q: event.target.value })}
-        placeholder="見出し語・読み方・タグ・意味・例文で検索"
-        className="min-h-12 w-full rounded-pill border border-line bg-card px-5 text-sm text-ink placeholder:text-muted"
-      />
+      <VocabularySearch value={filters.q} onChange={(q) => update({ ...filters, q })} />
 
       <FilterPanel filters={filters} allTags={visibleTags} onChange={update} />
 
