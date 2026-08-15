@@ -156,6 +156,27 @@ test.describe('dictation', () => {
 });
 
 test.describe('the practice setup screen', () => {
+  test('shows and can clear an older tag selected from the URL', async ({ page }) => {
+    const entries = Array.from({ length: 11 }, (_, index) => ({
+      ...WORDS[0],
+      id: `tagged-${index}`,
+      headword: `語${index}`,
+      tags: [index === 0 ? '古いタグ' : `タグ${index}`],
+      createdAt: new Date(Date.UTC(2026, 0, index + 1)).toISOString(),
+    }));
+    await seed(page, { signedIn: true, entries });
+
+    await page.goto('/practice/flashcards?tag=' + encodeURIComponent('古いタグ'));
+
+    const selected = page.getByRole('button', { name: '#古いタグ' });
+    await expect(selected).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText('1 件が対象')).toBeVisible();
+
+    await selected.click();
+    await expect(selected).toBeHidden();
+    await expect(page.getByText('11 件が対象')).toBeVisible();
+  });
+
   test('offers 苦手のみ against the words already recorded wrong', async ({ page }) => {
     await seed(page, { signedIn: true, entries: WORDS, weak: ['w-choukou'] });
     await page.goto('/practice/flashcards');
