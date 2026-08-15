@@ -81,6 +81,7 @@ export function PracticeSetup({
     onChange({ ...filters, [key]: value });
 
   const active = activeQuickRange(filters, now);
+  const selectedHiddenTags = filters.tags.filter((tag) => !allTags.includes(tag));
 
   // A quick range clears any end the learner had set: 「直近1ヶ月」 means
   // "since that day", and leaving an old end in place would silently produce a
@@ -119,9 +120,25 @@ export function PracticeSetup({
         </div>
       )}
 
-      {allTags.length > 0 && (
+      {(selectedHiddenTags.length > 0 || allTags.length > 0) && (
         <div className="space-y-1.5">
           <p className="text-[11px] text-muted">タグ</p>
+          {selectedHiddenTags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-muted">選択中</span>
+              {selectedHiddenTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  aria-pressed="true"
+                  onClick={() => update('tags', toggle(filters.tags, tag))}
+                  className={chipClass(true)}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap gap-1.5">
             {allTags.map((tag) => (
               <button

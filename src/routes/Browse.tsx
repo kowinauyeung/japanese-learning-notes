@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { EntryCard } from '@/components/browse/EntryCard';
 import { FilterPanel } from '@/components/browse/FilterPanel';
+import { VocabularySearch } from '@/components/browse/VocabularySearch';
 import { useEntries } from '@/lib/entries';
 import {
   EMPTY_FILTERS,
@@ -12,6 +13,7 @@ import {
   toSearchParams,
 } from '@/lib/filters';
 import type { Filters } from '@/lib/filters';
+import { recentTags } from '@/lib/tags';
 
 export function Component() {
   const { entries, loading, error } = useEntries();
@@ -20,11 +22,7 @@ export function Component() {
   const filters = useMemo(() => fromSearchParams(searchParams), [searchParams]);
   const update = (next: Filters) => setSearchParams(toSearchParams(next), { replace: true });
 
-  const allTags = useMemo(
-    () =>
-      [...new Set(entries.flatMap((entry) => entry.tags))].sort((a, b) => a.localeCompare(b, 'ja')),
-    [entries],
-  );
+  const visibleTags = useMemo(() => recentTags(entries), [entries]);
 
   const results = useMemo(
     () =>
@@ -42,15 +40,9 @@ export function Component() {
 
   return (
     <div className="space-y-4">
-      <input
-        type="search"
-        value={filters.q}
-        onChange={(event) => update({ ...filters, q: event.target.value })}
-        placeholder="見出し語・読み方・タグ・意味・例文で検索"
-        className="min-h-12 w-full rounded-pill border border-line bg-card px-5 text-sm text-ink placeholder:text-muted"
-      />
+      <VocabularySearch value={filters.q} onChange={(q) => update({ ...filters, q })} />
 
-      <FilterPanel filters={filters} allTags={allTags} onChange={update} />
+      <FilterPanel filters={filters} allTags={visibleTags} onChange={update} />
 
       {!isDefault(filters) && (
         <div className="flex flex-wrap items-center gap-1.5">
