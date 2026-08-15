@@ -34,7 +34,7 @@ export function Component() {
   // the id in the text they had just copied.
   const errorId = useMemo(() => newErrorId(), []);
 
-  const initial = (user?.displayName || user?.email || '?').charAt(0).toUpperCase();
+  const initial = (settings.profile.nickname || user?.email || '?').charAt(0).toUpperCase();
 
   const runExport = async () => {
     setBusy('export');
@@ -129,7 +129,7 @@ export function Component() {
         <dl className="mt-8 space-y-4 text-sm">
           <div>
             <dt className="text-xs text-muted">表示名</dt>
-            <dd className="mt-1">{user?.displayName ?? '—'}</dd>
+            <dd className="mt-1">{settings.profile.nickname || '—'}</dd>
           </div>
           <div>
             <dt className="text-xs text-muted">メールアドレス</dt>

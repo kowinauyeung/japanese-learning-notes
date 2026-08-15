@@ -267,7 +267,7 @@ service cloud.firestore {
         && d.uid == uid
         && str(d.nickname, 50) && d.nickname.size() > 0
         && d.language in ['en', 'ja', 'zh-Hant', 'ko', 'es']
-        && d.translationLanguage in ['en', 'ja', 'zh-Hant', 'ko', 'es']
+        && d.translationLanguage in ['en', 'ja', 'zh-Hant', 'yue-Hant', 'ko', 'es']
         && d.theme in ['light', 'dark', 'system']
         && d.createdAt is timestamp
         && d.updatedAt is timestamp;

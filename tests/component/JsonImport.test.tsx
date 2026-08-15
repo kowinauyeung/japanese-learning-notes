@@ -26,9 +26,9 @@ function Harness({ initial }: { initial: JsonImportState }) {
 
 describe('JsonImport — translation language preference', () => {
   it('shows the saved translation language as the initial editable value', () => {
-    render(<Harness initial={emptyJsonImport('zh-Hant')} />);
+    render(<Harness initial={emptyJsonImport('yue-Hant')} />);
 
-    expect(screen.getByRole('textbox', { name: '訳の言語' })).toHaveValue('繁体字中国語');
+    expect(screen.getByRole('textbox', { name: '訳の言語' })).toHaveValue('廣東話');
   });
 
   it('keeps a manual language override in the prompt instead of restoring the saved default', async () => {
@@ -48,6 +48,6 @@ describe('JsonImport — translation language preference', () => {
 
     expect(await screen.findByRole('button', { name: 'コピーしました' })).toBeInTheDocument();
     expect(copied).toContain('廣東話');
-    expect(copied).not.toContain('英語で書いてください');
+    expect(copied).not.toContain('Englishで書いてください');
   });
 });

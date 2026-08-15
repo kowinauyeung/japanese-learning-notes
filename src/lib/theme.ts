@@ -23,8 +23,8 @@ export function applyTheme(next: Theme) {
   if (meta) meta.content = meta.dataset[next] ?? meta.content;
 }
 
-export function applyThemePreference(preference: ThemePreference): Theme {
-  localStorage.setItem('theme', preference);
+export function applyThemePreference(preference: ThemePreference, persist = true): Theme {
+  if (persist) localStorage.setItem('theme', preference);
   const resolved =
     preference === 'system'
       ? window.matchMedia('(prefers-color-scheme: dark)').matches

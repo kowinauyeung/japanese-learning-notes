@@ -6,6 +6,7 @@ export interface UserSettingsValue {
   loading: boolean;
   saving: boolean;
   error: string | null;
+  preview: (draft: UserProfileDraft | null) => void;
   save: (draft: UserProfileDraft) => Promise<void>;
 }
 

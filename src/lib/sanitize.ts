@@ -13,7 +13,7 @@ import type {
 } from '@/domain/entry';
 import { PRACTICE_MODES } from '@/domain/practice';
 import type { EntryProgress, PracticeSession } from '@/domain/practice';
-import { THEME_PREFERENCES, UI_LANGUAGES } from '@/domain/user';
+import { THEME_PREFERENCES, TRANSLATION_LANGUAGES, UI_LANGUAGES } from '@/domain/user';
 import type { UserProfile } from '@/domain/user';
 import type { WordSet } from '@/domain/wordSet';
 import { isValidIsoDate } from './dates';
@@ -254,7 +254,7 @@ export function sanitizeUserProfile(uid: string, data: unknown): UserProfile {
     uid,
     nickname: str(raw.nickname).trim().slice(0, 50),
     language: oneOf(raw.language, UI_LANGUAGES, 'en'),
-    translationLanguage: oneOf(raw.translationLanguage, UI_LANGUAGES, 'en'),
+    translationLanguage: oneOf(raw.translationLanguage, TRANSLATION_LANGUAGES, 'en'),
     theme: oneOf(raw.theme, THEME_PREFERENCES, 'system'),
     createdAt: isoDateTime(raw.createdAt),
     updatedAt: isoDateTime(raw.updatedAt),

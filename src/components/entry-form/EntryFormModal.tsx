@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Entry, EntryDraft } from '@/domain/entry';
-import type { UiLanguage } from '@/domain/user';
+import type { TranslationLanguage } from '@/domain/user';
 import { draftError, emptyDraft, parseTags, toDraft } from '@/lib/draft';
 import { useEntries } from '@/lib/entries';
 import { jsonToDraft } from '@/lib/jsonImport';
@@ -33,7 +33,7 @@ export function EntryFormModal({
   /** Present when editing; absent when adding. */
   entry?: Entry;
   /** Saved default for the JSON tab; the text field remains editable. */
-  translationLanguage?: UiLanguage | null | undefined;
+  translationLanguage?: TranslationLanguage | null | undefined;
   onClose: () => void;
   onSaved?: (id: string) => void;
 }) {

@@ -251,9 +251,10 @@ describe('promptLanguageName', () => {
       promptLanguageName('en'),
       promptLanguageName('ja'),
       promptLanguageName('zh-Hant'),
+      promptLanguageName('yue-Hant'),
       promptLanguageName('ko'),
       promptLanguageName('es'),
-    ]).toEqual(['英語', '日本語', '繁体字中国語', '韓国語', 'スペイン語']);
+    ]).toEqual(['English', '日本語', '中文', '廣東話', '한국어', 'Español']);
   });
 
   it('keeps the existing Cantonese fallback when no preference is available', () => {

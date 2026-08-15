@@ -46,7 +46,8 @@ function UserSettingsState({
       ),
     [uid, displayName, email],
   );
-  const [profile, setProfile] = useState(defaults);
+  const [storedProfile, setStoredProfile] = useState(defaults);
+  const [previewDraft, setPreviewDraft] = useState<UserProfileDraft | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +68,7 @@ function UserSettingsState({
         return (await userRepository.get(uid)) ?? defaults;
       })
       .then((next) => {
-        if (!cancelled) setProfile(next);
+        if (!cancelled) setStoredProfile(next);
       })
       .catch((cause: unknown) => {
         console.error(cause);
@@ -82,13 +83,14 @@ function UserSettingsState({
   }, [uid, defaults]);
 
   useEffect(() => {
-    applyThemePreference(profile.theme);
+    const profile = previewDraft ? { ...storedProfile, ...previewDraft } : storedProfile;
+    applyThemePreference(profile.theme, previewDraft === null);
     if (profile.theme !== 'system') return;
     const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const followSystem = () => applyThemePreference('system');
+    const followSystem = () => applyThemePreference('system', previewDraft === null);
     media.addEventListener('change', followSystem);
     return () => media.removeEventListener('change', followSystem);
-  }, [profile.theme]);
+  }, [storedProfile, previewDraft]);
 
   const save = useCallback(
     async (draft: UserProfileDraft) => {
@@ -97,7 +99,10 @@ function UserSettingsState({
       try {
         await userRepository.save(uid, draft);
         const stored = await userRepository.get(uid);
-        if (stored) setProfile(stored);
+        if (stored) {
+          setStoredProfile(stored);
+          setPreviewDraft(null);
+        }
       } catch (cause) {
         console.error(cause);
         setError('設定を保存できませんでした。');
@@ -109,9 +114,15 @@ function UserSettingsState({
     [uid],
   );
 
+  const profile = useMemo(
+    () => (previewDraft ? { ...storedProfile, ...previewDraft } : storedProfile),
+    [storedProfile, previewDraft],
+  );
+  const preview = useCallback((draft: UserProfileDraft | null) => setPreviewDraft(draft), []);
+
   const value = useMemo(
-    () => ({ profile, loading, saving, error, save }),
-    [profile, loading, saving, error, save],
+    () => ({ profile, loading, saving, error, preview, save }),
+    [profile, loading, saving, error, preview, save],
   );
   return <UserSettingsContext.Provider value={value}>{children}</UserSettingsContext.Provider>;
 }

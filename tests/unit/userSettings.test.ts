@@ -35,6 +35,28 @@ describe('defaultUserProfile', () => {
 });
 
 describe('sanitizeUserProfile', () => {
+  it('keeps Hong Kong Cantonese as a translation-only preference', () => {
+    expect(
+      sanitizeUserProfile('u1', {
+        nickname: 'Kowin',
+        language: 'zh-Hant',
+        translationLanguage: 'yue-Hant',
+        theme: 'system',
+      }),
+    ).toMatchObject({ language: 'zh-Hant', translationLanguage: 'yue-Hant' });
+  });
+
+  it('does not admit Hong Kong Cantonese as a display language', () => {
+    expect(
+      sanitizeUserProfile('u1', {
+        nickname: 'Kowin',
+        language: 'yue-Hant',
+        translationLanguage: 'yue-Hant',
+        theme: 'system',
+      }),
+    ).toMatchObject({ language: 'en', translationLanguage: 'yue-Hant' });
+  });
+
   it('coerces stale or unsupported settings without admitting Simplified Chinese', () => {
     expect(
       sanitizeUserProfile('u1', {

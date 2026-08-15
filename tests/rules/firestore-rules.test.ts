@@ -522,7 +522,11 @@ describe('bounds on what an owner may write', () => {
     const db = as(ALICE);
     await assertSucceeds(db.doc(`users/${ALICE}`).set(profile(ALICE)));
     await assertSucceeds(db.doc(`users/${ALICE}`).update({ nickname: 'New name', theme: 'dark' }));
+    await assertSucceeds(
+      db.doc(`users/${ALICE}`).update({ language: 'zh-Hant', translationLanguage: 'yue-Hant' }),
+    );
     await assertFails(db.doc(`users/${ALICE}`).update({ nickname: '' }));
+    await assertFails(db.doc(`users/${ALICE}`).update({ language: 'yue-Hant' }));
     await assertFails(db.doc(`users/${ALICE}`).update({ language: 'zh-CN' }));
     await assertFails(db.doc(`users/${ALICE}`).update({ extra: 'not allowed' }));
   });

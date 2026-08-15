@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { VocabDialog } from '@/components/VocabDialog';
-import type { UiLanguage } from '@/domain/user';
+import type { TranslationLanguage } from '@/domain/user';
 import { useI18n } from '@/i18n/context';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/messages';
@@ -91,7 +91,7 @@ function AuthenticatedLayout({
   translationLanguage,
 }: {
   uid: string;
-  translationLanguage: UiLanguage;
+  translationLanguage: TranslationLanguage;
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();

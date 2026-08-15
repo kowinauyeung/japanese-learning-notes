@@ -1,31 +1,52 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { UI_LANGUAGES } from '@/domain/user';
-import type { ThemePreference, UiLanguage, UserProfileDraft } from '@/domain/user';
+import { THEME_PREFERENCES, TRANSLATION_LANGUAGES, UI_LANGUAGES } from '@/domain/user';
+import type {
+  ThemePreference,
+  TranslationLanguage,
+  UiLanguage,
+  UserProfileDraft,
+} from '@/domain/user';
+import { useI18n } from '@/i18n/context';
+import type { MessageKey } from '@/i18n/messages';
 import { useUserSettings } from '@/lib/userSettingsContext';
 import type { UserSettingsValue } from '@/lib/userSettingsContext';
 
-const LANGUAGE_LABELS: Record<UiLanguage, string> = {
+const UI_LANGUAGE_LABELS: Record<UiLanguage, string> = {
   en: 'English',
   ja: '日本語',
-  'zh-Hant': '繁體中文',
+  'zh-Hant': '中文',
   ko: '한국어',
   es: 'Español',
 };
 
-const THEME_LABELS: Record<ThemePreference, string> = {
-  light: 'ライト',
-  dark: 'ダーク',
-  system: '端末の設定に合わせる',
+const TRANSLATION_LANGUAGE_LABELS: Record<TranslationLanguage, string> = {
+  ...UI_LANGUAGE_LABELS,
+  'zh-Hant': '中文',
+  'yue-Hant': '廣東話',
+};
+
+const THEME_LABEL_KEYS: Record<ThemePreference, MessageKey> = {
+  light: 'settings.themeLight',
+  dark: 'settings.themeDark',
+  system: 'settings.themeSystem',
 };
 
 export function Component() {
-  const { profile, loading, saving, error, save } = useUserSettings();
+  const { t } = useI18n();
+  const { profile, loading, saving, error, preview, save } = useUserSettings();
 
-  if (loading) return <p className="text-sm text-muted">設定を読み込んでいます…</p>;
+  if (loading) return <p className="text-sm text-muted">{t('settings.loading')}</p>;
 
   return (
-    <SettingsForm key={profile.uid} profile={profile} saving={saving} error={error} save={save} />
+    <SettingsForm
+      key={profile.uid}
+      profile={profile}
+      saving={saving}
+      error={error}
+      preview={preview}
+      save={save}
+    />
   );
 }
 
@@ -33,8 +54,10 @@ function SettingsForm({
   profile,
   saving,
   error,
+  preview,
   save,
-}: Pick<UserSettingsValue, 'profile' | 'saving' | 'error' | 'save'>) {
+}: Pick<UserSettingsValue, 'profile' | 'saving' | 'error' | 'preview' | 'save'>) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState<UserProfileDraft>({
     nickname: profile.nickname,
     language: profile.language,
@@ -43,24 +66,29 @@ function SettingsForm({
   });
   const [saved, setSaved] = useState(false);
 
+  useEffect(() => () => preview(null), [preview]);
+
   const update = <K extends keyof UserProfileDraft>(key: K, value: UserProfileDraft[K]) => {
+    const next = { ...draft, [key]: value };
     setSaved(false);
-    setDraft((current) => ({ ...current, [key]: value }));
+    setDraft(next);
+    preview(next);
   };
 
   return (
     <section className="mx-auto max-w-xl">
-      <h1 className="font-display text-2xl font-bold">設定</h1>
+      <h1 className="font-display text-2xl font-bold">{t('settings.title')}</h1>
       <form
         className="mt-5 space-y-5 rounded-card bg-card p-6 shadow-panel"
         onSubmit={(event) => {
           event.preventDefault();
           const next = { ...draft, nickname: draft.nickname.trim() };
           setDraft(next);
+          preview(next);
           void save(next).then(() => setSaved(true));
         }}
       >
-        <Field label="ニックネーム" hint="公開したコンテンツの作成者名として表示されます。">
+        <Field label={t('settings.nickname')} hint={t('settings.nicknameHint')}>
           <input
             value={draft.nickname}
             maxLength={50}
@@ -69,26 +97,33 @@ function SettingsForm({
           />
         </Field>
 
-        <Field label="表示言語">
-          <LanguageSelect value={draft.language} onChange={(value) => update('language', value)} />
+        <Field label={t('settings.displayLanguage')}>
+          <LanguageSelect
+            value={draft.language}
+            options={UI_LANGUAGES}
+            labels={UI_LANGUAGE_LABELS}
+            onChange={(value) => update('language', value)}
+          />
         </Field>
 
-        <Field label="AI 翻訳言語" hint="単語追加用の AI プロンプトで使う既定の翻訳先です。">
+        <Field label={t('settings.translationLanguage')} hint={t('settings.translationHint')}>
           <LanguageSelect
             value={draft.translationLanguage}
+            options={TRANSLATION_LANGUAGES}
+            labels={TRANSLATION_LANGUAGE_LABELS}
             onChange={(value) => update('translationLanguage', value)}
           />
         </Field>
 
-        <Field label="テーマ">
+        <Field label={t('settings.theme')}>
           <select
             value={draft.theme}
             onChange={(event) => update('theme', event.target.value as ThemePreference)}
             className="min-h-11 w-full rounded-panel border border-line bg-bg px-4 text-sm"
           >
-            {Object.entries(THEME_LABELS).map(([value, label]) => (
+            {THEME_PREFERENCES.map((value) => (
               <option key={value} value={value}>
-                {label}
+                {t(THEME_LABEL_KEYS[value])}
               </option>
             ))}
           </select>
@@ -99,31 +134,35 @@ function SettingsForm({
           disabled={saving || !draft.nickname.trim()}
           className="min-h-11 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
         >
-          {saving ? '保存しています…' : '設定を保存'}
+          {saving ? t('settings.saving') : t('settings.save')}
         </button>
-        {saved && <p className="text-center text-xs text-accent">保存しました。</p>}
+        {saved && <p className="text-center text-xs text-accent">{t('settings.saved')}</p>}
         {error && <p className="text-center text-xs text-danger">{error}</p>}
       </form>
     </section>
   );
 }
 
-function LanguageSelect({
+function LanguageSelect<T extends string>({
   value,
+  options,
+  labels,
   onChange,
 }: {
-  value: UiLanguage;
-  onChange: (v: UiLanguage) => void;
+  value: T;
+  options: readonly T[];
+  labels: Readonly<Record<T, string>>;
+  onChange: (v: T) => void;
 }) {
   return (
     <select
       value={value}
-      onChange={(event) => onChange(event.target.value as UiLanguage)}
+      onChange={(event) => onChange(event.target.value as T)}
       className="min-h-11 w-full rounded-panel border border-line bg-bg px-4 text-sm"
     >
-      {UI_LANGUAGES.map((language) => (
+      {options.map((language) => (
         <option key={language} value={language}>
-          {LANGUAGE_LABELS[language]}
+          {labels[language]}
         </option>
       ))}
     </select>

@@ -1,17 +1,18 @@
 import type { EntryDraft } from '@/domain/entry';
-import type { UiLanguage } from '@/domain/user';
+import type { TranslationLanguage } from '@/domain/user';
 import { sanitizeDraft } from './sanitize';
 
 const PROMPT_LANGUAGE_NAMES = {
-  en: '英語',
+  en: 'English',
   ja: '日本語',
-  'zh-Hant': '繁体字中国語',
-  ko: '韓国語',
-  es: 'スペイン語',
-} as const satisfies Record<UiLanguage, string>;
+  'zh-Hant': '中文',
+  'yue-Hant': '廣東話',
+  ko: '한국어',
+  es: 'Español',
+} as const satisfies Record<TranslationLanguage, string>;
 
 /** Convert a persisted language code into wording for the Japanese AI prompt. */
-export function promptLanguageName(language?: UiLanguage | null): string {
+export function promptLanguageName(language?: TranslationLanguage | null): string {
   return language ? PROMPT_LANGUAGE_NAMES[language] : '廣東語';
 }
 
