@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
+import { WORD_SET_LIMITS } from '../../src/domain/limits';
 import {
   FULL_SET,
   OVERLAPPING_SETS,
@@ -22,6 +23,29 @@ const memberOrder = (page: Page) =>
  */
 const memberHrefs = (page: Page) =>
   memberOrder(page).evaluateAll((rows) => rows.map((row) => row.getAttribute('href')));
+
+const LONG_SET_NAME = 'W'.repeat(200);
+const LONG_SET_DESCRIPTION = 'W'.repeat(5000);
+
+const MANY_WORDS = Array.from({ length: 50 }, (_, index) => ({
+  ...WORDS[index % WORDS.length],
+  id: `stress-word-${index + 1}`,
+  headword: index === 0 ? 'W'.repeat(200) : `負荷試験${String(index + 1).padStart(2, '0')}`,
+  reading: `ふかしけん${String(index + 1).padStart(2, '0')}`,
+  learnedOn: `2026-06-${String(24 - (index % 20)).padStart(2, '0')}`,
+  createdAt: new Date(Date.UTC(2026, 5, 24, 0, 0, index)).toISOString(),
+  updatedAt: new Date(Date.UTC(2026, 5, 24, 0, 0, index)).toISOString(),
+}));
+
+const MANY_IDS = MANY_WORDS.map((word) => word.id);
+
+async function expectNoHorizontalOverflow(page: Page): Promise<void> {
+  const { viewport, content } = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    content: document.documentElement.scrollWidth,
+  }));
+  expect(content).toBeLessThanOrEqual(viewport);
+}
 
 /**
  * Press on `grip`, move to the top of `row`, release.
@@ -62,6 +86,197 @@ async function dragOnto(page: Page, grip: Locator, row: Locator): Promise<void> 
  */
 
 test.describe('word sets', () => {
+  test('keeps legacy oversized unbroken text inside cards, detail, practice and the modal', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 720 });
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS,
+      wordSets: [
+        {
+          id: 'set-long',
+          name: LONG_SET_NAME,
+          description: LONG_SET_DESCRIPTION,
+          entryIds: ['w-kiriwake'],
+        },
+      ],
+    });
+
+    await page.goto('/wordsets');
+    const cardTitle = page.getByRole('heading', { level: 2 });
+    await expect(cardTitle).toContainText(LONG_SET_NAME);
+    await expectNoHorizontalOverflow(page);
+    expect(await cardTitle.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true,
+    );
+
+    await cardTitle.click();
+    const detailTitle = page.getByRole('heading', { level: 1 });
+    await expect(detailTitle).toContainText(LONG_SET_NAME);
+    await expectNoHorizontalOverflow(page);
+    expect(
+      await detailTitle.evaluate((element) => element.scrollWidth <= element.clientWidth),
+    ).toBe(true);
+
+    const edit = page.getByRole('button', { name: '編集' });
+    await edit.click();
+    const dialog = page.getByRole('dialog', { name: '単語集を編集' });
+    await expect(dialog.getByLabel(/名前/)).toBeFocused();
+    await expect(page.locator('#root')).toHaveAttribute('inert', '');
+    await expect(page.locator('#root')).toHaveAttribute('aria-hidden', 'true');
+    await expectNoHorizontalOverflow(page);
+
+    const dialogBox = await dialog.boundingBox();
+    expect(dialogBox).not.toBeNull();
+    expect((dialogBox?.x ?? 0) + (dialogBox?.width ?? 0)).toBeLessThanOrEqual(320);
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(edit).toBeFocused();
+    await expect(page.locator('#root')).not.toHaveAttribute('inert', '');
+
+    await page.goto('/practice/flashcards');
+    const chip = page.getByRole('button', { name: new RegExp(`^${LONG_SET_NAME}`) });
+    await expect(chip).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    expect(await chip.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  });
+
+  test('rejects whitespace and over-limit names, but renders markup-shaped names as text', async ({
+    page,
+  }) => {
+    await seedSignedIn(page);
+    await page.goto('/wordsets');
+
+    const name = page.getByLabel('新しい単語集の名前');
+    await name.fill('   ');
+    await name.press('Enter');
+    await expect(page.getByText('名前は必須です。')).toBeVisible();
+
+    await name.fill('W'.repeat(WORD_SET_LIMITS.name + 1));
+    await expect(name).toHaveValue('W'.repeat(WORD_SET_LIMITS.name));
+
+    const payload = '<script>🚀</script>';
+    await name.fill(payload);
+    await page.getByRole('button', { name: '作成' }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(payload);
+    expect(await page.locator('h1 script').count()).toBe(0);
+    expect(await page.evaluate(() => '__monkeyXss' in window)).toBe(false);
+  });
+
+  test('ignores rapid repeated batch additions while one write is in flight', async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: MANY_WORDS,
+      wordSets: [{ id: 'set-stress', name: '負荷試験', entryIds: [] }],
+      wordSetWriteDelayMs: 250,
+    });
+    await page.goto('/wordsets/set-stress');
+
+    const addAll = page.getByRole('button', { name: /表示中の \d+ 語を追加/ });
+    const box = await addAll.boundingBox();
+    if (!box) throw new Error('the batch button is not laid out');
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, {
+      clickCount: 20,
+      delay: 1,
+    });
+    await expect(addAll).toBeDisabled();
+    await expect(memberOrder(page)).toHaveCount(50);
+    await expect(
+      page.locator('[data-drop-list="members"] button', { hasText: '削除' }).first(),
+    ).toBeEnabled();
+
+    const hrefs = await memberHrefs(page);
+    expect(new Set(hrefs).size).toBe(50);
+    await page.reload();
+    await expect(memberOrder(page)).toHaveCount(50);
+    expect(new Set(await memberHrefs(page)).size).toBe(50);
+  });
+
+  test('ignores rapid row additions that land before the first write returns', async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: MANY_WORDS,
+      wordSets: [{ id: 'set-stress', name: '負荷試験', entryIds: [] }],
+      wordSetWriteDelayMs: 250,
+    });
+    await page.goto('/wordsets/set-stress');
+
+    const addButtons = page.locator('[data-drop-list="candidates"] li button', {
+      hasText: '＋ 追加',
+    });
+    const first = await addButtons.nth(0).boundingBox();
+    const second = await addButtons.nth(1).boundingBox();
+    if (!first || !second) throw new Error('the first two row buttons are not laid out');
+
+    await page.mouse.click(first.x + first.width / 2, first.y + first.height / 2);
+    await page.mouse.click(second.x + second.width / 2, second.y + second.height / 2);
+
+    await expect(memberOrder(page)).toHaveCount(1);
+    await expect(addButtons.first()).toBeEnabled();
+    await page.reload();
+    await expect(memberOrder(page)).toHaveCount(1);
+  });
+
+  test('keeps the exact order through twenty rapid drag writes', async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: MANY_WORDS,
+      wordSets: [{ id: 'set-stress', name: '負荷試験', entryIds: MANY_IDS }],
+    });
+    await page.goto('/wordsets/set-stress');
+    await expect(memberOrder(page)).toHaveCount(50);
+    const original = await memberHrefs(page);
+
+    for (let index = 0; index < 20; index += 1) {
+      const grips = page.locator('[data-drop-list="members"] button[aria-label$="を並び替え"]');
+      await expect(grips.nth(1)).toBeEnabled();
+      await dragOnto(page, grips.nth(1), memberOrder(page).first());
+      await expect(grips.first()).toBeEnabled();
+    }
+
+    await page.reload();
+    await expect(memberOrder(page)).toHaveCount(50);
+    expect(await memberHrefs(page)).toEqual(original);
+    expect(new Set(await memberHrefs(page)).size).toBe(50);
+  });
+
+  test('auto-scrolls a large member list during a held drag and cancels safely on Escape', async ({
+    page,
+  }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: MANY_WORDS,
+      wordSets: [{ id: 'set-stress', name: '負荷試験', entryIds: MANY_IDS }],
+    });
+    await page.goto('/wordsets/set-stress');
+    await expect(memberOrder(page)).toHaveCount(50);
+    const original = await memberHrefs(page);
+    const grip = page
+      .locator('[data-drop-list="members"] button[aria-label$="を並び替え"]')
+      .first();
+    const list = page.locator('[data-drop-list="members"]');
+    const from = await grip.boundingBox();
+    const target = await list.boundingBox();
+    if (!from || !target) throw new Error('the large drag list is not laid out');
+
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height - 3, { steps: 8 });
+    await expectNoHorizontalOverflow(page);
+    const ghost = page.locator('[aria-hidden="true"].fixed').filter({ hasText: 'W'.repeat(200) });
+    const ghostBox = await ghost.boundingBox();
+    expect(ghostBox).not.toBeNull();
+    expect(ghostBox?.width ?? Infinity).toBeLessThanOrEqual(320);
+    await page.waitForTimeout(1000);
+    expect(await list.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+
+    expect(await memberHrefs(page)).toEqual(original);
+  });
+
   test('creates a set, fills it, and drills it', async ({ page }) => {
     await seedSignedIn(page);
     await page.goto('/wordsets');

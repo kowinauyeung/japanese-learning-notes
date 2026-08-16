@@ -155,7 +155,7 @@ export function DictationSession({
             <Ruby
               headword={entry.headword}
               reading={entry.reading}
-              className="has-ruby block font-display text-2xl font-bold"
+              className="has-ruby block font-display text-2xl font-bold [overflow-wrap:anywhere]"
             />
             <p className="prose-cjk text-sm">{entry.senses[0]?.description || entry.definition}</p>
           </div>

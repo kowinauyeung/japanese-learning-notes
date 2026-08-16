@@ -1,0 +1,385 @@
+import { expect, test } from '@playwright/test';
+import type { Locator, Page, TestInfo } from '@playwright/test';
+import { seed } from './fixtures';
+
+interface Scenario {
+  name: string;
+  viewport: { width: number; height: number };
+  seed: string;
+}
+
+interface Action {
+  description: string;
+  run: () => Promise<void>;
+}
+
+interface AvailableElement {
+  index: number;
+  label: string;
+  type: string;
+}
+
+const ROTATING_SEED = process.env.MONKEY_SEED || 'local-rotating-seed';
+const STEPS = Math.min(100, Math.max(10, Number(process.env.MONKEY_STEPS) || 40));
+
+const SCENARIOS: Scenario[] = [
+  { name: 'fixed desktop', viewport: { width: 1280, height: 720 }, seed: 'desktop-v1' },
+  { name: 'fixed mobile', viewport: { width: 375, height: 720 }, seed: 'mobile-v1' },
+  { name: 'rotating desktop', viewport: { width: 1280, height: 720 }, seed: ROTATING_SEED },
+];
+
+const ROUTES = [
+  '/',
+  '/vocabulary',
+  '/vocabulary/monkey-word-1',
+  '/wordsets',
+  '/wordsets/monkey-set',
+  '/practice/flashcards',
+  '/practice/dictation',
+  '/history',
+  '/settings',
+  '/account',
+];
+
+const TEXT_CORPUS = [
+  '',
+  '   ',
+  '兆候',
+  'Ｗ１２３',
+  'Emoji 🚀🧑‍💻',
+  '<script>window.__monkeyXss=true</script>',
+  "' OR '1'='1",
+  'e\u0301'.repeat(80),
+  '\u200b'.repeat(20),
+  'W'.repeat(200),
+  'W'.repeat(201),
+  '長'.repeat(500),
+];
+
+const MONKEY_ENTRIES: Record<string, unknown>[] = Array.from({ length: 50 }, (_, index) => ({
+  id: `monkey-word-${index + 1}`,
+  headword:
+    index === 0
+      ? 'W'.repeat(200)
+      : index === 1
+        ? '<script>🚀</script>'
+        : `負荷試験${String(index + 1).padStart(2, '0')}`,
+  reading: index < 2 ? '' : `ふかしけん${String(index + 1).padStart(2, '0')}`,
+  definition: index === 0 ? 'W'.repeat(500) : `予測できない操作を試す語 ${index + 1}`,
+  pos: ['名詞'],
+  jlpt: 'N2',
+  origin: '漢語',
+  style: '書き言葉',
+  politeness: '普通',
+  freq: (index % 5) + 1,
+  tags: index % 2 === 0 ? ['負荷試験'] : ['monkey'],
+  learnedOn: `2026-06-${String(24 - (index % 20)).padStart(2, '0')}`,
+  createdAt: new Date(Date.UTC(2026, 5, 24, 0, 0, index)).toISOString(),
+  updatedAt: new Date(Date.UTC(2026, 5, 24, 0, 0, index)).toISOString(),
+}));
+
+const MONKEY_SET = {
+  id: 'monkey-set',
+  name: 'W'.repeat(200),
+  description: 'W'.repeat(5000),
+  entryIds: MONKEY_ENTRIES.slice(0, 12).map((entry) => entry.id),
+};
+
+function hashSeed(value: string): number {
+  let hash = 2166136261;
+  for (const character of value) {
+    hash ^= character.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function randomFor(seedValue: number): () => number {
+  let value = seedValue;
+  return () => {
+    value += 0x6d2b79f5;
+    let mixed = value;
+    mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const pick = <T>(items: readonly T[], random: () => number): T => {
+  const item = items[Math.floor(random() * items.length)];
+  if (item === undefined) throw new Error('the monkey had no action to choose');
+  return item;
+};
+
+async function available(locator: Locator): Promise<AvailableElement[]> {
+  return locator.evaluateAll((elements) =>
+    elements.flatMap((element, index) => {
+      const html = element as HTMLElement;
+      const style = getComputedStyle(html);
+      const rect = html.getBoundingClientRect();
+      if (
+        !html.checkVisibility() ||
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        rect.width === 0 ||
+        rect.height === 0 ||
+        html.closest('[inert], [aria-hidden="true"]')
+      )
+        return [];
+      if ('disabled' in html && (html as HTMLButtonElement).disabled) return [];
+
+      const labelled =
+        html.getAttribute('aria-label') ||
+        ('labels' in html ? ((html as HTMLInputElement).labels?.[0]?.textContent ?? '') : '') ||
+        html.textContent ||
+        html.getAttribute('placeholder') ||
+        html.tagName.toLowerCase();
+      return [
+        {
+          index,
+          label: labelled.trim().replace(/\s+/g, ' ').slice(0, 80),
+          type: html.getAttribute('type') || html.tagName.toLowerCase(),
+        },
+      ];
+    }),
+  );
+}
+
+async function chooseAction(page: Page, random: () => number): Promise<Action> {
+  const actions: Action[] = [];
+  const route = pick(ROUTES, random);
+  const navigate = (): Action => ({
+    description: `navigate ${route}`,
+    run: async () => {
+      await page.goto(route);
+    },
+  });
+  actions.push(navigate(), navigate());
+
+  const buttons = page.locator('button');
+  const safeButtons = (await available(buttons)).filter(
+    ({ label }) => !/ログアウト|アカウントを削除|データを削除|書き出す|単語を聞く|音声/.test(label),
+  );
+  if (safeButtons.length > 0) {
+    const chosen = pick(safeButtons, random);
+    const clickButton = (): Action => ({
+      description: `click button “${chosen.label}”`,
+      run: () => buttons.nth(chosen.index).click({ timeout: 4000 }),
+    });
+    actions.push(clickButton(), clickButton(), clickButton(), clickButton());
+  }
+
+  const links = page.locator('a[href^="/"]');
+  const internalLinks = await available(links);
+  if (internalLinks.length > 0) {
+    const chosen = pick(internalLinks, random);
+    const clickLink = (): Action => ({
+      description: `click link “${chosen.label}”`,
+      run: () => links.nth(chosen.index).click({ timeout: 4000 }),
+    });
+    actions.push(clickLink(), clickLink());
+  }
+
+  const fields = page.locator('input:not([type="file"]), textarea');
+  const availableFields = await available(fields);
+  if (availableFields.length > 0) {
+    const chosen = pick(availableFields, random);
+    const field = fields.nth(chosen.index);
+    const fillField = (): Action => ({
+      description: `change ${chosen.type} “${chosen.label}”`,
+      run: async () => {
+        if (chosen.type === 'checkbox' || chosen.type === 'radio') return field.click();
+        if (chosen.type === 'date')
+          return field.fill(pick(['', '2026-02-28', '2026-06-24'], random));
+        if (chosen.type === 'number') return field.fill(pick(['-1', '0', '2.7', '999999'], random));
+        if (chosen.type === 'range') {
+          const bounds = await field.evaluate((element) => {
+            const input = element as HTMLInputElement;
+            return { min: input.min || '0', max: input.max || '100' };
+          });
+          return field.fill(pick([bounds.min, bounds.max], random));
+        }
+        return field.fill(pick(TEXT_CORPUS, random));
+      },
+    });
+    actions.push(fillField(), fillField(), fillField());
+  }
+
+  const selects = page.locator('select');
+  const availableSelects = await available(selects);
+  if (availableSelects.length > 0) {
+    const chosen = pick(availableSelects, random);
+    const select = selects.nth(chosen.index);
+    actions.push({
+      description: `choose option in “${chosen.label}”`,
+      run: async () => {
+        const count = await select.locator('option').count();
+        if (count > 0) await select.selectOption({ index: Math.floor(random() * count) });
+      },
+    });
+  }
+
+  actions.push({
+    description: 'press Escape',
+    run: () => page.keyboard.press('Escape'),
+  });
+  if (await page.evaluate(() => history.length > 1)) {
+    actions.push({
+      description: 'browser Back',
+      run: async () => {
+        await page.goBack();
+      },
+    });
+  }
+
+  return pick(actions, random);
+}
+
+async function assertHealthy(
+  page: Page,
+  pageErrors: string[],
+  firebaseRequests: string[],
+): Promise<void> {
+  const loading = page.getByText('読み込み中…', { exact: true });
+  if (await loading.isVisible().catch(() => false))
+    await expect(loading).toBeHidden({ timeout: 3000 });
+
+  const layout = await page.evaluate(() => {
+    const visible = (element: HTMLElement) => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return (
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        !element.closest('[inert], [aria-hidden="true"]')
+      );
+    };
+    const clippedText = [...document.querySelectorAll<HTMLElement>('h1,h2,h3,p,button,a,dd,label')]
+      .filter(visible)
+      .filter((element) => {
+        const style = getComputedStyle(element);
+        return (
+          style.overflowX === 'visible' &&
+          style.whiteSpace !== 'nowrap' &&
+          element.scrollWidth > element.clientWidth + 1
+        );
+      })
+      .map(
+        (element) =>
+          `${element.tagName.toLowerCase()}: ${(element.textContent ?? '').trim().slice(0, 80)}`,
+      );
+    const dialogsOutsideViewport = [...document.querySelectorAll<HTMLElement>('[role="dialog"]')]
+      .filter(visible)
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return (
+          rect.left < -1 ||
+          rect.right > innerWidth + 1 ||
+          rect.top < -1 ||
+          rect.bottom > innerHeight + 1
+        );
+      })
+      .map((element) => element.getAttribute('aria-label') || 'unnamed dialog');
+    const elementsOutsideViewport = [...document.querySelectorAll<HTMLElement>('body *')]
+      .filter(visible)
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.left < -1 || rect.right > innerWidth + 1;
+      })
+      .slice(0, 10)
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return `${element.tagName.toLowerCase()} left=${rect.left.toFixed(1)} right=${rect.right.toFixed(1)} text=${(element.textContent ?? '').trim().slice(0, 40)}`;
+      });
+
+    return {
+      errorScreen: document.body.textContent?.includes('問題が発生しました') ?? false,
+      horizontalOverflow:
+        document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+      clippedText,
+      dialogsOutsideViewport,
+      elementsOutsideViewport,
+      widths: {
+        viewport: document.documentElement.clientWidth,
+        document: document.documentElement.scrollWidth,
+      },
+    };
+  });
+
+  expect(pageErrors.splice(0), 'uncaught browser errors').toEqual([]);
+  expect(firebaseRequests, 'the e2e build must never reach Firebase').toEqual([]);
+  expect(layout.errorScreen, 'the route error boundary rendered').toBe(false);
+  expect(
+    layout.horizontalOverflow,
+    `the document overflowed horizontally: ${JSON.stringify({ widths: layout.widths, elements: layout.elementsOutsideViewport })}`,
+  ).toBe(false);
+  expect(layout.clippedText, 'visible text escaped its own box').toEqual([]);
+  expect(layout.dialogsOutsideViewport, 'a dialog escaped the viewport').toEqual([]);
+}
+
+async function attachHistory(testInfo: TestInfo, seedValue: string, history: string[]) {
+  await testInfo.attach('monkey-actions', {
+    body: [`seed=${seedValue}`, `steps=${history.length}`, '', ...history].join('\n'),
+    contentType: 'text/plain',
+  });
+}
+
+for (const scenario of SCENARIOS) {
+  test(`${scenario.name} survives random extreme input and navigation`, async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize(scenario.viewport);
+    await seed(page, {
+      signedIn: true,
+      entries: MONKEY_ENTRIES,
+      weak: ['monkey-word-2'],
+      wordSets: [MONKEY_SET],
+      sessions: [
+        {
+          id: 'monkey-session',
+          mode: 'flashcard',
+          filterLabel: `単語集:${MONKEY_SET.name}`,
+          total: 12,
+          correct: 7,
+          missed: ['monkey-word-1'],
+          startedAt: '2026-06-23T00:00:00.000Z',
+          finishedAt: '2026-06-23T00:05:00.000Z',
+        },
+      ],
+    });
+
+    const numericSeed = hashSeed(scenario.seed);
+    const random = randomFor(numericSeed);
+    const pageErrors: string[] = [];
+    const firebaseRequests: string[] = [];
+    const history: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.stack || error.message));
+    page.on('request', (request) => {
+      if (
+        /firestore\.googleapis\.com|firebaseio\.com|identitytoolkit|securetoken/.test(request.url())
+      )
+        firebaseRequests.push(request.url());
+    });
+
+    console.log(`[monkey] scenario=${scenario.name} seed=${scenario.seed} numeric=${numericSeed}`);
+    await page.goto('/wordsets/monkey-set');
+
+    try {
+      await assertHealthy(page, pageErrors, firebaseRequests);
+      for (let step = 1; step <= STEPS; step += 1) {
+        const action = await chooseAction(page, random);
+        const line = `${String(step).padStart(3, '0')}: ${action.description}`;
+        history.push(line);
+        await test.step(line, async () => {
+          await action.run();
+          await assertHealthy(page, pageErrors, firebaseRequests);
+        });
+      }
+    } finally {
+      await attachHistory(testInfo, scenario.seed, history);
+    }
+  });
+}

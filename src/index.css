@@ -168,6 +168,7 @@ body {
 .prose-cjk {
   font-family: var(--font-cjk);
   line-height: 1.85;
+  overflow-wrap: anywhere;
 }
 
 ruby {

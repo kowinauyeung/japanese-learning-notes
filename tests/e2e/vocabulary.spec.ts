@@ -48,6 +48,18 @@ test.describe('browsing', () => {
     await expect(page.getByText('1 語')).toBeVisible();
   });
 
+  test('keeps an unbroken search summary inside the viewport', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill('W'.repeat(200));
+
+    await expect(page.getByRole('button', { name: new RegExp(`^「W{200}」`) })).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+      ),
+    ).toBe(true);
+  });
+
   test('opens a word in a dialog without leaving the list', async ({ page }) => {
     await page.goto('/vocabulary');
     await page.getByRole('link', { name: /兆候/ }).click();

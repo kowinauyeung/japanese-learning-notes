@@ -48,7 +48,7 @@ export function SessionSummary({
               <li key={entry.id}>
                 <VocabLink
                   entryId={entry.id}
-                  className="flex items-baseline justify-between gap-3 py-2.5"
+                  className="flex min-w-0 items-baseline justify-between gap-3 py-2.5"
                 >
                   {/* Same treatment as the dashboard's recent list, for the
                       same reason: a flex item does not shrink below its content
@@ -60,7 +60,7 @@ export function SessionSummary({
                     reading={entry.reading}
                     className="has-ruby max-w-1/2 min-w-0 truncate font-display font-bold"
                   />
-                  <span className="line-clamp-1 min-w-0 text-xs text-muted">
+                  <span className="line-clamp-1 min-w-0 flex-1 text-xs text-muted">
                     {entry.senses[0]?.description || entry.definition}
                   </span>
                 </VocabLink>

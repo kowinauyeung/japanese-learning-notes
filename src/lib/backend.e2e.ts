@@ -39,6 +39,8 @@ interface Seed {
   weak?: string[];
   /** Raw 単語集 documents. Nothing in the app creates one yet. */
   wordSets?: unknown[];
+  /** Test-only network latency used to make concurrent-write guards observable. */
+  wordSetWriteDelayMs?: number;
   /** Finished sessions, so 履歴 can be reached without drilling first. */
   sessions?: unknown[];
   /** Raw persisted profile; absent means first sign-in. */
@@ -469,6 +471,12 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
   const persist = () => {
     save(`wordSets.${uid}`, [...store.values()]);
   };
+  const waitForWrite = () => {
+    const milliseconds = seed().wordSetWriteDelayMs ?? 0;
+    return milliseconds > 0
+      ? new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
+      : Promise.resolve();
+  };
 
   return {
     list({ limit, cursor }: PageQuery): Promise<Page<WordSet>> {
@@ -489,7 +497,8 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
       return Promise.resolve(store.get(id) ?? null);
     },
 
-    create(draft: WordSetDraft): Promise<string> {
+    async create(draft: WordSetDraft): Promise<string> {
+      await waitForWrite();
       const id = `e2e-set-${++setSequence}`;
       const now = stamp();
       store.set(id, {
@@ -504,12 +513,13 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
         updatedAt: now,
       });
       persist();
-      return Promise.resolve(id);
+      return id;
     },
 
-    update(id: string, draft: WordSetDraft): Promise<void> {
+    async update(id: string, draft: WordSetDraft): Promise<void> {
       const existing = store.get(id);
       if (!existing) return Promise.reject(new Error(`no word set ${id}`));
+      await waitForWrite();
       store.set(id, {
         ...existing,
         ...draft,
@@ -517,13 +527,12 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
         updatedAt: stamp(),
       });
       persist();
-      return Promise.resolve();
     },
 
-    remove(id: string): Promise<void> {
+    async remove(id: string): Promise<void> {
+      await waitForWrite();
       store.delete(id);
       persist();
-      return Promise.resolve();
     },
   };
 };

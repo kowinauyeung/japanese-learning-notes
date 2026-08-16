@@ -18,6 +18,9 @@ const CI = !!process.env.CI;
  */
 export default defineConfig({
   testDir: './tests/e2e',
+  // Random exploration is isolated from the deterministic end-to-end gate.
+  // Its own config supplies a replayable seed and retains a trace on failure.
+  testIgnore: '**/monkey.spec.ts',
   fullyParallel: true,
   forbidOnly: CI,
   // One retry in CI absorbs a genuinely flaky navigation without hiding a

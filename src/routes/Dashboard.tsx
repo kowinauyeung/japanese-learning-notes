@@ -68,7 +68,7 @@ export function Component() {
     <div className="space-y-4">
       {/* Hero row. Without a word of the day the notebook is empty, so the
           counts drop to a single full-width column rather than leaving a gap. */}
-      <div className={`grid gap-4 ${wordOfDay ? 'sm:grid-cols-2' : ''}`}>
+      <div className={`grid min-w-0 gap-4 ${wordOfDay ? 'sm:grid-cols-2' : ''}`}>
         {wordOfDay && <TodayWord entry={wordOfDay} />}
         <StatTiles week={stats.inWeek} month={stats.inMonth} year={stats.inYear} />
       </div>

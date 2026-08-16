@@ -19,16 +19,37 @@ import { renderWithI18n as render } from '../helpers/renderWithI18n';
  */
 const setup = () => {
   const onClose = vi.fn();
-  const { container } = render(
+  render(
     <Modal open title="単語" onClose={onClose}>
       <input aria-label="見出し語" />
       <button type="button">タブ</button>
     </Modal>,
   );
-  const backdrop = container.querySelector('[role="presentation"]');
+  const backdrop = document.body.querySelector('[role="presentation"]');
   if (!backdrop) throw new Error('the backdrop is not rendered');
   return { onClose, backdrop, card: screen.getByRole('dialog') };
 };
+
+describe('Modal — focus stays in the active dialog', () => {
+  it('moves focus into the first field when it opens', () => {
+    setup();
+
+    expect(screen.getByLabelText('見出し語')).toHaveFocus();
+  });
+
+  it('wraps Tab and Shift+Tab instead of reaching the page behind it', () => {
+    setup();
+    const close = screen.getByRole('button', { name: '閉じる' });
+    const last = screen.getByRole('button', { name: 'タブ' });
+
+    last.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(close).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(last).toHaveFocus();
+  });
+});
 
 describe('Modal — dismissing by backdrop', () => {
   it('stays open when the press began inside the dialog', () => {

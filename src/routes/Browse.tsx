@@ -50,13 +50,13 @@ export function Component() {
       <FilterPanel filters={filters} allTags={visibleTags} onChange={update} />
 
       {!isDefault(filters) && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {active.map((chip) => (
             <button
               key={chip.key}
               type="button"
               onClick={() => update(chip.clear(filters))}
-              className="rounded-pill bg-accent-soft px-3 py-1 text-xs font-medium text-accent"
+              className="max-w-full rounded-pill bg-accent-soft px-3 py-1 text-left text-xs font-medium [overflow-wrap:anywhere] text-accent"
             >
               {chip.label} ✕
             </button>

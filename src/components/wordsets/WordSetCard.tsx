@@ -15,7 +15,7 @@ export function WordSetCard({ set, count }: { set: WordSet; count: number }) {
   return (
     <Link
       to={`/wordsets/${set.id}`}
-      className="flex flex-col gap-2 rounded-card bg-card p-4 shadow-panel transition hover:-translate-y-0.5"
+      className="flex min-w-0 flex-col gap-2 overflow-hidden rounded-card bg-card p-4 shadow-panel transition hover:-translate-y-0.5"
     >
       {/* Two lines, not one: a set name is chosen prose rather than a single
           word, so the second line often carries the half that distinguishes two
