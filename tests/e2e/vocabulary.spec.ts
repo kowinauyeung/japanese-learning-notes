@@ -60,6 +60,18 @@ test.describe('browsing', () => {
     ).toBe(true);
   });
 
+  test('keeps furigana and pitch annotations at their content width', async ({ page }) => {
+    await page.goto('/vocabulary/w-kiriwake');
+    const furigana = page.locator('.has-ruby').first();
+    await expect(furigana).toBeVisible();
+    expect((await furigana.boundingBox())?.width ?? Infinity).toBeLessThan(400);
+
+    await page.goto('/vocabulary/w-choukou');
+    const pitch = page.locator('.has-accent').first();
+    await expect(pitch).toBeVisible();
+    expect((await pitch.boundingBox())?.width ?? Infinity).toBeLessThan(400);
+  });
+
   test('opens a word in a dialog without leaving the list', async ({ page }) => {
     await page.goto('/vocabulary');
     await page.getByRole('link', { name: /兆候/ }).click();

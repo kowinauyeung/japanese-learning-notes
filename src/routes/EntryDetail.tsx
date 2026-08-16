@@ -93,7 +93,7 @@ export function Component() {
       {/* Header */}
       <header className="rounded-card bg-card p-5 shadow-panel sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
+          <div className="max-w-full min-w-0">
             <Ruby
               headword={entry.headword}
               reading={entry.reading}
