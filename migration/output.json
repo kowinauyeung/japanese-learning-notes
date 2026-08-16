@@ -199,7 +199,7 @@
     "id": "harasumento",
     "headword": "ハラスメント",
     "reading": "はらすめんと",
-    "pitchAccent": null,
+    "pitchAccent": 2,
     "pos": [
       "名詞"
     ],
@@ -305,7 +305,7 @@
     "id": "sagesumu",
     "headword": "蔑む",
     "reading": "さげすむ",
-    "pitchAccent": null,
+    "pitchAccent": 3,
     "pos": [
       "動詞"
     ],
@@ -415,7 +415,7 @@
     "id": "decchiage",
     "headword": "でっちあげ",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞"
     ],
@@ -611,7 +611,7 @@
     "id": "oshitsuke",
     "headword": "押し付け",
     "reading": "おしつけ",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞"
     ],
@@ -827,7 +827,7 @@
     "id": "bukotsu",
     "headword": "無骨",
     "reading": "ぶこつ",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "な形容詞"
     ],
@@ -1470,7 +1470,7 @@
     "id": "gorigori",
     "headword": "ゴリゴリ",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 1,
     "pos": [
       "副詞",
       "擬態語"
@@ -1561,7 +1561,7 @@
     "id": "batabata",
     "headword": "バタバタ",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 1,
     "pos": [
       "擬態語",
       "副詞",
@@ -1759,7 +1759,7 @@
     "id": "tachiagari",
     "headword": "立ち上がり",
     "reading": "たちあがり",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞"
     ],
@@ -1869,7 +1869,7 @@
     "id": "uchikiri",
     "headword": "打ち切り",
     "reading": "うちきり",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞"
     ],
@@ -2081,7 +2081,7 @@
     "id": "bureru",
     "headword": "ブレる",
     "reading": "ぶれる",
-    "pitchAccent": null,
+    "pitchAccent": 2,
     "pos": [
       "動詞"
     ],
@@ -2290,7 +2290,7 @@
     "id": "concierge",
     "headword": "コンシェルジュ",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 3,
     "pos": [
       "名詞"
     ],
@@ -2490,7 +2490,7 @@
     "id": "stock",
     "headword": "ストック",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 2,
     "pos": [
       "名詞",
       "動詞"
@@ -2597,7 +2597,7 @@
     "id": "ichiduke",
     "headword": "位置付け",
     "reading": "いちづけ",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞"
     ],
@@ -2699,7 +2699,7 @@
     "id": "ando",
     "headword": "安堵",
     "reading": "あんど",
-    "pitchAccent": null,
+    "pitchAccent": 1,
     "pos": [
       "名詞"
     ],
@@ -2801,7 +2801,7 @@
     "id": "bochibochi",
     "headword": "ぼちぼち",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 1,
     "pos": [
       "副詞",
       "感動詞"
@@ -2896,7 +2896,7 @@
     "id": "chiratto",
     "headword": "ちらっと",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 2,
     "pos": [
       "副詞"
     ],
@@ -2978,7 +2978,7 @@
     "id": "daradara",
     "headword": "ダラダラ",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 1,
     "pos": [
       "擬態語"
     ],
@@ -3084,7 +3084,7 @@
     "id": "katchiri",
     "headword": "かっちり",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 3,
     "pos": [
       "副詞",
       "擬態語"
@@ -3175,7 +3175,7 @@
     "id": "kiriwake",
     "headword": "切り分け",
     "reading": "きりわけ",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞"
     ],
@@ -3588,7 +3588,7 @@
     "id": "tagui",
     "headword": "類",
     "reading": "たぐい",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞"
     ],
@@ -3690,7 +3690,7 @@
     "id": "zuruzuru",
     "headword": "ずるずる",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 1,
     "pos": [
       "擬態語",
       "副詞"
@@ -3977,7 +3977,7 @@
     "id": "miidasu",
     "headword": "見出す",
     "reading": "みいだす",
-    "pitchAccent": null,
+    "pitchAccent": 3,
     "pos": [
       "動詞"
     ],
@@ -4087,7 +4087,7 @@
     "id": "tatetsuke",
     "headword": "立て付け",
     "reading": "たてつけ",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞"
     ],
@@ -4480,7 +4480,7 @@
     "id": "kurosu",
     "headword": "クロス",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 1,
     "pos": [
       "名詞"
     ],
@@ -4590,7 +4590,7 @@
     "id": "tsukiawase",
     "headword": "突き合わせ",
     "reading": "つきあわせ",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞"
     ],
@@ -4802,7 +4802,7 @@
     "id": "shisa",
     "headword": "示唆",
     "reading": "しさ",
-    "pitchAccent": null,
+    "pitchAccent": 1,
     "pos": [
       "名詞"
     ],
@@ -4904,7 +4904,7 @@
     "id": "sokyu",
     "headword": "遡及",
     "reading": "そきゅう",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞",
       "動詞"
@@ -5007,7 +5007,7 @@
     "id": "yakikomi",
     "headword": "焼き込む",
     "reading": "やきこむ",
-    "pitchAccent": null,
+    "pitchAccent": 3,
     "pos": [
       "動詞"
     ],
@@ -5125,7 +5125,7 @@
     "id": "fuwatto",
     "headword": "ふわっと",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 2,
     "pos": [
       "副詞",
       "擬態語"
@@ -5339,7 +5339,7 @@
     "id": "kaneai",
     "headword": "兼ね合い",
     "reading": "かねあい",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞"
     ],
@@ -5441,7 +5441,7 @@
     "id": "marunage",
     "headword": "丸投げ",
     "reading": "まるなげ",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞",
       "動詞"
@@ -5850,7 +5850,7 @@
     "id": "ryuyou",
     "headword": "流用",
     "reading": "りゅうよう",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞"
     ],
@@ -6063,7 +6063,7 @@
     "id": "plusalpha",
     "headword": "プラスアルファ",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 4,
     "pos": [
       "名詞",
       "副詞"
@@ -6261,7 +6261,7 @@
     "id": "furatsuku",
     "headword": "ふらつく",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "動詞"
     ],
@@ -6367,7 +6367,7 @@
     "id": "sarau",
     "headword": "さらう",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "動詞"
     ],
@@ -6587,7 +6587,7 @@
     "id": "choukou",
     "headword": "兆候",
     "reading": "ちょうこう",
-    "pitchAccent": null,
+    "pitchAccent": 0,
     "pos": [
       "名詞"
     ],
@@ -6791,7 +6791,7 @@
     "id": "hissori",
     "headword": "ひっそり",
     "reading": "",
-    "pitchAccent": null,
+    "pitchAccent": 3,
     "pos": [
       "副詞",
       "擬態語"
