@@ -211,12 +211,18 @@ test.describe('word sets', () => {
     if (!first || !second) throw new Error('the first two row buttons are not laid out');
 
     await page.mouse.click(first.x + first.width / 2, first.y + first.height / 2);
+    await expect(memberOrder(page)).toHaveCount(1);
+    const firstHref = await memberOrder(page).first().getAttribute('href');
+    if (!firstHref) throw new Error('the first added row has no vocabulary href');
+
     await page.mouse.click(second.x + second.width / 2, second.y + second.height / 2);
 
     await expect(memberOrder(page)).toHaveCount(1);
+    expect(await memberHrefs(page)).toEqual([firstHref]);
     await expect(addButtons.first()).toBeEnabled();
     await page.reload();
     await expect(memberOrder(page)).toHaveCount(1);
+    expect(await memberHrefs(page)).toEqual([firstHref]);
   });
 
   test('keeps the exact order through twenty rapid drag writes', async ({ page }) => {
@@ -229,16 +235,21 @@ test.describe('word sets', () => {
     await expect(memberOrder(page)).toHaveCount(50);
     const original = await memberHrefs(page);
 
-    for (let index = 0; index < 20; index += 1) {
+    const expected = [...original];
+    for (let index = 0; index < 19; index += 1) {
       const grips = page.locator('[data-drop-list="members"] button[aria-label$="を並び替え"]');
       await expect(grips.nth(1)).toBeEnabled();
       await dragOnto(page, grips.nth(1), memberOrder(page).first());
       await expect(grips.first()).toBeEnabled();
+
+      const [moved, stayed] = expected;
+      if (!moved || !stayed) throw new Error('the expected drag order is too short');
+      expected.splice(0, 2, stayed, moved);
     }
 
     await page.reload();
     await expect(memberOrder(page)).toHaveCount(50);
-    expect(await memberHrefs(page)).toEqual(original);
+    expect(await memberHrefs(page)).toEqual(expected);
     expect(new Set(await memberHrefs(page)).size).toBe(50);
   });
 
