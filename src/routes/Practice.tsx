@@ -8,6 +8,7 @@ import { SessionSummary } from '@/components/practice/SessionSummary';
 import type { Entry } from '@/domain/entry';
 import type { PracticeMode } from '@/domain/practice';
 import { useI18n } from '@/i18n/context';
+import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import {
@@ -77,14 +78,16 @@ function Practice({ mode }: { mode: PracticeMode }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t } = useI18n();
+  const entryLabel = useEntryLabel();
   const filterLabels = useMemo(
     () => ({
       set: (name: string) => t('practice.filterSet', { name }),
+      metadata: entryLabel,
       unknown: t('practice.filterUnknown'),
       weakOnly: t('practice.weakOnly'),
       all: t('practice.filterAll'),
     }),
-    [t],
+    [entryLabel, t],
   );
 
   /**

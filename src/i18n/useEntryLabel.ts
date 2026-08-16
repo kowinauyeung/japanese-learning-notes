@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useI18n } from './context';
 import type { MessageKey } from './messages';
 
@@ -40,8 +41,11 @@ const metadataKeys: Readonly<Record<string, MessageKey>> = {
 
 export function useEntryLabel() {
   const { t } = useI18n();
-  return (value: string): string => {
-    const key = metadataKeys[value];
-    return key ? t(key) : value;
-  };
+  return useCallback(
+    (value: string): string => {
+      const key = metadataKeys[value];
+      return key ? t(key) : value;
+    },
+    [t],
+  );
 }

@@ -231,6 +231,7 @@ export function shuffle<T>(items: readonly T[], random: () => number): T[] {
  */
 export interface PracticeFilterLabels {
   set: (name: string) => string;
+  metadata: (value: string) => string;
   unknown: string;
   weakOnly: string;
   all: string;
@@ -238,6 +239,7 @@ export interface PracticeFilterLabels {
 
 const JAPANESE_FILTER_LABELS: PracticeFilterLabels = {
   set: (name) => `単語集:${name}`,
+  metadata: (value) => value,
   unknown: '不明',
   weakOnly: '苦手のみ',
   all: 'すべての語',
@@ -262,8 +264,8 @@ export function describeFilters(
     ...setNames,
     ...filters.tags.map((tag) => `#${tag}`),
     ...filters.jlpt,
-    ...(filters.pos ? [filters.pos] : []),
-    ...(filters.origin ? [filters.origin] : []),
+    ...(filters.pos ? [labels.metadata(filters.pos)] : []),
+    ...(filters.origin ? [labels.metadata(filters.origin)] : []),
     ...range,
     ...(filters.weakOnly ? [labels.weakOnly] : []),
   ];
