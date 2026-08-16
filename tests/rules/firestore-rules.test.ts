@@ -501,10 +501,14 @@ describe('bounds on what an owner may write', () => {
 
   /**
    * **`migrationKey` is not in the domain `Entry` and is on every migrated
-   * document.** `migration/upload.mjs` writes it as provenance, and an update
-   * sends the merged document — so an allowlist built from the TypeScript type
-   * would refuse every edit to all 67 migrated words. It would pass here, pass
-   * in review, and fail only in production, where the migration has been run.
+   * document.** The import wrote it as provenance, and an update sends the
+   * merged document — so an allowlist built from the TypeScript type would
+   * refuse every edit to all 67 migrated words. It would pass here, pass in
+   * review, and fail only in production, where the import has been run.
+   *
+   * The importer itself is gone. This test is what keeps the field on the
+   * allowlist: nothing in `src` names it, so reading the type is exactly the
+   * mistake that stays available.
    *
    * This is the test that says the list came from what is stored.
    */

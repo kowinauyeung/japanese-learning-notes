@@ -1,14 +1,14 @@
 {
-  // Every script outside src and tests — migration and admin — in one pass.
-  // Standalone for the same reason tsconfig.test.json is: these files reach
-  // into src, and a composite project may only do that through a reference
-  // tsconfig.app.json cannot provide.
+  // Every script outside src and tests — the operator scripts in admin — in one
+  // pass. Standalone for the same reason tsconfig.test.json is: these files
+  // reach into src, and a composite project may only do that through a
+  // reference tsconfig.app.json cannot provide.
   //
-  // The folder was plain .mjs until accents.ts, so it sat outside both existing
-  // passes and nobody noticed. Measured at the time: importing a symbol that
-  // does not exist from src/lib/mora left `yarn typecheck` green, so renaming an
-  // export would have broken the migration silently — and the artefact this
-  // folder writes is what goes to production.
+  // This pass exists because a folder once sat outside every checker without
+  // anything saying so. Measured at the time: importing a symbol that does not
+  // exist from src/lib left `yarn typecheck` green. Nothing in a diff shows
+  // that a file landed in an unchecked directory, so a new script folder has to
+  // be added here deliberately.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
@@ -35,5 +35,5 @@
     "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["migration", "admin"]
+  "include": ["admin"]
 }

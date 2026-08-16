@@ -3,10 +3,10 @@
 A personal web app for recording and reviewing Japanese vocabulary picked up in
 daily life and at work, with Cantonese translations and notes.
 
-This repository began as 67 hand-written Markdown notes. Once they were imported
-into Firestore the tracked Markdown was removed, so Firestore now holds the live
-data. [`migration/README.md`](migration/README.md) documents the committed import
-artefacts and how to replay them.
+This repository began as 67 hand-written Markdown notes. They were imported into
+Firestore, which now holds the live data — the Markdown and the one-shot import
+scripts have both been removed. The import is recorded in the history of this
+repository rather than in a folder it no longer carries.
 
 ## Features
 
@@ -120,14 +120,11 @@ source tree.
 | `yarn test`                            | Unit, component, rules and adapter tests              |
 | `yarn test:e2e`                        | Playwright: user flows and visual regression          |
 | `yarn rules:dev` / `yarn rules:prod`   | Deploy `firestore.rules`                              |
-| `yarn auth:login` / `yarn auth:revoke` | Repo-local Google ADC, used by the migration upload   |
+| `yarn auth:login` / `yarn auth:revoke` | Repo-local Google ADC, used by the operator scripts   |
 
 `yarn auth:login` writes to `.gcloud/` via `CLOUDSDK_CONFIG`, deliberately apart
 from the machine-wide `~/.config/gcloud`. There is no long-lived service-account
 key in this project, and there should not be one.
-
-`migrate:parse` and `migrate:upload` are one-shot migration scripts — see
-[`migration/README.md`](migration/README.md) before running either.
 
 ## Tests
 
@@ -210,8 +207,8 @@ signups are closed until an operator grants it. Nothing in front of the site can
 substitute for this: Hosting serves the config that reaches Firestore, so a
 password on the HTML protects the page, not the data.
 
-For the first production import, follow the rules-first order in
-[`migration/README.md`](migration/README.md).
+Rules deploy before anything that writes through them. A client briefly older
+than its rules fails closed; the other way round fails open.
 
 ### Operator runbook
 
@@ -369,7 +366,7 @@ rules enforce account access only, never document shape.
 Source code: [MIT](LICENSE).
 
 The Japanese vocabulary entries are **not** covered by it. They are personal
-study notes, committed as `migration/output.json` and `migration/review.json`
-so the Firestore import stays inspectable — see
-[`migration/README.md`](migration/README.md) — and they are reserved. The scope
-note at the bottom of [`LICENSE`](LICENSE) is the authoritative wording.
+study notes and they are reserved. They were committed as import artefacts
+while the migration ran, so they remain in this repository's history even
+though the working tree no longer carries them. The scope note at the bottom of
+[`LICENSE`](LICENSE) is the authoritative wording.

@@ -229,8 +229,7 @@ test.describe('editing and deleting', () => {
    * input — a cleared field — and that is what is asserted here.
    *
    * The impossible-date rule itself is covered where it is reachable, over
-   * isValidIsoDate in tests/unit/sanitize.test.ts, against the Firestore
-   * documents in tests/unit/migrationOutput.test.ts, and it stays in the form
+   * isValidIsoDate in tests/unit/sanitize.test.ts, and it stays in the form
    * because a stored document is not obliged to have come from this field.
    */
   test('refuses to save with the learning date cleared', async ({ page }) => {
