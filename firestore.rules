@@ -284,9 +284,22 @@ service cloud.firestore {
         && d.get('correct', 0) is int && d.get('correct', 0) >= 0
         && d.get('correct', 0) <= d.get('total', 0)
         && list(d.get('missed', []), 2000)
-        // Same again. `mode` is one of four words and `startedAt` is an ISO
-        // instant the client sends; `finishedAt` comes from the server clock and
-        // is a timestamp or it is not this document.
+        // Same again, and `mode` is bounded by length rather than by value on
+        // purpose. `PRACTICE_MODES` in `src/domain/practice.ts` holds two words
+        // today, and an earlier version of this comment said four — but writing
+        // either number here couples a rules deploy to a client deploy: adding
+        // a third mode would ship a client whose every session write is refused
+        // until the rules follow, and the two go out through separate jobs.
+        //
+        // What rules are for is the megabyte, and 20 characters is the megabyte.
+        // A wrong-but-short `mode` is left to the client, which handles it the
+        // way it must anyway: `MODE_LABEL` is keyed by `PracticeMode`, so a mode
+        // it has never heard of yields `undefined` and renders as a blank label
+        // rather than throwing. Not good, and not a rules problem — a document
+        // written by a newer client reaches an older one the same way.
+        //
+        // `startedAt` is an ISO instant the client sends; `finishedAt` comes
+        // from the server clock and is a timestamp or it is not this document.
         && str(d.get('mode', ''), 20)
         && str(d.get('startedAt', ''), 40)
         && d.finishedAt is timestamp;
