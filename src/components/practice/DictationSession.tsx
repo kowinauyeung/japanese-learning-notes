@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Ruby } from '@/components/Ruby';
+import { SpeechStatusNote } from '@/components/SpeakButton';
 import type { Entry } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
-import { isCorrectAnswer, spokenForm } from '@/lib/dictation';
-import { useJapaneseSpeech } from '@/lib/speech';
+import { isCorrectAnswer } from '@/lib/dictation';
+import { canSpeak, spokenForm, useJapaneseSpeech } from '@/lib/speech';
 import { SessionHeader } from './SessionHeader';
 
 /**
@@ -104,8 +105,6 @@ export function DictationSession({
     else check();
   };
 
-  const speakable = status === 'ready' || status === 'loading' || status === 'failed';
-
   return (
     <section className="mx-auto max-w-2xl space-y-4">
       <SessionHeader title={t('practice.dictation')} index={index} total={total} onQuit={onQuit} />
@@ -115,20 +114,15 @@ export function DictationSession({
           <button
             type="button"
             onClick={() => speak(spokenForm(entry))}
-            disabled={!speakable}
+            disabled={!canSpeak(status)}
             className="min-h-12 rounded-pill bg-accent px-6 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
             {t('practice.listen')}
           </button>
-          {status === 'unsupported' && (
-            <p className="mt-2 text-xs text-danger">{t('practice.speechUnsupported')}</p>
-          )}
-          {status === 'no-japanese-voice' && (
-            <p className="mt-2 text-xs text-danger">{t('practice.voiceMissing')}</p>
-          )}
-          {status === 'failed' && (
-            <p className="mt-2 text-xs text-danger">{t('practice.speechError')}</p>
-          )}
+          {/* Its own button rather than `SpeakButton`: the drill is the one
+              screen where playing the word *is* the task, so it gets a labelled
+              primary target instead of an icon beside a headword. */}
+          <SpeechStatusNote status={status} className="mt-2" />
         </div>
 
         <label className="block space-y-1">

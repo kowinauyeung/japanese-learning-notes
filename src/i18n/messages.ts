@@ -8,6 +8,11 @@ import { vocabularyMessages } from './vocabularyMessages';
 const en = {
   'common.loading': 'Loading…',
   'brand.name': '語彙庭',
+  'speech.pronounce': 'Play pronunciation',
+  'speech.unsupported': 'This browser does not support speech.',
+  'speech.voiceMissing':
+    'No Japanese voice was found. Add one in your system accessibility or speech settings.',
+  'speech.error': 'Could not play the audio. Try again.',
   'nav.dashboard': 'My progress',
   'nav.vocabulary': 'Vocabulary',
   'nav.wordSets': 'Word sets',
@@ -62,6 +67,11 @@ type Messages = Record<BaseMessageKey, string>;
 const ja: Messages = {
   'common.loading': '読み込み中…',
   'brand.name': '語彙庭',
+  'speech.pronounce': '発音を再生',
+  'speech.unsupported': 'このブラウザは音声読み上げに対応していません',
+  'speech.voiceMissing':
+    '日本語の音声が見つかりません。システムのアクセシビリティまたは読み上げ設定から日本語の声を追加してください。',
+  'speech.error': '音声を再生できませんでした。もう一度お試しください。',
   'nav.dashboard': '学習サマリー',
   'nav.vocabulary': '単語',
   'nav.wordSets': '単語集',
@@ -113,6 +123,10 @@ const ja: Messages = {
 const zhHant: Messages = {
   'common.loading': '載入中…',
   'brand.name': '語彙庭',
+  'speech.pronounce': '播放發音',
+  'speech.unsupported': '此瀏覽器不支援語音朗讀。',
+  'speech.voiceMissing': '找不到日語語音，請在系統的輔助使用或語音設定加入日語聲音。',
+  'speech.error': '無法播放語音，請再試一次。',
   'nav.dashboard': '學習總覽',
   'nav.vocabulary': '單字',
   'nav.wordSets': '單字集',
@@ -164,6 +178,11 @@ const zhHant: Messages = {
 const ko: Messages = {
   'common.loading': '불러오는 중…',
   'brand.name': '語彙庭',
+  'speech.pronounce': '발음 재생',
+  'speech.unsupported': '이 브라우저는 음성 읽기를 지원하지 않습니다.',
+  'speech.voiceMissing':
+    '일본어 음성을 찾을 수 없습니다. 시스템 접근성 또는 음성 설정에서 일본어 음성을 추가하세요.',
+  'speech.error': '음성을 재생할 수 없습니다. 다시 시도해 주세요.',
   'nav.dashboard': '학습 현황',
   'nav.vocabulary': '단어',
   'nav.wordSets': '단어 모음',
@@ -215,6 +234,11 @@ const ko: Messages = {
 const es: Messages = {
   'common.loading': 'Cargando…',
   'brand.name': '語彙庭',
+  'speech.pronounce': 'Reproducir la pronunciación',
+  'speech.unsupported': 'Este navegador no admite lectura de voz.',
+  'speech.voiceMissing':
+    'No se encontró una voz japonesa. Añádela en los ajustes de accesibilidad o voz del sistema.',
+  'speech.error': 'No se pudo reproducir el audio. Inténtalo de nuevo.',
   'nav.dashboard': 'Mi progreso',
   'nav.vocabulary': 'Vocabulario',
   'nav.wordSets': 'Listas de palabras',
