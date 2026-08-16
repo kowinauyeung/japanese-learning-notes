@@ -55,9 +55,9 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: yarn
@@ -138,12 +138,12 @@ jobs:
             echo '::notice::Deploy skipped: GCP_WORKLOAD_IDENTITY_PROVIDER is not set. See README → Deploy credentials.'
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         if: steps.gate.outputs.configured == 'true'
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         if: steps.gate.outputs.configured == 'true'
         with:
           node-version-file: .nvmrc
