@@ -146,15 +146,48 @@ console.log(`認証  : ${how}`);
 console.log(`所有者: ${ownerEmail} (${owner.uid})`);
 console.log(`件数  : ${entries.length}`);
 
-// The rules gate every path on allowedUsers/{uid} existing, and no client can
-// write that collection, so uploading a notebook the owner would then be denied
-// access to is the obvious way to get this wrong. Done here rather than by hand
-// because the uid is only resolvable through the Admin SDK anyway.
-await db
-  .collection('allowedUsers')
-  .doc(owner.uid)
-  .set({ email: ownerEmail, addedAt: Timestamp.now() }, { merge: true });
-console.log(`許可    : allowedUsers/${owner.uid} を確認しました`);
+// **This checks. It used to grant, and the difference went unreported.**
+//
+// Until the claim gate landed, the rules read `allowedUsers/{uid}` and this
+// script wrote it, so an owner could not end up locked out of a notebook it had
+// just uploaded. Nothing has read that collection since. The write went on
+// succeeding and the line below went on saying 「確認しました」 — a confirmation
+// of something that had stopped being true, printed by the tool an operator
+// trusts most at the one moment they most need it to be right.
+//
+// The failure that produces is not subtle and not recoverable by retrying: the
+// script reports access confirmed, the operator opens the app, and every screen
+// says it could not load. Checking the claim instead costs nothing —
+// `getUserByEmail` above already returned it — and it fails *before* 67
+// documents are written rather than after.
+//
+// It cannot see the other half. A claim reaches a client only in a freshly
+// minted ID token, so an account granted access while signed in still cannot
+// read anything until it signs in again. Nothing server-side can observe that,
+// which is why the message says it rather than checking it.
+//
+// **Both halves, because the gate is both.** `isAllowed()` is
+// `signedIn() && request.auth.token.allowed == true`, and `signedIn()` requires
+// `email_verified`. Standing in for one of them would report an account ready
+// when the rules will still refuse it — which is the same failure this block
+// replaces, in a smaller size.
+//
+// Low impact and worth saying so: `client.ts` registers Google as the only
+// provider and a Google account arrives verified. This is the check matching the
+// rule, not a case anyone is likely to hit.
+if (owner.emailVerified !== true) {
+  console.error(`許可    : ${ownerEmail} のメールアドレスが未確認です。`);
+  console.error('          ルールは email_verified を要求します。');
+  process.exit(1);
+}
+if (owner.customClaims?.allowed !== true) {
+  console.error(`許可    : ${ownerEmail} に allowed クレームがありません。`);
+  console.error(`          yarn allow ${ownerEmail}${env === 'prod' ? ' prod' : ''}`);
+  console.error('          を実行し、サインアウトしてからサインインし直してください。');
+  process.exit(1);
+}
+console.log('許可    : email_verified と allowed クレームを確認しました');
+console.log('          （付与直後の場合は、一度サインアウトして入り直す必要があります）');
 
 // One read of the collection buys idempotency: without the key -> id map a
 // second run cannot tell an already-uploaded note from a new one.
