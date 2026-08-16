@@ -1,0 +1,108 @@
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { WordSetCard } from '@/components/wordsets/WordSetCard';
+import { useEntries } from '@/lib/entries';
+import { membersOf } from '@/lib/wordSetMembers';
+import { useWordSets } from '@/lib/wordSets';
+
+/**
+ * 単語集 — the list, and the one field it takes to start one.
+ *
+ * Creating asks for a name and nothing else, then opens the new set: a 単語集
+ * is only worth anything once it has words in it, and the screen that adds
+ * them is the one after this. Description and the rest are edited there.
+ */
+export function Component() {
+  const { sets, loading, error, refresh, repository } = useWordSets();
+  const { entries, loading: entriesLoading, error: entriesError } = useEntries();
+  const navigate = useNavigate();
+
+  const [name, setName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  // Memoised because the name box above re-renders this list on every
+  // keystroke, and resolving members walks the whole notebook once per set.
+  const counts = useMemo(
+    () => new Map(sets.map((set) => [set.id, membersOf(set, entries).length])),
+    [sets, entries],
+  );
+
+  const create = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || creating) return;
+
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const id = await repository.create({
+        name: trimmed,
+        description: '',
+        entryIds: [],
+        level: '',
+        topics: [],
+      });
+      setName('');
+      // The detail page reads the set out of this same list and has no fetch of
+      // its own, so a create that does not refresh lands on 見つかりません for a
+      // set that was written perfectly well.
+      await refresh();
+      void navigate(`/wordsets/${id}`);
+    } catch (cause) {
+      console.error(cause);
+      setCreateError('単語集を作成できませんでした。');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  if (loading || entriesLoading)
+    return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
+  // The notebook's error counts as much as the list's: every card's count is
+  // resolved against `entries`, so a failed load with only `error` surfaced
+  // renders each set as 0 語 rather than saying it could not be read.
+  if (error || entriesError)
+    return <p className="py-16 text-center text-sm text-danger">{error ?? entriesError}</p>;
+
+  return (
+    <div className="space-y-4">
+      <h1 className="font-display text-2xl font-bold">単語集</h1>
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void create();
+        }}
+        className="flex flex-wrap items-center gap-2 rounded-card bg-card p-4 shadow-panel"
+      >
+        <input
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="新しい単語集の名前"
+          aria-label="新しい単語集の名前"
+          className="min-h-11 min-w-0 flex-1 rounded-pill border border-line bg-bg px-4 text-sm text-ink placeholder:text-muted"
+        />
+        <button
+          type="submit"
+          disabled={creating || !name.trim()}
+          className="min-h-11 rounded-pill bg-accent px-6 text-sm font-semibold text-on-accent disabled:opacity-60"
+        >
+          {creating ? '作成中…' : '作成'}
+        </button>
+        {createError && <p className="w-full text-xs text-danger">{createError}</p>}
+      </form>
+
+      {sets.length ? (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+          {sets.map((set) => (
+            <WordSetCard key={set.id} set={set} count={counts.get(set.id) ?? 0} />
+          ))}
+        </div>
+      ) : (
+        <p className="py-16 text-center text-sm text-muted">
+          まだ単語集がありません。名前を入れて作成してください。
+        </p>
+      )}
+    </div>
+  );
+}

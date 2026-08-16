@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>語彙庭</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!--
+      One tag rather than a prefers-color-scheme pair: a saved theme overrides
+      the OS preference, so the media query would leave the browser chrome on
+      the opposite colour from the page. Both values live here so the script
+      below and useTheme read one source instead of duplicating the hexes.
+    -->
+    <meta name="theme-color" content="#f7fbf9" data-light="#f7fbf9" data-dark="#0d1a16" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&family=Zen+Maru+Gothic:wght@500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Applied before first paint so the page never flashes the wrong theme.
+      (() => {
+        const saved = localStorage.getItem('theme');
+        const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = dark ? 'dark' : 'light';
+        document.documentElement.dataset.theme = theme;
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.content = meta.dataset[theme];
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

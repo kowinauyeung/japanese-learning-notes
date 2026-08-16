@@ -1,0 +1,138 @@
+@import 'tailwindcss';
+
+/*
+ * Palette derived from the 語彙庭 logo, which carries two distinct greens:
+ * the book and wordmark sit at hue ~169 (#014D3A, a blue-leaning forest green)
+ * and the sprout runs hue 133-141 (#4BB239 -> #85D136, a yellow-leaning leaf
+ * green). Forest green is the brand/accent; leaf green is reserved for growth
+ * and progress, which keeps the two from competing.
+ *
+ * Both themes are declared as plain custom properties and referenced from
+ * @theme, so every Tailwind colour utility follows the active theme without
+ * needing a `dark:` variant on each element.
+ */
+:root,
+:root[data-theme='light'] {
+  --c-bg: oklch(99% 0.003 169);
+  --c-bg-alt: oklch(96.5% 0.012 169);
+  --c-card: oklch(100% 0 0);
+  --c-border: oklch(92% 0.012 169);
+  --c-text: oklch(18% 0.012 169);
+  --c-text-muted: oklch(50% 0.015 169);
+  --c-accent: oklch(38% 0.08 169);
+  --c-accent-soft: oklch(95% 0.03 169);
+  --c-on-accent: oklch(99% 0.005 169);
+  --c-sprout: oklch(60% 0.17 138);
+  /* Danger keeps its red hue, now far enough from the brand that a destructive
+     button can never be mistaken for a primary one. */
+  --c-danger: oklch(50% 0.16 25);
+  --c-danger-soft: oklch(94% 0.05 25);
+  --shadow-card: 0 1px 2px rgb(4 40 28 / 0.05), 0 8px 24px rgb(4 40 28 / 0.08);
+
+  /* Heatmap: sequential magnitude stepped light -> dark, sweeping hue from leaf
+     green to forest green so the ramp retraces the logo's own gradient — a
+     quiet day reads as a seedling, a busy one as established planting. Level 0
+     is near-neutral and level 1 jumps ~0.1 in chroma, so "nothing added" stays
+     clearly distinct from "one word added". */
+  --heat-0: oklch(94% 0.005 169);
+  --heat-1: oklch(85% 0.1 138);
+  --heat-2: oklch(72% 0.16 143);
+  --heat-3: oklch(56% 0.13 155);
+  --heat-4: oklch(40% 0.09 169);
+}
+
+:root[data-theme='dark'] {
+  --c-bg: oklch(15% 0.012 169);
+  --c-bg-alt: oklch(20% 0.02 169);
+  --c-card: oklch(22% 0.018 169);
+  --c-border: oklch(32% 0.022 169);
+  --c-text: oklch(94% 0.008 169);
+  --c-text-muted: oklch(68% 0.014 169);
+  /* The forest green is too dark to carry an accent against a dark surface, so
+     the accent moves along the logo's gradient toward the leaf, staying a step
+     below --c-sprout to keep the two readable side by side in the logomark. */
+  --c-accent: oklch(66% 0.155 152);
+  --c-accent-soft: oklch(28% 0.07 158);
+  --c-on-accent: oklch(16% 0.02 169);
+  --c-sprout: oklch(80% 0.19 133);
+  --c-danger: oklch(65% 0.16 25);
+  --c-danger-soft: oklch(28% 0.06 25);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35);
+
+  /* Stepped independently against the dark surface rather than inverted, so the
+     ramp climbs toward the bright leaf instead of sinking into the background. */
+  --heat-0: oklch(27% 0.01 169);
+  --heat-1: oklch(36% 0.06 165);
+  --heat-2: oklch(48% 0.11 155);
+  --heat-3: oklch(60% 0.15 145);
+  --heat-4: oklch(73% 0.19 136);
+}
+
+@theme inline {
+  --color-bg: var(--c-bg);
+  --color-bg-alt: var(--c-bg-alt);
+  --color-card: var(--c-card);
+  --color-line: var(--c-border);
+  --color-ink: var(--c-text);
+  --color-muted: var(--c-text-muted);
+  --color-accent: var(--c-accent);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-on-accent: var(--c-on-accent);
+  --color-sprout: var(--c-sprout);
+  --color-danger: var(--c-danger);
+  --color-danger-soft: var(--c-danger-soft);
+
+  /* Inter for UI, Zen Maru Gothic for headwords, Noto Sans TC for CJK prose. */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif;
+  --font-cjk: 'Noto Sans TC', 'Hiragino Sans', sans-serif;
+
+  /* The handoff collapses the nav to a hamburger below 700px, which sits
+     between Tailwind's sm and md defaults, so it gets its own breakpoint. */
+  --breakpoint-nav: 700px;
+
+  /* Generously rounded: panels 18–24px, pills fully round. */
+  --radius-panel: 18px;
+  --radius-card: 22px;
+  --radius-pill: 999px;
+
+  --shadow-panel: var(--shadow-card);
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Japanese and Cantonese prose needs the extra leading for furigana and wrapping. */
+.prose-cjk {
+  font-family: var(--font-cjk);
+  line-height: 1.85;
+}
+
+ruby {
+  ruby-position: over;
+  ruby-align: center;
+}
+
+rt {
+  font-size: 0.45em;
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--c-text-muted);
+}
+
+/*
+ * The annotation is drawn inside the line box, so a tight line-height clips it
+ * or lets it collide with the line above. Anything showing furigana opts into
+ * the extra leading with this class.
+ */
+.has-ruby {
+  line-height: 1.75;
+}

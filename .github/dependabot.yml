@@ -1,0 +1,47 @@
+version: 2
+
+updates:
+  # Grouped so a week's updates arrive as two pull requests rather than a
+  # dozen. Major bumps stay separate: React, Firebase and Vite majors each
+  # need reading release notes, which is not a review to rubber-stamp
+  # alongside a patch bump.
+  # develop, not the repository default. The default branch is main, which is
+  # production; a dependency bump has no business landing there without going
+  # through dev first.
+  - package-ecosystem: npm
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      production-minor-patch:
+        dependency-type: production
+        update-types: [minor, patch]
+      development-minor-patch:
+        dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # Pinned by hand, because the version exists in three places that must
+      # agree: this dependency, the container image in ci.yml, and the same
+      # image tag in the `test:visual:update` script. Only the first is
+      # something Dependabot can see — the github-actions ecosystem below
+      # rewrites `uses:` references and never a `container.image` tag. A
+      # grouped bump would therefore leave the image behind, and the e2e job
+      # would fail with `Executable doesn't exist at /ms-playwright/…`.
+      - dependency-name: '@playwright/test'
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ['*']

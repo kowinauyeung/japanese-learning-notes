@@ -1,0 +1,51 @@
+# Original markdown notes, kept locally until the Firestore migration is verified.
+# Every file remains recoverable from git history.
+bak/
+
+# migration/output.json and review.json are deliberately NOT ignored. The
+# markdown notes they were parsed from are gone, and the corrections made during
+# migration were never committed, so this artefact is the only complete record
+# of what was loaded into Firestore — and the only way to roll production out
+# from the repo alone.
+
+# Private AI-agent workspace
+.kowin/
+
+# Agent memory. Local tool state rather than project source, and several of the
+# notes cite paths inside .kowin/ — committing them here would publish exactly
+# what that folder is ignored to keep private.
+.serena/
+
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Vite's dependency pre-bundling cache. Normally lands in node_modules/.vite,
+# but falls back to the project root in some invocations.
+.vite/
+
+# Firebase web config is public by design, but keep envs out of the repo so the
+# dev and prod projects stay decoupled from the source tree.
+.env*
+!.env.example
+# Committed on purpose: no credentials, only the mode name for the end-to-end
+# build. See the file itself for why.
+!.env.e2e
+
+# Service-account private keys used by the upload script — never commit these.
+migration/service-account-*.json
+.firebase/
+
+# Repo-local gcloud config, so this project's Google identity never touches the
+# machine-wide ~/.config/gcloud. Holds the ADC credential.
+.gcloud/
+
+.DS_Store
+*.log
+
+# Test output. Screenshot baselines under tests/e2e/__screenshots__ ARE
+# committed — they are the expected result, not a report.
+coverage/
+playwright-report/
+test-results/
+migration/accents.prompt.txt

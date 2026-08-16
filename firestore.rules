@@ -1,0 +1,437 @@
+rules_version = '2';
+
+// Private data lives under users/{uid} and is reachable by that account alone.
+// **That is currently all of it.** Publishing is designed and unbuilt, and the
+// collections it would use are closed rather than waiting open — see the block
+// further down for what has to come back with the feature.
+//
+// Two properties are worth stating because they are what make this simple:
+//
+//  * Rules *reject* a query they cannot satisfy — they never filter one. A
+//    listing that forgot to scope itself to the signed-in user therefore fails
+//    loudly instead of returning somebody else's rows.
+//  * **No user ever writes to another user's document.** A copy counter on
+//    published sets was designed and dropped to keep that true. If a feature
+//    seems to need a cross-user write, that is the signal it belongs in a search
+//    index or a backend, not in an exception here.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // The single gate that keeps this a private notebook.
+    //
+    // The paths below are already multi-user: every rule is written against
+    // request.auth.uid and nothing depends on there being one account. This
+    // check is the only thing standing between the current state and open
+    // signups, and it is deliberate — the billing plan has no hard spending
+    // cap, so a stranger who signed up would be writing to a project that can
+    // be alerted on but not capped.
+    //
+    // It is an allowlist collection rather than a hard-coded address so that
+    // adding somebody is a document rather than a rules deploy, and so the same
+    // mechanism becomes a beta invite list later. `allowedUsers` has no match
+    // block of its own, so no client can read or write it — a rules-internal
+    // exists() is not itself subject to rules, and admin tooling writes it.
+    //
+    // Note this cannot be replaced by anything in front of the site: Firebase
+    // Hosting serves the config that reaches Firestore, so basic auth or any
+    // other gate on the HTML protects the page, not the data.
+    //
+    // To open signups: delete this function and its call sites. Do that
+    // together with App Check and a budget-alert kill switch, not before.
+    //
+    // **A custom claim, not a document read.** exists() here is billed as a
+    // document read on *every request to every path*, which on a public service
+    // doubles the read cost of the whole application to answer a question whose
+    // answer changes perhaps twice in an account's lifetime.
+    //
+    // **What it trades away is immediacy, and the trade is real.** The gate
+    // this replaces was re-evaluated on every request, so removing a document
+    // took effect on the next one. A claim lives inside the ID token the client
+    // is already holding, and Firestore rules have no revocation check — there
+    // is no rules equivalent of `verifyIdToken(..., checkRevoked: true)`. So a
+    // removed claim changes nothing until that token expires: **up to an hour.**
+    //
+    // Revoking the refresh tokens does not shorten it. It stops the *next*
+    // refresh from succeeding, which ends the session — but the ID token
+    // already in hand keeps its claims and keeps being accepted until it runs
+    // out. `admin/allow-user.ts` revokes them anyway, because ending the
+    // session is worth doing; it is not what makes a ban land.
+    //
+    // Closing the window properly means storing a revocation time and comparing
+    // `request.auth.token.auth_time` against it here, which reintroduces the
+    // per-request read this change removed. That is a decision worth making
+    // deliberately if abuse ever becomes a live problem, and not before.
+    function isAllowed() {
+      return signedIn() && request.auth.token.allowed == true;
+    }
+
+    // ---- shape and size ----
+    //
+    // These exist for one threat and it is not shape: an account that is
+    // legitimately signed in can write **as many documents as it likes, as
+    // large as it likes**, and on a metered project that is somebody else's
+    // bill. Firestore caps a document at 1 MiB, which is 1 MiB per document and
+    // no limit at all on how many.
+    //
+    // **What rules cannot check is worth knowing before trusting this.** There
+    // is no way to iterate a list, so the length of `senses[3].description` is
+    // invisible here — only the number of senses and the size of the top-level
+    // strings can be bounded. Anything relying on per-element limits has to
+    // enforce them somewhere that can see them.
+    //
+    // Read "bounded" as cardinality, not size. 100 senses of 3,000 characters
+    // each is accepted, measured against the emulator. **The only size bound on
+    // a document here is Firestore's own 1 MiB**, which is a ceiling rather
+    // than a budget: it stops one document being enormous and says nothing
+    // about how many documents there are.
+    //
+    // Deliberately not a full schema, and `get` with a default is what makes
+    // that true rather than merely claimed. `d.field` on an absent key is an
+    // evaluation error, which rules treat as a denial — so naming a field is
+    // requiring it, and an earlier version of this file required every field it
+    // mentioned while the paragraph above said it did not.
+    //
+    // That matters in one direction in particular: `deploy-prod.yml` deploys
+    // rules before hosting, so rules rejecting a newly optional field would be
+    // live before the client that fills it.
+    //
+    // `headword` is the exception and is read directly: an entry without one is
+    // not an entry, and the form refuses it too.
+    //
+    // **`createdAt` and `finishedAt` are the other exceptions, and the reason is
+    // not schema tidiness.** Every `list()` in the adapters orders by one of
+    // them — `entryRepo` and `wordSetRepo` by `createdAt`, `progressRepo` by
+    // `finishedAt` — and Firestore omits a document that lacks the field it is
+    // ordering by. So a row written without one is invisible to paging, which
+    // means it is never exported and never deleted, while the account screen and
+    // the privacy policy both promise otherwise. Optional here and ordered-by
+    // there is a combination that quietly breaks a legal claim, so they are
+    // required at the only point that can enforce it.
+    //
+    // **`updatedAt` is required for a different reason, and the distinction is
+    // load-bearing:** nothing orders by it. Both adapters write it on every
+    // create and every update, so a document without one did not come from this
+    // application — which is worth refusing on its own, but is not the
+    // invisible-to-paging argument above. A reader auditing this later looks for
+    // the listing that orders by `updatedAt`, finds none, and is entitled to
+    // conclude that either the comment or the rule is wrong.
+
+    // ---- which fields, not just how many ----
+    //
+    // `keys().size()` bounds the number of fields and says nothing about their
+    // names, so `{ headword: 'x', junk: <a megabyte> }` passed everything
+    // below: the count is two, every string named is within its limit, and
+    // `junk` is invisible to all of them.
+    //
+    // **Being on this list is permission to send a field, not a limit on it.**
+    // `hasOnly` closes the unknown-name half and the other half is closed by
+    // the checks in `validEntry` — which is why the short scalars, the two
+    // timestamps and the maps are all bounded there now rather than merely
+    // named here. An allowlisted-but-unchecked field is the same megabyte under
+    // a different key.
+    //
+    // **What still is not bounded, said plainly rather than left to be found.**
+    // `size()` on a map counts keys and `size()` on a list counts elements, so
+    // neither reaches the bytes inside one: a single `context` value, or one
+    // `senses[3].description`, can be as large as a document may be. Firestore
+    // rules cannot see either. Anything depending on per-element limits has to
+    // enforce them where they are visible.
+    //
+    // `hasOnly` is the allowlist Firestore documents for this. It does **not**
+    // make anything required — it constrains the key set to a subset, so an
+    // absent optional field stays absent. Requiredness is still where it was,
+    // in the `d.get(field, default)` calls further down, and the tests that
+    // assert an entry missing every optional field is accepted still pass.
+    //
+    // **`migrationKey` is on the entry list and is not in the domain `Entry`.**
+    // `migration/upload.mjs` writes it onto every migrated document as
+    // provenance, and an update sends the merged document — so omitting it here
+    // would refuse every edit to all 67 migrated words, in production only,
+    // where the migration has been run. Read the list off what is stored, not
+    // off the TypeScript type.
+    function entryFields() {
+      return [
+        'ownerUid', 'headword', 'reading', 'pitchAccent', 'pos', 'jlpt',
+        'origin', 'style', 'politeness', 'freq', 'citationForm', 'posInfo',
+        'definition', 'definitionSub', 'senses', 'examples', 'related',
+        'source', 'context', 'usage', 'tags', 'learnedOn',
+        'publishedId', 'publishedVersion', 'copiedFrom',
+        'createdAt', 'updatedAt',
+        'migrationKey'
+      ];
+    }
+
+    function wordSetFields() {
+      return [
+        'ownerUid', 'name', 'description', 'entryIds', 'level', 'topics',
+        'publishedId', 'publishedVersion', 'copiedFrom',
+        'createdAt', 'updatedAt'
+      ];
+    }
+
+    function sessionFields() {
+      return [
+        'ownerUid', 'mode', 'filterLabel', 'total', 'correct', 'missed',
+        'startedAt', 'finishedAt'
+      ];
+    }
+
+    function str(value, max) {
+      return value is string && value.size() <= max;
+    }
+
+    function list(value, max) {
+      return value is list && value.size() <= max;
+    }
+
+    function ownedBy(uid) {
+      return request.resource.data.ownerUid == uid;
+    }
+
+    // Bookkeeping a client may never rewrite. On an update `request.resource`
+    // is the merged result, so an untouched field compares equal to itself.
+    //
+    // `resource == null` first, and not for tidiness: on a create there is no
+    // existing document, and reaching into `resource.data` there is a null
+    // dereference — which rules report as an evaluation error and treat as a
+    // denial, so every create was refused with a message about null rather than
+    // about ownership.
+    function keepsCreatedAt() {
+      return resource == null
+        || !('createdAt' in resource.data)
+        || request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function validEntry(uid) {
+      let d = request.resource.data;
+      return ownedBy(uid)
+        && d.keys().hasOnly(entryFields())
+        && str(d.headword, 200) && d.headword.size() > 0
+        && str(d.get('reading', ''), 200)
+        && str(d.get('definition', ''), 20000)
+        && str(d.get('definitionSub', ''), 20000)
+        && str(d.get('source', ''), 500)
+        && str(d.get('citationForm', ''), 200)
+        && list(d.get('pos', []), 20)
+        && list(d.get('tags', []), 50)
+        && list(d.get('senses', []), 100)
+        && list(d.get('examples', []), 100)
+        && list(d.get('related', []), 100)
+        && (d.get('pitchAccent', null) == null || d.get('pitchAccent', 0) is int)
+        // Short, closed-vocabulary scalars. Each is one line and each was
+        // previously unbounded, which `hasOnly` alone does not change: being on
+        // the allowlist is permission to send the field, not a limit on it.
+        && str(d.get('jlpt', ''), 10)
+        && str(d.get('origin', ''), 10)
+        && str(d.get('style', ''), 10)
+        && str(d.get('politeness', ''), 10)
+        && str(d.get('learnedOn', ''), 10)
+        && str(d.get('migrationKey', ''), 200)
+        && (d.get('publishedId', null) == null || str(d.get('publishedId', ''), 200))
+        && d.get('freq', 1) is int && d.get('freq', 1) >= 1 && d.get('freq', 1) <= 5
+        && d.get('publishedVersion', 0) is int && d.get('publishedVersion', 0) >= 0
+        // Timestamps, not strings. Both are written by the adapter from the
+        // server clock, so anything else on this key is a client sending a
+        // value of its own choosing — and before this line that value could be
+        // a string of any length. `keepsCreatedAt` pins createdAt to what is
+        // stored, which says nothing about the create that stored it.
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp
+        // Maps. `size()` counts keys, so this stops a key explosion and **not**
+        // a large value inside one — the same blind spot the note above records
+        // for list elements. Said plainly rather than left to be discovered.
+        && d.get('context', {}).size() <= 20
+        && d.get('usage', {}).size() <= 20
+        && (d.get('posInfo', null) == null || d.get('posInfo', {}).size() <= 20)
+        && (d.get('copiedFrom', null) == null || d.get('copiedFrom', {}).size() <= 10);
+    }
+
+    function validWordSet(uid) {
+      let d = request.resource.data;
+      return ownedBy(uid)
+        && d.keys().hasOnly(wordSetFields())
+        && str(d.name, 200) && d.name.size() > 0
+        && str(d.get('description', ''), 5000)
+        // The one unbounded list in the schema, and the one a set is made of.
+        && list(d.get('entryIds', []), 2000)
+        && list(d.get('topics', []), 50)
+        // The rest of what `wordSetFields()` permits. Naming a field and never
+        // reading it is the hole `hasOnly` was added to close, and closing it
+        // for entries alone left the same megabyte reachable one collection over
+        // — measured, not inferred: `level` took 900,000 characters.
+        && str(d.get('level', ''), 10)
+        && (d.get('publishedId', null) == null || str(d.get('publishedId', ''), 200))
+        && d.get('publishedVersion', 0) is int && d.get('publishedVersion', 0) >= 0
+        && (d.get('copiedFrom', null) == null || d.get('copiedFrom', {}).size() <= 10)
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    function validSession(uid) {
+      let d = request.resource.data;
+      return ownedBy(uid)
+        && d.keys().hasOnly(sessionFields())
+        && str(d.get('filterLabel', ''), 500)
+        && d.get('total', 0) is int && d.get('total', 0) >= 0 && d.get('total', 0) <= 2000
+        && d.get('correct', 0) is int && d.get('correct', 0) >= 0
+        && d.get('correct', 0) <= d.get('total', 0)
+        && list(d.get('missed', []), 2000)
+        // Same again. `mode` is one of four words and `startedAt` is an ISO
+        // instant the client sends; `finishedAt` comes from the server clock and
+        // is a timestamp or it is not this document.
+        && str(d.get('mode', ''), 20)
+        && str(d.get('startedAt', ''), 40)
+        && d.finishedAt is timestamp;
+    }
+
+    // Private data, one collection at a time.
+    //
+    // **There is deliberately no `match /{document=**}` here any more.** Rules
+    // are a union: a recursive wildcard granting write is an unconditional
+    // allow that every validation below would be evaluated *beside* rather than
+    // *after*, so leaving it in place while adding shape checks would have
+    // looked like hardening and enforced nothing.
+    //
+    // The cost of enumerating is that a collection nobody listed is denied
+    // rather than allowed. That is the right way round, and it is why adding a
+    // path to the app now means adding it here too.
+    match /users/{uid} {
+      function mine() {
+        return isOwner(uid) && isAllowed();
+      }
+
+      // Read and delete only. **Nothing in the application writes this
+      // document** — there is no profile, and no adapter addresses this path —
+      // so the create and update it used to carry described a feature that does
+      // not exist, while permitting any twenty fields of any names. That is the
+      // one place `hasOnly` cannot help, because there is no legitimate field to
+      // allow: the honest allowlist for a document nobody writes is empty.
+      //
+      // Delete stays, and stays split from the rest for the reason
+      // `keepsCreatedAt` documents: `write` covers delete, and on a delete
+      // `request.resource` is null, so reaching into it is an evaluation error.
+      // This document was the one place that kept the combined form, and
+      // deleting it therefore failed with a message about null rather than
+      // about permission — the failure mode account deletion would have hit.
+      //
+      // Adding a profile later means adding `create, update` back **with a
+      // `hasOnly` naming its fields**, not restoring what was here.
+      allow read, delete: if mine();
+
+      match /entries/{entryId} {
+        allow read, delete: if mine();
+        allow create, update: if mine() && validEntry(uid) && keepsCreatedAt();
+      }
+
+      match /wordSets/{setId} {
+        allow read, delete: if mine();
+        allow create, update: if mine() && validWordSet(uid) && keepsCreatedAt();
+      }
+
+      match /practiceSessions/{sessionId} {
+        allow read, delete: if mine();
+        allow create, update: if mine() && validSession(uid) && keepsCreatedAt();
+      }
+
+      // One document holding every entry's progress — see ProgressRepository
+      // for why it is a map rather than a collection.
+      //
+      // `progress/entries` and not `progress/{id}`: the adapter addresses that
+      // one fixed id and nothing else, and a wildcard here was the one path in
+      // the file with no bound of any kind. An allowed account could create
+      // progress/junk-1, progress/junk-2 and so on, each holding as much as a
+      // document can — which is precisely the threat the section above names.
+      //
+      // `ownedBy` too, because `mine()` asserts the owner of the *path* and
+      // every sibling checks the field as well.
+      match /progress/entries {
+        allow read, delete: if mine();
+        // `entries` is the whole content of this document and `hasOnly` does not
+        // touch it, so before this bound the only ceiling on one account's
+        // progress map was Firestore's 1 MiB. 5,000 words is far past any
+        // notebook this design expects and far short of that ceiling.
+        allow create, update: if mine() && ownedBy(uid)
+                              && request.resource.data.keys().hasOnly(['ownerUid', 'entries'])
+                              && request.resource.data.get('entries', {}).size() <= 5000;
+      }
+    }
+
+    // ---- publishing: closed until it exists ----
+    //
+    // `publicEntries` and `publicSets` had full create/update/delete rules and
+    // **no shape or size validation of any kind** — no `hasOnly`, no length
+    // caps, nothing. Meanwhile `PublicationRepository` is a port in
+    // `src/domain/ports.ts` with no adapter behind it and no interface in front
+    // of it, so nothing in the application has ever written to either.
+    //
+    // That combination is the worst way round. The paths nothing writes were
+    // the only ones an allowed account could write anything at all to, and an
+    // account is only ever one compromise away from being that account.
+    //
+    // Two further things would have been wrong on the day publishing shipped,
+    // and both are cheaper to fix while the feature is unbuilt:
+    //
+    //  * `deleteEverything()` removes entries, word sets, progress and
+    //    sessions. It does not touch published copies — so "アカウントおよび
+    //    データを削除できます" would have been false for exactly the data other
+    //    people can see.
+    //  * `exportEverything()` does not include them either.
+    //
+    // **What has to come back with the feature**, restored as properties rather
+    // than as rules. The twelve tests that covered them were removed with the
+    // rules and are not recoverable from this list — they are in pull request
+    // #30, which is where to read them, and their names are the specification.
+    //
+    // Reads first, because they are the access model rather than a detail:
+    //
+    //  * **A published copy is readable by any allowed account, not only its
+    //    owner.** That is the whole point of publishing and the first decision
+    //    somebody rebuilding this has to make; the old rule was
+    //    `allow read: if isAllowed()` on both collections.
+    //  * **A snapshot entry is readable only while its parent set exists** —
+    //    `allow read: if isAllowed() && exists(setPath(publicSetId))`. Firestore
+    //    does not cascade deletes, so without it an unpublish that fails
+    //    part-way leaves a snapshot readable from a path somebody already noted.
+    //    This is the half of the orphan story that fails **open**; the delete
+    //    exemption below is the half that fails closed.
+    //  * **The owner must be able to publish, republish and unpublish.** A list
+    //    of prohibitions with nothing that must succeed is how rules nobody can
+    //    publish through get written — which is exactly what the `getAfter`
+    //    point below exists to prevent.
+    //
+    // Then the writes:
+    //
+    //  * ownerUid may never be reassigned on an existing copy, and may never be
+    //    somebody else's on a new one.
+    //  * A snapshot entry's parent set must be owned by the writer, checked
+    //    with `getAfter` and not `get` — a first publish writes the set and its
+    //    first entries in one batch, and `get` sees only committed state, so it
+    //    denies every first publish.
+    //  * Delete on a snapshot entry deliberately skips that parent check, so an
+    //    orphan left by a half-finished unpublish stays cleanable by its owner.
+    //  * Every mutation gates on `isAllowed()`, not only create: a revoked
+    //    account must lose the ability to edit what it has already put in front
+    //    of other people.
+    //  * Shape and size validation, which never existed here and must, on the
+    //    same footing as the private collections above — which by then means
+    //    `hasOnly` plus per-field bounds. That arrives in #29, not here: this
+    //    branch still bounds the private collections with `keys().size()`, and
+    //    the intended order is #29 first. The two merge cleanly either way; it
+    //    is this sentence that stops being true if they land the other way
+    //    round.
+    //  * Deletion and export have to cover published copies before the feature
+    //    is reachable, not after.
+
+    // Anything not listed above stays denied. The old top-level /entries,
+    // /entryProgress, /practiceSessions and /wordSets collections are gone: they
+    // had no owner field, so they could not be secured per user.
+  }
+}
