@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { PublicLayout } from '@/components/PublicLayout';
+import { useI18n } from '@/i18n/context';
 
 /**
  * A mistyped address, which is not a crash.
@@ -13,19 +14,18 @@ import { PublicLayout } from '@/components/PublicLayout';
  * they mistyped a URL answers a question they did not ask.
  */
 export function Component() {
+  const { t } = useI18n();
   return (
     <PublicLayout>
       <section className="py-16 text-center">
         <p className="font-display text-5xl font-bold text-accent">404</p>
-        <h1 className="mt-4 font-display text-xl font-bold">ページが見つかりません</h1>
-        <p className="mt-3 text-sm text-muted">
-          アドレスが変わったか、間違っている可能性があります。
-        </p>
+        <h1 className="mt-4 font-display text-xl font-bold">{t('notFound.title')}</h1>
+        <p className="mt-3 text-sm text-muted">{t('notFound.description')}</p>
         <Link
           to="/"
           className="mt-8 inline-block min-h-11 rounded-pill bg-accent px-8 py-3 text-sm font-semibold text-on-accent"
         >
-          トップページへ
+          {t('notFound.home')}
         </Link>
       </section>
     </PublicLayout>

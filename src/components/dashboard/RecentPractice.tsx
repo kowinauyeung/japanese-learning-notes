@@ -1,12 +1,8 @@
 import { Link } from 'react-router-dom';
 import { PRACTICE_MODES } from '@/domain/practice';
 import type { PracticeMode, PracticeSession } from '@/domain/practice';
+import { useI18n } from '@/i18n/context';
 import { sessionTime } from '@/lib/history';
-
-const MODE_LABEL: Record<PracticeMode, string> = {
-  flashcard: 'フラッシュカード',
-  dictation: '書き取り練習',
-};
 
 const MODE_PATH: Record<PracticeMode, string> = {
   flashcard: '/practice/flashcards',
@@ -26,12 +22,19 @@ export function RecentPractice({
 }: {
   latest: Record<PracticeMode, PracticeSession | null>;
 }) {
+  const { locale, t } = useI18n();
+  const modeLabel: Record<PracticeMode, string> = {
+    flashcard: t('nav.flashcards'),
+    dictation: t('nav.dictation'),
+  };
   return (
     <section className="rounded-card bg-card p-5 shadow-panel">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-xs font-semibold tracking-wide text-muted">最新の練習</h2>
+        <h2 className="text-xs font-semibold tracking-wide text-muted">
+          {t('dashboard.latestPractice')}
+        </h2>
         <Link to="/history" className="text-xs text-accent hover:underline">
-          履歴を見る
+          {t('dashboard.viewHistory')}
         </Link>
       </div>
 
@@ -44,18 +47,18 @@ export function RecentPractice({
               to={MODE_PATH[mode]}
               className="rounded-panel bg-bg-alt p-4 transition hover:bg-accent-soft"
             >
-              <p className="text-sm font-medium">{MODE_LABEL[mode]}</p>
+              <p className="text-sm font-medium">{modeLabel[mode]}</p>
               {session ? (
                 <>
                   <p className="mt-1 font-display text-lg font-bold tabular-nums">
                     {session.correct} / {session.total}
                   </p>
                   <p className="text-xs text-muted">
-                    {sessionTime(session.finishedAt)} · {session.filterLabel}
+                    {sessionTime(session.finishedAt, locale)} · {session.filterLabel}
                   </p>
                 </>
               ) : (
-                <p className="mt-1 text-xs text-muted">まだ実施していません</p>
+                <p className="mt-1 text-xs text-muted">{t('dashboard.notPracticed')}</p>
               )}
             </Link>
           );

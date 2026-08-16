@@ -19,6 +19,8 @@ export interface E2ESeed {
   wordSets?: Record<string, unknown>[];
   /** Finished sessions, so 履歴 can be reached without drilling first. */
   sessions?: Record<string, unknown>[];
+  profile?: Record<string, unknown>;
+  settingsSave?: 'fail' | 'defer';
 }
 
 /** Fixed instant every spec runs at. A Wednesday; its ISO week starts on the 22nd. */
@@ -58,6 +60,7 @@ export const WORDS: Record<string, unknown>[] = [
     pitchAccent: 0,
     definition: '何かが起こる前ぶれ。',
     definitionSub: '徵兆',
+    source: 'NHK News',
     pos: ['名詞'],
     jlpt: 'N1',
     origin: '漢語',

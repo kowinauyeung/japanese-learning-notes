@@ -1,5 +1,20 @@
 import type { EntryDraft } from '@/domain/entry';
+import type { TranslationLanguage } from '@/domain/user';
 import { sanitizeDraft } from './sanitize';
+
+const PROMPT_LANGUAGE_NAMES = {
+  en: 'English',
+  ja: '日本語',
+  'zh-Hant': '中文',
+  'yue-Hant': '廣東話',
+  ko: '한국어',
+  es: 'Español',
+} as const satisfies Record<TranslationLanguage, string>;
+
+/** Convert a persisted language code into wording for the Japanese AI prompt. */
+export function promptLanguageName(language?: TranslationLanguage | null): string {
+  return language ? PROMPT_LANGUAGE_NAMES[language] : '廣東語';
+}
 
 /** The shape shown in the app and asked of the assistant. */
 export const SCHEMA = `{
@@ -17,7 +32,7 @@ export const SCHEMA = `{
   "citationForm": "",
   "definition": "意味・説明（必須）",
   "definitionSub": "補足・注記",
-  "source": "出處",
+  "source": "出典",
   "context": { "original": "", "ja": "", "translation": "" },
   "senses": [
     { "label": "", "description": "", "example": "",

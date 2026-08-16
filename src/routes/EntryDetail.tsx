@@ -5,6 +5,9 @@ import { KeyValueTable, Section } from '@/components/detail/Section';
 import { EntryFormModal } from '@/components/entry-form/EntryFormModal';
 import { PitchAccent } from '@/components/PitchAccent';
 import { Ruby } from '@/components/Ruby';
+import { useI18n } from '@/i18n/context';
+import { useEntryLabel } from '@/i18n/useEntryLabel';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import { accentKana } from '@/lib/mora';
 
@@ -20,7 +23,10 @@ function stars(freq: number): string {
 export function Component() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useI18n();
+  const entryLabel = useEntryLabel();
   const { entries, loading, error, refresh, repository } = useEntries();
+  const errorMessage = useLoadErrorMessage(error);
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -41,41 +47,42 @@ export function Component() {
       void navigate('/vocabulary', { replace: true });
     } catch (cause) {
       console.error(cause);
-      setDeleteError('削除できませんでした。もう一度お試しください。');
+      setDeleteError(t('vocabulary.deleteError'));
     } finally {
       setDeleting(false);
     }
   };
 
-  if (loading) return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
-  if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
+  if (loading)
+    return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
+  if (errorMessage) return <p className="py-16 text-center text-sm text-danger">{errorMessage}</p>;
 
   const entry = entries.find((item) => item.id === id);
   if (!entry) {
     return (
       <div className="py-16 text-center">
-        <p className="text-sm text-muted">単語が見つかりません</p>
+        <p className="text-sm text-muted">{t('vocabulary.notFound')}</p>
         <Link to="/vocabulary" className="mt-2 inline-block text-sm text-accent underline">
-          単語一覧に戻る
+          {t('vocabulary.backToList')}
         </Link>
       </div>
     );
   }
 
   const manifest = [
-    { label: '品詞', value: entry.pos.join('／') },
-    { label: 'JLPTレベル', value: entry.jlpt },
-    { label: '語種', value: entry.origin },
-    { label: '文体', value: entry.style },
-    { label: '丁寧さ', value: entry.politeness },
-    { label: '頻度', value: stars(entry.freq) },
-    { label: '登録形', value: entry.citationForm },
+    { label: t('vocabulary.partOfSpeech'), value: entry.pos.map(entryLabel).join('／') },
+    { label: t('vocabulary.jlptLevel'), value: entryLabel(entry.jlpt) },
+    { label: t('vocabulary.origin'), value: entryLabel(entry.origin) },
+    { label: t('vocabulary.style'), value: entryLabel(entry.style) },
+    { label: t('vocabulary.politeness'), value: entryLabel(entry.politeness) },
+    { label: t('vocabulary.frequency'), value: stars(entry.freq) },
+    { label: t('vocabulary.citationForm'), value: entry.citationForm },
   ].filter((row) => row.value);
 
   const usageRows = [
-    { label: 'いつ使う', value: entry.usage.when },
-    { label: '訳語で言うと', value: entry.usage.translation },
-    { label: '注意点', value: entry.usage.caution },
+    { label: t('vocabulary.whenUsed'), value: entry.usage.when },
+    { label: t('vocabulary.translationEquivalent'), value: entry.usage.translation },
+    { label: t('vocabulary.caution'), value: entry.usage.caution },
   ].filter((row) => row.value);
 
   return (
@@ -102,10 +109,10 @@ export function Component() {
               </span>
               {entry.pos.map((part) => (
                 <span key={part} className="rounded-pill bg-bg-alt px-2.5 py-1 text-muted">
-                  {part}
+                  {entryLabel(part)}
                 </span>
               ))}
-              <span className="text-accent" title={`頻度 ${entry.freq}/5`}>
+              <span className="text-accent" title={`${t('vocabulary.frequency')} ${entry.freq}/5`}>
                 {stars(entry.freq)}
               </span>
               <span className="text-muted tabular-nums">{entry.learnedOn}</span>
@@ -131,20 +138,20 @@ export function Component() {
               onClick={() => setEditing(true)}
               className="min-h-9 rounded-pill bg-bg-alt px-4 text-xs font-semibold text-ink"
             >
-              編集
+              {t('common.edit')}
             </button>
             <button
               type="button"
               onClick={() => setConfirmingDelete(true)}
               className="min-h-9 rounded-pill bg-danger-soft px-4 text-xs font-semibold text-danger"
             >
-              削除
+              {t('common.delete')}
             </button>
           </div>
         </div>
       </header>
 
-      <Section emoji="📋" title="MANIFEST">
+      <Section emoji="📋" title={t('vocabulary.manifest')}>
         <KeyValueTable rows={manifest} />
       </Section>
 
@@ -159,7 +166,7 @@ export function Component() {
           first. Reading the encounter before the definition is also the order
           the word was actually learned in. */}
       {entry.context.original && (
-        <Section emoji="📌" title="この文での使われ方">
+        <Section emoji="📌" title={t('vocabulary.context')}>
           <blockquote className="prose-cjk rounded-panel border-l-4 border-accent bg-bg-alt px-4 py-3 text-sm">
             {entry.context.original}
           </blockquote>
@@ -175,7 +182,7 @@ export function Component() {
       )}
 
       {(entry.definition || entry.definitionSub) && (
-        <Section emoji="📖" title="意味・説明">
+        <Section emoji="📖" title={t('vocabulary.definition')}>
           {entry.definition && (
             <p className="prose-cjk text-sm whitespace-pre-line">{entry.definition}</p>
           )}
@@ -188,7 +195,7 @@ export function Component() {
       )}
 
       {entry.senses.length > 0 && (
-        <Section emoji="🌐" title="文脈別の意味">
+        <Section emoji="🌐" title={t('vocabulary.senses')}>
           <ol className="divide-y divide-line">
             {entry.senses.map((sense, index) => (
               <li key={index} className="py-4 first:pt-0 last:pb-0">
@@ -202,14 +209,16 @@ export function Component() {
                     {sense.example}
                     {sense.exampleGloss && (
                       <span className="block text-xs text-muted">
-                        （意味：{sense.exampleGloss}）
+                        {t('vocabulary.gloss', { value: sense.exampleGloss })}
                       </span>
                     )}
                   </blockquote>
                 )}
                 {sense.translation && <p className="prose-cjk mt-2 text-sm">{sense.translation}</p>}
                 {sense.usage && (
-                  <p className="prose-cjk mt-2 text-xs text-muted">使う場面：{sense.usage}</p>
+                  <p className="prose-cjk mt-2 text-xs text-muted">
+                    {t('vocabulary.usageSituation', { value: sense.usage })}
+                  </p>
                 )}
               </li>
             ))}
@@ -218,7 +227,7 @@ export function Component() {
       )}
 
       {entry.examples.length > 0 && (
-        <Section emoji="📝" title="例文">
+        <Section emoji="📝" title={t('vocabulary.examples')}>
           <ol className="divide-y divide-line">
             {entry.examples.map((example, index) => (
               <li key={index} className="py-3 first:pt-0 last:pb-0">
@@ -236,13 +245,13 @@ export function Component() {
       )}
 
       {usageRows.length > 0 && (
-        <Section emoji="🗣️" title="使い方・ニュアンス">
+        <Section emoji="🗣️" title={t('vocabulary.usage')}>
           <KeyValueTable rows={usageRows} />
         </Section>
       )}
 
       {entry.related.length > 0 && (
-        <Section emoji="🔗" title="関連語">
+        <Section emoji="🔗" title={t('vocabulary.related')}>
           <ul className="divide-y divide-line text-sm">
             {entry.related.map((related, index) => (
               <li key={index} className="py-2.5 first:pt-0 last:pb-0">
@@ -254,15 +263,19 @@ export function Component() {
         </Section>
       )}
 
-      {entry.source && <p className="px-1 text-xs text-muted">出處：{entry.source}</p>}
+      {entry.source && (
+        <p className="px-1 text-xs text-muted">
+          {t('vocabulary.sourceLine', { source: entry.source })}
+        </p>
+      )}
 
       <EntryFormModal open={editing} entry={entry} onClose={() => setEditing(false)} />
 
       <ConfirmDialog
         open={confirmingDelete}
-        title="単語を削除"
-        message={`「${entry.headword}」を削除しますか？\nこの操作は取り消せません。`}
-        confirmLabel="削除する"
+        title={t('vocabulary.deleteTitle')}
+        message={t('vocabulary.deleteMessage', { headword: entry.headword })}
+        confirmLabel={t('vocabulary.deleteConfirm')}
         busy={deleting}
         error={deleteError}
         onClose={() => {

@@ -1,8 +1,10 @@
 import { Ruby } from '@/components/Ruby';
 import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
+import { useEntryLabel } from '@/i18n/useEntryLabel';
 
 export function EntryCard({ entry }: { entry: Entry }) {
+  const entryLabel = useEntryLabel();
   return (
     <VocabLink
       entryId={entry.id}
@@ -26,7 +28,7 @@ export function EntryCard({ entry }: { entry: Entry }) {
       <div className="mt-auto flex flex-wrap items-center gap-1.5">
         {entry.pos.slice(0, 2).map((part) => (
           <span key={part} className="rounded-pill bg-bg-alt px-2 py-0.5 text-[11px] text-muted">
-            {part}
+            {entryLabel(part)}
           </span>
         ))}
         {entry.tags.slice(0, 2).map((tag) => (

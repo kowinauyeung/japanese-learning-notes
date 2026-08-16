@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
+import { useI18n } from '@/i18n/context';
 
 /**
  * Centred card on desktop, bottom sheet on phones — the add and edit flows open
@@ -18,6 +19,7 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
 }) {
+  const { t } = useI18n();
   /** Whether the gesture in progress started, and ended, on the backdrop. */
   const pressedOnBackdrop = useRef(false);
   const releasedOnBackdrop = useRef(false);
@@ -140,7 +142,7 @@ export function Modal({
             <button
               type="button"
               onClick={onClose}
-              aria-label="閉じる"
+              aria-label={t('modal.close')}
               className="grid h-9 w-9 place-items-center rounded-pill text-lg hover:bg-bg-alt"
             >
               ✕

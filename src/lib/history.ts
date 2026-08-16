@@ -56,10 +56,10 @@ export function weakWords(weakIds: ReadonlySet<string>, entries: readonly Entry[
  * suite runs in, and pinning that would change what every other date-rendering
  * test and screenshot means. It is an `Intl` call with no logic of its own.
  */
-export function sessionTime(finishedAt: string): string {
+export function sessionTime(finishedAt: string, locale = 'ja-JP'): string {
   const at = new Date(finishedAt);
   if (Number.isNaN(at.getTime())) return '';
-  return new Intl.DateTimeFormat('ja-JP', {
+  return new Intl.DateTimeFormat(locale, {
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',

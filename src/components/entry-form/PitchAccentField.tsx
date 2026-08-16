@@ -1,5 +1,7 @@
 import { useId } from 'react';
 import { PitchAccent } from '@/components/PitchAccent';
+import { useI18n } from '@/i18n/context';
+import { localizeFormError } from '@/i18n/localizeFormError';
 import { accentProblem, moraCount } from '@/lib/mora';
 import { Field, inputClass } from './fields';
 
@@ -28,13 +30,15 @@ export function PitchAccentField({
   value: number | null;
   onChange: (value: number | null) => void;
 }) {
+  const { t } = useI18n();
   const errorId = useId();
   const mora = moraCount(kana);
-  const message = value === null ? null : accentProblem(value, kana);
+  const problem = value === null ? null : accentProblem(value, kana);
+  const message = problem === null ? null : localizeFormError(problem, t);
 
   return (
     <div className="space-y-1">
-      <Field label="アクセント" hint="任意・下がる拍">
+      <Field label={t('form.pitchAccent')} hint={t('form.dropMora')}>
         <input
           type="number"
           min={0}
@@ -50,7 +54,7 @@ export function PitchAccentField({
             const parsed = Number(raw);
             onChange(Number.isFinite(parsed) ? parsed : null);
           }}
-          placeholder={kana ? `0〜${mora}` : '読み方を先に'}
+          placeholder={kana ? `0〜${mora}` : t('form.readingFirst')}
           aria-invalid={message !== null}
           aria-describedby={message === null ? undefined : errorId}
           className={inputClass}

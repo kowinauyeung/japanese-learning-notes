@@ -92,6 +92,7 @@ export interface ProgressRepository {
 export interface UserRepository {
   get(uid: string): Promise<UserProfile | null>;
   save(uid: string, draft: UserProfileDraft): Promise<void>;
+  remove(uid: string): Promise<void>;
 }
 
 /**

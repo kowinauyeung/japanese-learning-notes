@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Entry, EntryDraft } from '@/domain/entry';
+import type { TranslationLanguage } from '@/domain/user';
+import { useI18n } from '@/i18n/context';
+import { localizeFormError } from '@/i18n/localizeFormError';
 import { draftError, emptyDraft, parseTags, toDraft } from '@/lib/draft';
 import { useEntries } from '@/lib/entries';
 import { jsonToDraft } from '@/lib/jsonImport';
@@ -11,12 +14,6 @@ import type { JsonImportState } from './JsonImport';
 
 type Tab = 'simple' | 'full' | 'json';
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'simple', label: '簡単' },
-  { id: 'full', label: '詳細' },
-  { id: 'json', label: 'JSON' },
-];
-
 /**
  * One modal for both adding and editing. Editing skips the tab switcher — the
  * quick-capture and paste-from-AI modes only make sense for a new note.
@@ -24,16 +21,25 @@ const TABS: { id: Tab; label: string }[] = [
 export function EntryFormModal({
   open,
   entry,
+  translationLanguage,
   onClose,
   onSaved,
 }: {
   open: boolean;
   /** Present when editing; absent when adding. */
   entry?: Entry;
+  /** Saved default for the JSON tab; the text field remains editable. */
+  translationLanguage?: TranslationLanguage | null | undefined;
   onClose: () => void;
   onSaved?: (id: string) => void;
 }) {
   const { refresh, repository } = useEntries();
+  const { t } = useI18n();
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'simple', label: t('form.simple') },
+    { id: 'full', label: t('form.full') },
+    { id: 'json', label: 'JSON' },
+  ];
   const [tab, setTab] = useState<Tab>('simple');
   const [draft, setDraft] = useState<EntryDraft>(emptyDraft);
   const [saving, setSaving] = useState(false);
@@ -51,22 +57,22 @@ export function EntryFormModal({
    * its own resting place so it slid 16px on the last of the scroll. The footer
    * is outside the scrollport and already `shrink-0`, so nothing about it moves.
    */
-  const [json, setJson] = useState<JsonImportState>(emptyJsonImport);
+  const [json, setJson] = useState<JsonImportState>(() => emptyJsonImport(translationLanguage));
 
   useEffect(() => {
     if (!open) return;
     setDraft(entry ? toDraft(entry) : emptyDraft());
     setTab(entry ? 'full' : 'simple');
-    setJson(emptyJsonImport());
+    setJson(emptyJsonImport(translationLanguage));
     setError(null);
-  }, [open, entry]);
+  }, [open, entry, translationLanguage]);
 
   const loadJson = () => {
     const { draft: loaded, error: failure } = jsonToDraft(json.raw, {
       original: json.original,
       source: json.source,
     });
-    if (failure) return setError(failure);
+    if (failure) return setError(localizeFormError(failure, t));
     setError(null);
     if (loaded) {
       setDraft(loaded);
@@ -76,7 +82,7 @@ export function EntryFormModal({
 
   const save = async () => {
     const invalid = draftError(draft);
-    if (invalid) return setError(invalid);
+    if (invalid) return setError(localizeFormError(invalid, t));
 
     setSaving(true);
     setError(null);
@@ -89,7 +95,7 @@ export function EntryFormModal({
       onClose();
     } catch (cause) {
       console.error(cause);
-      setError('保存できませんでした。');
+      setError(t('form.saveError'));
     } finally {
       setSaving(false);
     }
@@ -98,7 +104,7 @@ export function EntryFormModal({
   return (
     <Modal
       open={open}
-      title={entry ? '単語を編集' : '単語を追加'}
+      title={entry ? t('form.editTitle') : t('form.addTitle')}
       onClose={onClose}
       footer={
         <div className="flex items-center gap-3">
@@ -110,7 +116,7 @@ export function EntryFormModal({
               disabled={!json.raw.trim()}
               className="min-h-10 rounded-pill bg-bg-alt px-5 text-sm font-semibold text-ink disabled:opacity-50"
             >
-              読み込む
+              {t('form.import')}
             </button>
           )}
           <button
@@ -118,7 +124,7 @@ export function EntryFormModal({
             onClick={onClose}
             className="ml-auto min-h-10 rounded-pill bg-bg-alt px-5 text-sm font-semibold text-ink"
           >
-            キャンセル
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -126,14 +132,14 @@ export function EntryFormModal({
             disabled={saving}
             className="min-h-10 rounded-pill bg-accent px-5 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
-            {saving ? '保存中…' : '保存する'}
+            {saving ? t('form.saving') : t('form.save')}
           </button>
         </div>
       }
     >
       {!entry && (
         <div className="mb-5 flex gap-1 rounded-pill bg-bg-alt p-1">
-          {TABS.map((item) => (
+          {tabs.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -156,36 +162,34 @@ export function EntryFormModal({
 
       {tab === 'simple' && !entry && (
         <div className="space-y-3">
-          <Field label="見出し語" hint="必須">
+          <Field label={t('form.headword')} hint={t('form.required')}>
             <Text value={draft.headword} onChange={(v) => setDraft({ ...draft, headword: v })} />
           </Field>
-          <Field label="読み方" hint="かな">
+          <Field label={t('form.reading')} hint={t('form.kana')}>
             <Text value={draft.reading} onChange={(v) => setDraft({ ...draft, reading: v })} />
           </Field>
-          <Field label="意味・説明" hint="必須">
+          <Field label={t('form.definition')} hint={t('form.required')}>
             <Area
               value={draft.definition}
               onChange={(v) => setDraft({ ...draft, definition: v })}
               rows={4}
             />
           </Field>
-          <Field label="補足" hint="任意">
+          <Field label={t('form.additionalNotes')} hint={t('form.optional')}>
             <Area
               value={draft.definitionSub}
               onChange={(v) => setDraft({ ...draft, definitionSub: v })}
               rows={3}
             />
           </Field>
-          <Field label="タグ" hint="スペース・カンマ区切り">
+          <Field label={t('form.tags')} hint={t('form.tagsHint')}>
             <Text
               value={draft.tags.join(' ')}
               onChange={(v) => setDraft({ ...draft, tags: parseTags(v) })}
-              placeholder="仕事 N2文法"
+              placeholder={t('form.tagsPlaceholder')}
             />
           </Field>
-          <p className="text-xs text-muted">
-            残りの項目は「詳細」タブ、または保存後の編集から入力できます。
-          </p>
+          <p className="text-xs text-muted">{t('form.moreFields')}</p>
         </div>
       )}
 

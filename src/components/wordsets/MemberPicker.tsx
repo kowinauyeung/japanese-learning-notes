@@ -1,4 +1,5 @@
 import type { Entry } from '@/domain/entry';
+import { useI18n } from '@/i18n/context';
 import type { ListDrag } from '@/lib/listDrag';
 import { CANDIDATE_LIMIT } from '@/lib/wordSetMembers';
 import { DragHandle } from './DragHandle';
@@ -39,13 +40,16 @@ export function MemberPicker({
   onAdd: (entryId: string) => void;
   onAddAll: (entryIds: string[]) => void;
 }) {
+  const { t } = useI18n();
   return (
     <section className="flex min-h-0 flex-1 flex-col rounded-card bg-card shadow-panel">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line p-4">
         <h2 className="text-sm font-semibold">
-          単語を探す
+          {t('wordSets.findWords')}
           <span className="ml-2 text-xs font-normal text-muted tabular-nums">
-            {total} 語{total > CANDIDATE_LIMIT && `（上位 ${CANDIDATE_LIMIT} 件）`}
+            {total > CANDIDATE_LIMIT
+              ? t('wordSets.limitedCount', { count: total, limit: CANDIDATE_LIMIT })
+              : t('wordSets.count', { count: total })}
           </span>
         </h2>
         {/* Named with its own count, because the rendered rows are capped and
@@ -56,7 +60,7 @@ export function MemberPicker({
           disabled={busy || shown.length === 0}
           className="min-h-9 rounded-pill bg-accent-soft px-4 text-xs font-semibold text-accent disabled:opacity-60"
         >
-          表示中の {shown.length} 語を追加
+          {t('wordSets.addShown', { count: shown.length })}
         </button>
       </div>
 
@@ -97,13 +101,13 @@ export function MemberPicker({
               disabled={busy}
               className="min-h-9 shrink-0 rounded-pill bg-accent-soft px-4 text-xs font-semibold text-accent disabled:opacity-60"
             >
-              ＋ 追加
+              {t('wordSets.add')}
             </button>
           </li>
         ))}
 
         {shown.length === 0 && (
-          <li className="py-6 text-center text-sm text-muted">条件に合う単語がありません</li>
+          <li className="py-6 text-center text-sm text-muted">{t('vocabulary.noResults')}</li>
         )}
       </ul>
     </section>

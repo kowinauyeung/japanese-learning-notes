@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useI18n } from '@/i18n/context';
 import { collectDiagnostics, formatDiagnostics } from '@/lib/diagnostics';
 import { projectId } from '@/lib/env';
 
@@ -14,6 +15,7 @@ import { projectId } from '@/lib/env';
 export function CopyDiagnostics({ errorId }: { errorId: string }) {
   const { pathname } = useLocation();
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const { t } = useI18n();
   // Memoised, or `at` is re-read on every render — including the one caused by
   // reporting a successful copy, so the text in the box and the text on the
   // clipboard could differ by the moment each was made.
@@ -24,7 +26,7 @@ export function CopyDiagnostics({ errorId }: { errorId: string }) {
 
   return (
     <details className="rounded-panel border border-line p-3 text-left">
-      <summary className="cursor-pointer text-xs text-muted">診断情報を見る・コピーする</summary>
+      <summary className="cursor-pointer text-xs text-muted">{t('diagnostics.summary')}</summary>
       <pre className="mt-2 overflow-x-auto text-[11px] leading-relaxed text-muted">{text}</pre>
       {/*
         Both failure modes are handled, on the one screen whose entire purpose
@@ -65,16 +67,12 @@ export function CopyDiagnostics({ errorId }: { errorId: string }) {
         }}
         className="mt-2 min-h-9 w-full rounded-pill bg-bg-alt text-xs font-semibold text-ink"
       >
-        {state === 'copied' ? 'コピーしました' : '診断情報をコピー'}
+        {state === 'copied' ? t('diagnostics.copied') : t('diagnostics.copy')}
       </button>
       {state === 'failed' && (
-        <p className="mt-2 text-[11px] text-danger">
-          コピーできませんでした。上のテキストを選択してコピーしてください。
-        </p>
+        <p className="mt-2 text-[11px] text-danger">{t('diagnostics.copyError')}</p>
       )}
-      <p className="mt-2 text-[11px] text-muted">
-        ユーザー ID、メールアドレス、登録した単語は含まれません。
-      </p>
+      <p className="mt-2 text-[11px] text-muted">{t('diagnostics.privacy')}</p>
     </details>
   );
 }

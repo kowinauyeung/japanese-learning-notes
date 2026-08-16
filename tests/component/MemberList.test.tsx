@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { MemberList } from '@/components/wordsets/MemberList';
@@ -6,6 +6,7 @@ import type { ListDrag } from '@/lib/listDrag';
 import { VocabDialogProvider } from '@/lib/vocabDialog';
 import { idleDrag } from '../fixtures/drag';
 import { makeEntry } from '../fixtures/entry';
+import { renderWithI18n as render } from '../helpers/renderWithI18n';
 
 const MEMBERS = [
   makeEntry({ id: 'w1', headword: '切り分け', reading: 'きりわけ' }),

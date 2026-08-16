@@ -61,6 +61,10 @@ export default defineConfig({
 
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
+    // Existing scenarios assert the original Japanese interface. Pinning the
+    // browser preference keeps those tests deterministic now that production
+    // intentionally follows the visitor's locale.
+    locale: 'ja-JP',
     trace: 'on-first-retry',
     // Fixed, because it is part of every screenshot baseline.
     viewport: { width: 1280, height: 720 },

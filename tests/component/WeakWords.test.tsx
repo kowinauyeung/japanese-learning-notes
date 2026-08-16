@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { WeakWords } from '@/components/history/WeakWords';
@@ -6,6 +6,7 @@ import { EMPTY_PRACTICE_FILTERS } from '@/lib/practice';
 import type { PracticeFilters } from '@/lib/practice';
 import { VocabDialogProvider } from '@/lib/vocabDialog';
 import { makeEntry } from '../fixtures/entry';
+import { renderWithI18n as render } from '../helpers/renderWithI18n';
 
 const WORDS = [makeEntry({ id: 'w1', headword: '切り分け' })];
 

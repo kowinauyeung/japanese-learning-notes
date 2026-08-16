@@ -1,3 +1,5 @@
+import type { MessageKey } from '@/i18n/messages';
+
 /**
  * What to show when a read fails.
  *
@@ -71,6 +73,26 @@ export function isAccessDenied(cause: unknown): boolean {
  * a fact about the account, identical on every screen, and saying it four
  * different ways would suggest four different problems.
  */
-export function loadErrorMessage(cause: unknown, fallback: string): string {
-  return isAccessDenied(cause) ? ACCESS_DENIED_MESSAGE : fallback;
+export function loadErrorMessage(
+  cause: unknown,
+  fallback: string,
+  accessDenied = ACCESS_DENIED_MESSAGE,
+): string {
+  return isAccessDenied(cause) ? accessDenied : fallback;
+}
+
+/**
+ * A failed read before it has been translated.
+ *
+ * Providers keep this descriptor in state instead of a rendered sentence so a
+ * locale change can update the message without becoming a data dependency and
+ * repeating the repository read that failed.
+ */
+export interface LoadFailure {
+  cause: unknown;
+  fallback: MessageKey;
+}
+
+export function captureLoadFailure(cause: unknown, fallback: MessageKey): LoadFailure {
+  return { cause, fallback };
 }

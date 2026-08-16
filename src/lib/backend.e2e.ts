@@ -6,9 +6,11 @@ import type {
   Page,
   PageQuery,
   ProgressRepository,
+  UserRepository,
   WordSetRepository,
 } from '@/domain/ports';
 import type { EntryProgress, PracticeSession, PracticeSessionDraft } from '@/domain/practice';
+import type { UserProfile, UserProfileDraft } from '@/domain/user';
 import type { WordSet, WordSetDraft } from '@/domain/wordSet';
 import { sanitizeEntry, sanitizeSession, sanitizeWordSet } from './sanitize';
 
@@ -39,15 +41,27 @@ interface Seed {
   wordSets?: unknown[];
   /** Finished sessions, so 履歴 can be reached without drilling first. */
   sessions?: unknown[];
+  /** Raw persisted profile; absent means first sign-in. */
+  profile?: unknown;
+  /** Force the next settings write to fail so the localized error path is reachable. */
+  settingsSave?: 'fail' | 'defer';
 }
 
 declare global {
   interface Window {
     __GOITEI_E2E__?: Seed;
+    __GOITEI_E2E_READS__?: Record<'entries' | 'progress' | 'wordSets', number>;
+    __GOITEI_E2E_RELEASE_SETTINGS_SAVE__?: () => void;
   }
 }
 
 const seed = (): Seed => (typeof window === 'undefined' ? {} : (window.__GOITEI_E2E__ ?? {}));
+
+function countRead(store: 'entries' | 'progress' | 'wordSets'): void {
+  if (typeof window === 'undefined') return;
+  const reads = (window.__GOITEI_E2E_READS__ ??= { entries: 0, progress: 0, wordSets: 0 });
+  reads[store] += 1;
+}
 
 const E2E_USER: AuthUser = {
   uid: 'e2e-user',
@@ -130,6 +144,73 @@ export const authPort: AuthPort = {
   },
 };
 
+// --------------------------------------------------------------- user profile
+
+const profileStores = new Map<string, UserProfile>();
+
+function persistedProfile(uid: string): UserProfile | null {
+  const existing = profileStores.get(uid);
+  if (existing) return existing;
+  const persisted = load<UserProfile | null>(`profile.${uid}`, null);
+  if (persisted) {
+    profileStores.set(uid, persisted);
+    return persisted;
+  }
+  const raw = seed().profile;
+  if (typeof raw !== 'object' || raw === null) return null;
+  const now = new Date().toISOString();
+  const record = raw as Partial<UserProfile>;
+  const profile: UserProfile = {
+    uid,
+    nickname: typeof record.nickname === 'string' ? record.nickname : '',
+    language: record.language ?? 'en',
+    translationLanguage: record.translationLanguage ?? 'en',
+    theme: record.theme ?? 'system',
+    createdAt: now,
+    updatedAt: now,
+  };
+  profileStores.set(uid, profile);
+  return profile;
+}
+
+export const userRepository: UserRepository = {
+  get(uid): Promise<UserProfile | null> {
+    return Promise.resolve(persistedProfile(uid));
+  },
+  save(uid, draft: UserProfileDraft): Promise<void> {
+    if (seed().settingsSave === 'fail') return Promise.reject(new Error('settings save failed'));
+    if (seed().settingsSave === 'defer') {
+      return new Promise((resolve) => {
+        window.__GOITEI_E2E_RELEASE_SETTINGS_SAVE__ = () => {
+          persistProfile(uid, draft);
+          delete window.__GOITEI_E2E_RELEASE_SETTINGS_SAVE__;
+          resolve();
+        };
+      });
+    }
+    persistProfile(uid, draft);
+    return Promise.resolve();
+  },
+  remove(uid): Promise<void> {
+    profileStores.delete(uid);
+    save(`profile.${uid}`, null);
+    return Promise.resolve();
+  },
+};
+
+function persistProfile(uid: string, draft: UserProfileDraft): void {
+  const existing = persistedProfile(uid);
+  const now = new Date().toISOString();
+  const profile: UserProfile = {
+    ...draft,
+    uid,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+  profileStores.set(uid, profile);
+  save(`profile.${uid}`, profile);
+}
+
 // --------------------------------------------------------------- entry store
 
 /** Keyed by uid so the store survives the provider remounting. */
@@ -188,6 +269,7 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
 
   return {
     list({ limit, cursor }: PageQuery): Promise<Page<Entry>> {
+      countRead('entries');
       const all = [...store.values()].sort(newestFirst);
       const start = cursor ? all.findIndex((entry) => entry.id === cursor) + 1 : 0;
       const items = all.slice(start, start + limit);
@@ -301,6 +383,7 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
 
   return {
     listAll(): Promise<EntryProgress[]> {
+      countRead('progress');
       return Promise.resolve([...progress.values()]);
     },
 
@@ -385,6 +468,7 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
 
   return {
     list({ limit, cursor }: PageQuery): Promise<Page<WordSet>> {
+      countRead('wordSets');
       const all = [...store.values()].sort(
         (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
       );

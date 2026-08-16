@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FilterPanel } from '@/components/browse/FilterPanel';
+import { useI18n } from '@/i18n/context';
 import { EMPTY_FILTERS, isDefault } from '@/lib/filters';
 import type { Filters } from '@/lib/filters';
 
@@ -26,6 +27,7 @@ export function PickerToolbar({
    * it takes that much off both lists at once.
    */
   const [open, setOpen] = useState(false);
+  const { t } = useI18n();
   const narrowed = !isDefault(filters);
 
   return (
@@ -35,7 +37,7 @@ export function PickerToolbar({
           type="search"
           value={filters.q}
           onChange={(event) => onChange({ ...filters, q: event.target.value })}
-          placeholder="見出し語・読み方・タグ・意味・例文で検索"
+          placeholder={t('vocabulary.searchPlaceholder')}
           className="min-h-11 min-w-0 flex-1 rounded-pill border border-line bg-bg px-4 text-sm text-ink placeholder:text-muted"
         />
         {narrowed && (
@@ -44,7 +46,7 @@ export function PickerToolbar({
             onClick={() => onChange({ ...EMPTY_FILTERS, sort: filters.sort })}
             className="text-xs text-muted underline hover:text-ink"
           >
-            すべて解除
+            {t('vocabulary.clearFilters')}
           </button>
         )}
         <button
@@ -55,7 +57,8 @@ export function PickerToolbar({
             narrowed ? 'bg-accent-soft text-accent' : 'bg-bg-alt text-muted hover:text-ink'
           }`}
         >
-          絞り込み{open ? ' ▲' : ' ▼'}
+          {t('wordSets.filter')}
+          {open ? ' ▲' : ' ▼'}
         </button>
       </div>
 

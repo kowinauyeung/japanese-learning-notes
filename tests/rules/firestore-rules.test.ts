@@ -92,6 +92,17 @@ const session = (ownerUid: string, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+const profile = (uid: string, over: Record<string, unknown> = {}) => ({
+  uid,
+  nickname: 'Alice',
+  language: 'en',
+  translationLanguage: 'zh-Hant',
+  theme: 'system',
+  createdAt: new Date('2026-08-13T00:00:00.000Z'),
+  updatedAt: new Date('2026-08-13T00:00:00.000Z'),
+  ...over,
+});
+
 /** `n` characters, for the length caps. */
 const long = (n: number) => 'あ'.repeat(n);
 
@@ -507,15 +518,30 @@ describe('bounds on what an owner may write', () => {
     await assertSucceeds(db.doc(`users/${ALICE}/entries/migrated`).update({ headword: '別の語' }));
   });
 
-  /**
-   * Nothing in the application writes `users/{uid}` itself — there is no
-   * profile and no adapter addresses the path — so the create it used to permit
-   * described a feature that does not exist while accepting any twenty fields
-   * of any names. Deleting stays, because account deletion needs it.
-   */
-  it('refuses to create the user document, which nothing writes', async () => {
+  it('lets the owner create and update only their bounded profile shape', async () => {
     const db = as(ALICE);
-    await assertFails(db.doc(`users/${ALICE}`).set({ displayName: 'x' }));
+    await assertSucceeds(db.doc(`users/${ALICE}`).set(profile(ALICE)));
+    await assertSucceeds(db.doc(`users/${ALICE}`).update({ nickname: 'New name', theme: 'dark' }));
+    await assertSucceeds(
+      db.doc(`users/${ALICE}`).update({ language: 'zh-Hant', translationLanguage: 'yue-Hant' }),
+    );
+    await assertFails(db.doc(`users/${ALICE}`).update({ nickname: '' }));
+    await assertFails(db.doc(`users/${ALICE}`).update({ language: 'yue-Hant' }));
+    await assertFails(db.doc(`users/${ALICE}`).update({ language: 'zh-CN' }));
+    await assertFails(db.doc(`users/${ALICE}`).update({ extra: 'not allowed' }));
+  });
+
+  it('refuses another user and a mismatched uid on the profile document', async () => {
+    await assertFails(as(BOB).doc(`users/${ALICE}`).set(profile(ALICE)));
+    await assertFails(as(ALICE).doc(`users/${ALICE}`).set(profile(BOB)));
+  });
+
+  it('keeps the profile creation timestamp immutable', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(db.doc(`users/${ALICE}`).set(profile(ALICE)));
+    await assertFails(
+      db.doc(`users/${ALICE}`).update({ createdAt: new Date('2027-01-01T00:00:00Z') }),
+    );
   });
 });
 

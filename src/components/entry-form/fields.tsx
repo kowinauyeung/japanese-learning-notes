@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useI18n } from '@/i18n/context';
 
 export const inputClass =
   'rounded-panel border-line bg-bg text-ink placeholder:text-muted min-h-10 w-full border px-3 text-sm';
@@ -69,11 +70,13 @@ export function Select({
   value,
   onChange,
   options,
+  formatOption = (option) => option,
   blank = 'すべて',
 }: {
   value: string;
   onChange: (value: string) => void;
   options: readonly string[];
+  formatOption?: (option: string) => string;
   blank?: string;
 }) {
   return (
@@ -81,7 +84,7 @@ export function Select({
       <option value="">{blank}</option>
       {options.map((option) => (
         <option key={option} value={option}>
-          {option}
+          {formatOption(option)}
         </option>
       ))}
     </select>
@@ -102,6 +105,7 @@ export function RepeatableList<T>({
   blank: () => T;
   render: (item: T, update: (next: T) => void) => ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <fieldset className="space-y-3">
       <legend className="text-sm font-semibold">{title}</legend>
@@ -114,7 +118,7 @@ export function RepeatableList<T>({
               onClick={() => onChange(items.filter((_, i) => i !== index))}
               className="text-xs text-danger"
             >
-              削除
+              {t('form.deleteRow')}
             </button>
           </div>
           {render(item, (next) => onChange(items.map((old, i) => (i === index ? next : old))))}
@@ -125,7 +129,7 @@ export function RepeatableList<T>({
         onClick={() => onChange([...items, blank()])}
         className="min-h-9 w-full rounded-pill bg-bg-alt text-xs font-medium text-muted hover:text-ink"
       >
-        ＋ 追加
+        {t('form.addRow')}
       </button>
     </fieldset>
   );

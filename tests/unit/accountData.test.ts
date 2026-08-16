@@ -33,11 +33,16 @@ const ports = (entryCount: number, setCount: number, sessionCount: number) => {
     reauthenticate: vi.fn(() => Promise.resolve()),
     deleteAccount: vi.fn(() => Promise.resolve()),
   };
+  const userProfiles = {
+    remove: vi.fn(() => Promise.resolve()),
+  };
   // Only the methods under test are implemented; the ports are wider.
   return {
     entries,
     wordSets,
     progress,
+    userProfiles,
+    uid: 'u1',
     auth,
     profile: { displayName: 'k' },
   } as unknown as Parameters<typeof exportEverything>[0] & Parameters<typeof deleteEverything>[0];
@@ -72,7 +77,7 @@ describe('exportEverything', () => {
       now: new Date('2026-08-13T00:00:00Z'),
     });
 
-    expect(bundle.schemaVersion).toBe(1);
+    expect(bundle.schemaVersion).toBe(2);
     expect(bundle.appVersion).toBe('0.1.0');
     expect(bundle.exportedAt).toBe('2026-08-13T00:00:00.000Z');
   });
@@ -131,6 +136,24 @@ describe('deleteEverything', () => {
     expect((p.auth.deleteAccount as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
   });
 
+  it('removes the persisted profile before deleting the Auth account', async () => {
+    const order: string[] = [];
+    const p = ports(0, 0, 0);
+    (p.userProfiles.remove as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      order.push('profile');
+      return Promise.resolve();
+    });
+    (p.auth.deleteAccount as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      order.push('account');
+      return Promise.resolve();
+    });
+
+    await deleteEverything(p);
+
+    expect((p.userProfiles.remove as ReturnType<typeof vi.fn>).mock.calls).toEqual([['u1']]);
+    expect(order).toEqual(['profile', 'account']);
+  });
+
   /**
    * Order matters in one direction only: once the account is gone there is no
    * session left to delete anything with, so it has to be last.
@@ -177,6 +200,7 @@ describe('deleteEverything', () => {
     expect((p.entries.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     expect((p.wordSets.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     expect((p.progress.removeAll as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect((p.userProfiles.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     expect((p.auth.deleteAccount as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
   });
 

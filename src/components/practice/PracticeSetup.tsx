@@ -1,5 +1,7 @@
 import { JLPT_LEVELS, POS, WORD_ORIGINS } from '@/domain/entry';
 import type { PracticeMode } from '@/domain/practice';
+import { useI18n } from '@/i18n/context';
+import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { activeQuickRange, QUICK_RANGES, quickRangeStart } from '@/lib/practice';
 import type { PracticeFilters } from '@/lib/practice';
 
@@ -16,16 +18,6 @@ export interface SetChip {
   name: string;
   count: number;
 }
-
-const MODE_TITLE: Record<PracticeMode, string> = {
-  flashcard: 'フラッシュカード',
-  dictation: '書き取り練習',
-};
-
-const MODE_NOTE: Record<PracticeMode, string> = {
-  flashcard: '見出し語を見て意味を思い出す練習です。',
-  dictation: '読み上げられた語を聞いて入力する練習です。',
-};
 
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
@@ -77,6 +69,8 @@ export function PracticeSetup({
   onStart: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
+  const entryLabel = useEntryLabel();
   const update = <K extends keyof PracticeFilters>(key: K, value: PracticeFilters[K]) =>
     onChange({ ...filters, [key]: value });
 
@@ -96,13 +90,21 @@ export function PracticeSetup({
   return (
     <section className="mx-auto max-w-2xl space-y-5 rounded-card bg-card p-6 shadow-panel">
       <header>
-        <h1 className="font-display text-2xl font-bold">{MODE_TITLE[mode]}</h1>
-        <p className="mt-1 text-sm text-muted">{MODE_NOTE[mode]}</p>
+        <h1 className="font-display text-2xl font-bold">
+          {t(mode === 'flashcard' ? 'practice.flashcard' : 'practice.dictation')}
+        </h1>
+        <p className="mt-1 text-sm text-muted">
+          {t(
+            mode === 'flashcard'
+              ? 'practice.flashcardDescription'
+              : 'practice.dictationDescription',
+          )}
+        </p>
       </header>
 
       {allSets.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[11px] text-muted">単語集</p>
+          <p className="text-[11px] text-muted">{t('practice.wordSets')}</p>
           <div className="flex flex-wrap gap-1.5">
             {allSets.map((set) => (
               <button
@@ -122,10 +124,10 @@ export function PracticeSetup({
 
       {(selectedHiddenTags.length > 0 || allTags.length > 0) && (
         <div className="space-y-1.5">
-          <p className="text-[11px] text-muted">タグ</p>
+          <p className="text-[11px] text-muted">{t('practice.tags')}</p>
           {selectedHiddenTags.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] text-muted">選択中</span>
+              <span className="text-[11px] text-muted">{t('practice.selected')}</span>
               {selectedHiddenTags.map((tag) => (
                 <button
                   key={tag}
@@ -156,7 +158,7 @@ export function PracticeSetup({
       )}
 
       <div className="space-y-1.5">
-        <p className="text-[11px] text-muted">JLPTレベル</p>
+        <p className="text-[11px] text-muted">{t('vocabulary.jlptLevel')}</p>
         <div className="flex flex-wrap gap-1.5">
           {JLPT_LEVELS.map((level) => (
             <button
@@ -174,32 +176,32 @@ export function PracticeSetup({
 
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="space-y-1">
-          <span className="text-[11px] text-muted">品詞</span>
+          <span className="text-[11px] text-muted">{t('vocabulary.partOfSpeech')}</span>
           <select
             value={filters.pos}
             onChange={(event) => update('pos', event.target.value)}
             className={selectClass}
           >
-            <option value="">すべて</option>
+            <option value="">{t('vocabulary.all')}</option>
             {POS.map((part) => (
               <option key={part} value={part}>
-                {part}
+                {entryLabel(part)}
               </option>
             ))}
           </select>
         </label>
 
         <label className="space-y-1">
-          <span className="text-[11px] text-muted">語種</span>
+          <span className="text-[11px] text-muted">{t('vocabulary.origin')}</span>
           <select
             value={filters.origin}
             onChange={(event) => update('origin', event.target.value)}
             className={selectClass}
           >
-            <option value="">すべて</option>
+            <option value="">{t('vocabulary.all')}</option>
             {WORD_ORIGINS.map((origin) => (
               <option key={origin} value={origin}>
-                {origin}
+                {entryLabel(origin)}
               </option>
             ))}
           </select>
@@ -207,7 +209,7 @@ export function PracticeSetup({
       </div>
 
       <div className="space-y-1.5">
-        <p className="text-[11px] text-muted">学習日</p>
+        <p className="text-[11px] text-muted">{t('practice.studyDate')}</p>
         <div className="flex flex-wrap gap-1.5">
           {QUICK_RANGES.map((range) => (
             <button
@@ -217,13 +219,21 @@ export function PracticeSetup({
               onClick={() => applyQuickRange(range.key)}
               className={chipClass(active === range.key)}
             >
-              直近{range.label}
+              {t('practice.recent', {
+                range: t(
+                  range.key === 'week'
+                    ? 'practice.rangeWeek'
+                    : range.key === 'month'
+                      ? 'practice.rangeMonth'
+                      : 'practice.rangeYear',
+                ),
+              })}
             </button>
           ))}
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="space-y-1">
-            <span className="text-[11px] text-muted">開始日</span>
+            <span className="text-[11px] text-muted">{t('vocabulary.startDate')}</span>
             <input
               type="date"
               value={filters.from}
@@ -232,7 +242,7 @@ export function PracticeSetup({
             />
           </label>
           <label className="space-y-1">
-            <span className="text-[11px] text-muted">終了日</span>
+            <span className="text-[11px] text-muted">{t('vocabulary.endDate')}</span>
             <input
               type="date"
               value={filters.to}
@@ -245,13 +255,13 @@ export function PracticeSetup({
 
       <label className="flex min-h-11 items-center justify-between gap-3 rounded-panel bg-bg-alt px-4">
         <span className="text-sm font-medium">
-          苦手な語のみ
+          {t('practice.weakOnly')}
           <span className="ml-2 text-xs text-muted">
             {weakState === 'ready'
-              ? `${weakCount} 語`
+              ? t('vocabulary.resultCount', { count: weakCount })
               : weakState === 'loading'
-                ? '読み込み中…'
-                : '記録を読み込めませんでした'}
+                ? t('vocabulary.loading')
+                : t('practice.weakLoadingError')}
           </span>
         </span>
         <input
@@ -265,8 +275,8 @@ export function PracticeSetup({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
         <p className="text-sm" role="status">
-          <strong className="tabular-nums">{matchCount}</strong> 件が対象
-          {matchCount === 0 && <span className="ml-2 text-danger">条件に合う語がありません</span>}
+          {t('practice.matches', { count: matchCount })}
+          {matchCount === 0 && <span className="ml-2 text-danger">{t('practice.noMatches')}</span>}
         </p>
         <div className="flex gap-2">
           <button
@@ -274,7 +284,7 @@ export function PracticeSetup({
             onClick={onCancel}
             className="min-h-10 rounded-pill px-4 text-sm text-muted hover:bg-bg-alt"
           >
-            キャンセル
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -282,7 +292,7 @@ export function PracticeSetup({
             disabled={matchCount === 0}
             className="min-h-10 rounded-pill bg-accent px-5 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
-            開始する
+            {t('practice.start')}
           </button>
         </div>
       </div>

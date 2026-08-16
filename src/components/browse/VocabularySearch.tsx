@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useI18n } from '@/i18n/context';
 
 export function VocabularySearch({
   value,
@@ -7,6 +8,7 @@ export function VocabularySearch({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const { t } = useI18n();
   const composing = useRef(false);
   const justCommitted = useRef<string | null>(null);
   const [compositionValue, setCompositionValue] = useState<string | null>(null);
@@ -47,7 +49,7 @@ export function VocabularySearch({
         setCompositionValue(event.currentTarget.value);
         onChange(event.currentTarget.value);
       }}
-      placeholder="見出し語・読み方・タグ・意味・例文で検索"
+      placeholder={t('vocabulary.searchPlaceholder')}
       className="min-h-12 w-full rounded-pill border border-line bg-card px-5 text-sm text-ink placeholder:text-muted"
     />
   );

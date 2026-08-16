@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WordSetCard } from '@/components/wordsets/WordSetCard';
+import { useI18n } from '@/i18n/context';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import { membersOf } from '@/lib/wordSetMembers';
 import { useWordSets } from '@/lib/wordSets';
@@ -15,7 +17,10 @@ import { useWordSets } from '@/lib/wordSets';
 export function Component() {
   const { sets, loading, error, refresh, repository } = useWordSets();
   const { entries, loading: entriesLoading, error: entriesError } = useEntries();
+  const errorMessage = useLoadErrorMessage(error);
+  const entriesErrorMessage = useLoadErrorMessage(entriesError);
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -50,23 +55,25 @@ export function Component() {
       void navigate(`/wordsets/${id}`);
     } catch (cause) {
       console.error(cause);
-      setCreateError('単語集を作成できませんでした。');
+      setCreateError(t('wordSets.createError'));
     } finally {
       setCreating(false);
     }
   };
 
   if (loading || entriesLoading)
-    return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
+    return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
   // The notebook's error counts as much as the list's: every card's count is
   // resolved against `entries`, so a failed load with only `error` surfaced
   // renders each set as 0 語 rather than saying it could not be read.
-  if (error || entriesError)
-    return <p className="py-16 text-center text-sm text-danger">{error ?? entriesError}</p>;
+  if (errorMessage || entriesErrorMessage)
+    return (
+      <p className="py-16 text-center text-sm text-danger">{errorMessage ?? entriesErrorMessage}</p>
+    );
 
   return (
     <div className="space-y-4">
-      <h1 className="font-display text-2xl font-bold">単語集</h1>
+      <h1 className="font-display text-2xl font-bold">{t('wordSets.title')}</h1>
 
       <form
         onSubmit={(event) => {
@@ -78,8 +85,8 @@ export function Component() {
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="新しい単語集の名前"
-          aria-label="新しい単語集の名前"
+          placeholder={t('wordSets.newName')}
+          aria-label={t('wordSets.newName')}
           className="min-h-11 min-w-0 flex-1 rounded-pill border border-line bg-bg px-4 text-sm text-ink placeholder:text-muted"
         />
         <button
@@ -87,7 +94,7 @@ export function Component() {
           disabled={creating || !name.trim()}
           className="min-h-11 rounded-pill bg-accent px-6 text-sm font-semibold text-on-accent disabled:opacity-60"
         >
-          {creating ? '作成中…' : '作成'}
+          {creating ? t('wordSets.creating') : t('wordSets.create')}
         </button>
         {createError && <p className="w-full text-xs text-danger">{createError}</p>}
       </form>
@@ -99,9 +106,7 @@ export function Component() {
           ))}
         </div>
       ) : (
-        <p className="py-16 text-center text-sm text-muted">
-          まだ単語集がありません。名前を入れて作成してください。
-        </p>
+        <p className="py-16 text-center text-sm text-muted">{t('wordSets.empty')}</p>
       )}
     </div>
   );

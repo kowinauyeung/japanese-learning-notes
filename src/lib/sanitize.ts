@@ -13,6 +13,8 @@ import type {
 } from '@/domain/entry';
 import { PRACTICE_MODES } from '@/domain/practice';
 import type { EntryProgress, PracticeSession } from '@/domain/practice';
+import { THEME_PREFERENCES, TRANSLATION_LANGUAGES, UI_LANGUAGES } from '@/domain/user';
+import type { UserProfile } from '@/domain/user';
 import type { WordSet } from '@/domain/wordSet';
 import { isValidIsoDate } from './dates';
 import { emptyDraft, parseTags, validTags } from './draft';
@@ -238,6 +240,22 @@ export function sanitizeEntry(id: string, data: unknown): Entry {
     publishedId: str(raw.publishedId) || null,
     publishedVersion: nonNegativeInt(raw.publishedVersion),
     copiedFrom: attribution(raw.copiedFrom),
+    createdAt: isoDateTime(raw.createdAt),
+    updatedAt: isoDateTime(raw.updatedAt),
+  };
+}
+
+// ---------------------------------------------------------------------- user
+
+/** A persisted profile is untrusted for the same reason as every other document. */
+export function sanitizeUserProfile(uid: string, data: unknown): UserProfile {
+  const raw = record(data);
+  return {
+    uid,
+    nickname: str(raw.nickname).trim().slice(0, 50),
+    language: oneOf(raw.language, UI_LANGUAGES, 'en'),
+    translationLanguage: oneOf(raw.translationLanguage, TRANSLATION_LANGUAGES, 'en'),
+    theme: oneOf(raw.theme, THEME_PREFERENCES, 'system'),
     createdAt: isoDateTime(raw.createdAt),
     updatedAt: isoDateTime(raw.updatedAt),
   };

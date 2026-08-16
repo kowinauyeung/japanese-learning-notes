@@ -1,3 +1,4 @@
+import { useI18n } from '@/i18n/context';
 import { Modal } from './Modal';
 
 export function ConfirmDialog({
@@ -20,6 +21,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Modal
       open={open}
@@ -33,7 +35,7 @@ export function ConfirmDialog({
             onClick={onClose}
             className="min-h-10 rounded-pill bg-bg-alt px-5 text-sm font-semibold text-ink"
           >
-            キャンセル
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -41,7 +43,7 @@ export function ConfirmDialog({
             disabled={busy}
             className="min-h-10 rounded-pill bg-danger px-5 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
-            {busy ? '処理中…' : confirmLabel}
+            {busy ? t('common.processing') : confirmLabel}
           </button>
         </div>
       }

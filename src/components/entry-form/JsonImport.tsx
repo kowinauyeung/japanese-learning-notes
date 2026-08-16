@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { buildPrompt, SCHEMA } from '@/lib/jsonImport';
+import type { TranslationLanguage } from '@/domain/user';
+import { useI18n } from '@/i18n/context';
+import { buildPrompt, promptLanguageName, SCHEMA } from '@/lib/jsonImport';
 import { Area, Field, inputClass } from './fields';
 
 /**
@@ -14,9 +16,11 @@ export interface JsonImportState {
   raw: string;
 }
 
-export const emptyJsonImport = (): JsonImportState => ({
+export const emptyJsonImport = (
+  translationLanguage?: TranslationLanguage | null,
+): JsonImportState => ({
   word: '',
-  language: '廣東語',
+  language: promptLanguageName(translationLanguage),
   original: '',
   source: '',
   raw: '',
@@ -31,6 +35,7 @@ export function JsonImport({
 }) {
   // Purely local: nothing outside this component acts on it.
   const [copied, setCopied] = useState(false);
+  const { t } = useI18n();
 
   const set = <K extends keyof JsonImportState>(key: K, next: JsonImportState[K]) =>
     onChange({ ...value, [key]: next });
@@ -49,7 +54,7 @@ export function JsonImport({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="単語">
+        <Field label={t('import.word')}>
           <input
             type="text"
             value={value.word}
@@ -58,7 +63,7 @@ export function JsonImport({
             className={inputClass}
           />
         </Field>
-        <Field label="訳の言語">
+        <Field label={t('import.translationLanguage')}>
           <input
             type="text"
             value={value.language}
@@ -68,7 +73,7 @@ export function JsonImport({
         </Field>
       </div>
 
-      <Field label="出会った文" hint="任意">
+      <Field label={t('import.sentence')} hint={t('form.optional')}>
         <Area
           value={value.original}
           onChange={(v) => set('original', v)}
@@ -77,7 +82,7 @@ export function JsonImport({
         />
       </Field>
 
-      <Field label="出處" hint="任意">
+      <Field label={t('form.source')} hint={t('form.optional')}>
         <input
           type="text"
           value={value.source}
@@ -87,24 +92,22 @@ export function JsonImport({
         />
       </Field>
 
-      <p className="text-xs text-muted">
-        文を入れると、その文脈での役割まで AI に書かせます。空のままでも構いません。
-      </p>
+      <p className="text-xs text-muted">{t('import.contextHint')}</p>
 
       <button
         type="button"
         onClick={() => void copyPrompt()}
         className="min-h-10 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent"
       >
-        {copied ? 'コピーしました' : 'プロンプトをコピー'}
+        {copied ? t('import.copied') : t('import.copyPrompt')}
       </button>
 
       <details className="rounded-panel border border-line p-3">
-        <summary className="cursor-pointer text-xs text-muted">JSON スキーマを見る</summary>
+        <summary className="cursor-pointer text-xs text-muted">{t('import.schema')}</summary>
         <pre className="mt-2 overflow-x-auto text-[11px] leading-relaxed">{SCHEMA}</pre>
       </details>
 
-      <Field label="AI の返した JSON を貼り付け">
+      <Field label={t('import.pasteJson')}>
         <Area value={value.raw} onChange={(v) => set('raw', v)} rows={10} placeholder="{ …" />
       </Field>
     </div>
