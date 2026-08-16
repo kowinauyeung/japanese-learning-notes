@@ -20,6 +20,7 @@ export interface E2ESeed {
   /** Finished sessions, so 履歴 can be reached without drilling first. */
   sessions?: Record<string, unknown>[];
   profile?: Record<string, unknown>;
+  settingsSave?: 'fail';
 }
 
 /** Fixed instant every spec runs at. A Wednesday; its ISO week starts on the 22nd. */

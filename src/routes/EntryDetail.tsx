@@ -7,6 +7,7 @@ import { PitchAccent } from '@/components/PitchAccent';
 import { Ruby } from '@/components/Ruby';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import { accentKana } from '@/lib/mora';
 
@@ -25,6 +26,7 @@ export function Component() {
   const { t } = useI18n();
   const entryLabel = useEntryLabel();
   const { entries, loading, error, refresh, repository } = useEntries();
+  const errorMessage = useLoadErrorMessage(error);
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -53,7 +55,7 @@ export function Component() {
 
   if (loading)
     return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
-  if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
+  if (errorMessage) return <p className="py-16 text-center text-sm text-danger">{errorMessage}</p>;
 
   const entry = entries.find((item) => item.id === id);
   if (!entry) {

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { UserProfileDraft } from '@/domain/user';
-import { useI18n } from '@/i18n/context';
 import { userRepository } from '@/lib/backend';
-import { loadErrorMessage } from '@/lib/loadError';
+import { captureLoadFailure } from '@/lib/loadError';
+import type { LoadFailure } from '@/lib/loadError';
 import { applyThemePreference } from '@/lib/theme';
 import { defaultUserProfile } from '@/lib/userPreferences';
 import { UserSettingsContext } from '@/lib/userSettingsContext';
@@ -37,7 +37,6 @@ function UserSettingsState({
   email: string;
   children: ReactNode;
 }) {
-  const { t } = useI18n();
   const defaults = useMemo(
     () =>
       defaultUserProfile(
@@ -52,7 +51,7 @@ function UserSettingsState({
   const [previewDraft, setPreviewDraft] = useState<UserProfileDraft | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LoadFailure | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,8 +73,7 @@ function UserSettingsState({
       })
       .catch((cause: unknown) => {
         console.error(cause);
-        if (!cancelled)
-          setError(loadErrorMessage(cause, t('load.settings'), t('load.accessDenied')));
+        if (!cancelled) setError(captureLoadFailure(cause, 'load.settings'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -83,7 +81,7 @@ function UserSettingsState({
     return () => {
       cancelled = true;
     };
-  }, [uid, defaults, t]);
+  }, [uid, defaults]);
 
   useEffect(() => {
     const profile = previewDraft ? { ...storedProfile, ...previewDraft } : storedProfile;
@@ -108,13 +106,13 @@ function UserSettingsState({
         }
       } catch (cause) {
         console.error(cause);
-        setError(t('load.settingsSave'));
+        setError(captureLoadFailure(cause, 'load.settingsSave'));
         throw cause;
       } finally {
         setSaving(false);
       }
     },
-    [uid, t],
+    [uid],
   );
 
   const profile = useMemo(

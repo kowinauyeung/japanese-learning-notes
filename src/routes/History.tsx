@@ -4,9 +4,11 @@ import { SessionRow } from '@/components/history/SessionRow';
 import { WeakWords } from '@/components/history/WeakWords';
 import type { PracticeSession } from '@/domain/practice';
 import { useI18n } from '@/i18n/context';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import { weakWords } from '@/lib/history';
-import { loadErrorMessage } from '@/lib/loadError';
+import { captureLoadFailure } from '@/lib/loadError';
+import type { LoadFailure } from '@/lib/loadError';
 import { EMPTY_PRACTICE_FILTERS } from '@/lib/practice';
 import { useProgress } from '@/lib/progress';
 import { useVocabDialog } from '@/lib/vocabDialog';
@@ -31,11 +33,14 @@ export function Component() {
   const { entries, loading: entriesLoading, error: entriesError } = useEntries();
   const { weakIds, loading: progressLoading, error: progressError, repository } = useProgress();
   const { t } = useI18n();
+  const entriesErrorMessage = useLoadErrorMessage(entriesError);
+  const progressErrorMessage = useLoadErrorMessage(progressError);
 
   const [sessions, setSessions] = useState<PracticeSession[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LoadFailure | null>(null);
+  const errorMessage = useLoadErrorMessage(error);
   /** The row that has been opened out, or null. Held here so the dialog is a
    *  sibling of the list rather than something each row carries. */
   const [opened, setOpened] = useState<PracticeSession | null>(null);
@@ -62,13 +67,12 @@ export function Component() {
         setCursor(page.cursor);
       } catch (cause) {
         console.error(cause);
-        if (walk.current === mine)
-          setError(loadErrorMessage(cause, t('history.loadError'), t('load.accessDenied')));
+        if (walk.current === mine) setError(captureLoadFailure(cause, 'history.loadError'));
       } finally {
         if (walk.current === mine) setLoading(false);
       }
     },
-    [repository, t],
+    [repository],
   );
 
   useEffect(() => {
@@ -94,8 +98,12 @@ export function Component() {
   // Both feed this page: the sessions name entry ids, and 苦手な語 is the
   // progress map resolved against the notebook. Either failing leaves rows that
   // would silently render short.
-  if (entriesError || progressError)
-    return <p className="py-16 text-center text-sm text-danger">{entriesError ?? progressError}</p>;
+  if (entriesErrorMessage || progressErrorMessage)
+    return (
+      <p className="py-16 text-center text-sm text-danger">
+        {entriesErrorMessage ?? progressErrorMessage}
+      </p>
+    );
 
   return (
     <div className="space-y-4">
@@ -107,7 +115,7 @@ export function Component() {
       <section className="space-y-2 rounded-card bg-card p-5 shadow-panel">
         <h2 className="text-sm font-semibold">{t('history.practiceHistory')}</h2>
 
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {errorMessage && <p className="text-sm text-danger">{errorMessage}</p>}
 
         {sessions.length > 0 ? (
           <ul className="divide-y divide-line">

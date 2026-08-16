@@ -4,6 +4,7 @@ import { EntryCard } from '@/components/browse/EntryCard';
 import { FilterPanel } from '@/components/browse/FilterPanel';
 import { VocabularySearch } from '@/components/browse/VocabularySearch';
 import { useI18n } from '@/i18n/context';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import {
   EMPTY_FILTERS,
@@ -18,6 +19,7 @@ import { recentTags } from '@/lib/tags';
 
 export function Component() {
   const { entries, loading, error } = useEntries();
+  const errorMessage = useLoadErrorMessage(error);
   const [searchParams, setSearchParams] = useSearchParams();
   const { t } = useI18n();
 
@@ -39,7 +41,7 @@ export function Component() {
 
   if (loading)
     return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
-  if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
+  if (errorMessage) return <p className="py-16 text-center text-sm text-danger">{errorMessage}</p>;
 
   return (
     <div className="space-y-4">

@@ -8,6 +8,7 @@ import { TodayWord, pickWordOfDay } from '@/components/dashboard/TodayWord';
 import type { PracticeMode, PracticeSession } from '@/domain/practice';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { dateKey } from '@/lib/dates';
 import { useEntries } from '@/lib/entries';
 import { latestByMode, RECENT_WINDOW } from '@/lib/history';
@@ -18,6 +19,7 @@ export function Component() {
   const { locale, t } = useI18n();
   const entryLabel = useEntryLabel();
   const { entries, loading, error } = useEntries();
+  const errorMessage = useLoadErrorMessage(error);
   const { repository } = useProgress();
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
@@ -60,7 +62,7 @@ export function Component() {
   const wordOfDay = useMemo(() => pickWordOfDay(entries, dateKey(new Date())), [entries]);
 
   if (loading) return <p className="py-16 text-center text-sm text-muted">{t('common.loading')}</p>;
-  if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
+  if (errorMessage) return <p className="py-16 text-center text-sm text-danger">{errorMessage}</p>;
 
   return (
     <div className="space-y-4">

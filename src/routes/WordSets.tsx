@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WordSetCard } from '@/components/wordsets/WordSetCard';
 import { useI18n } from '@/i18n/context';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import { membersOf } from '@/lib/wordSetMembers';
 import { useWordSets } from '@/lib/wordSets';
@@ -16,6 +17,8 @@ import { useWordSets } from '@/lib/wordSets';
 export function Component() {
   const { sets, loading, error, refresh, repository } = useWordSets();
   const { entries, loading: entriesLoading, error: entriesError } = useEntries();
+  const errorMessage = useLoadErrorMessage(error);
+  const entriesErrorMessage = useLoadErrorMessage(entriesError);
   const navigate = useNavigate();
   const { t } = useI18n();
 
@@ -63,8 +66,10 @@ export function Component() {
   // The notebook's error counts as much as the list's: every card's count is
   // resolved against `entries`, so a failed load with only `error` surfaced
   // renders each set as 0 語 rather than saying it could not be read.
-  if (error || entriesError)
-    return <p className="py-16 text-center text-sm text-danger">{error ?? entriesError}</p>;
+  if (errorMessage || entriesErrorMessage)
+    return (
+      <p className="py-16 text-center text-sm text-danger">{errorMessage ?? entriesErrorMessage}</p>
+    );
 
   return (
     <div className="space-y-4">

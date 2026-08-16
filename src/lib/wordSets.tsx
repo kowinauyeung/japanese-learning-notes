@@ -10,14 +10,14 @@ import {
 import type { ReactNode } from 'react';
 import type { WordSetRepository } from '@/domain/ports';
 import type { WordSet } from '@/domain/wordSet';
-import { useI18n } from '@/i18n/context';
 import { wordSetRepositoryFor } from '@/lib/backend';
-import { loadErrorMessage } from '@/lib/loadError';
+import { captureLoadFailure } from '@/lib/loadError';
+import type { LoadFailure } from '@/lib/loadError';
 
 interface WordSetsValue {
   sets: WordSet[];
   loading: boolean;
-  error: string | null;
+  error: LoadFailure | null;
   refresh: () => Promise<void>;
   /**
    * Exposed for the same reason `EntriesProvider` exposes its own: `/wordsets`
@@ -45,10 +45,9 @@ const PAGE_SIZE = 200;
  * of it, and the practice filter builds its chips from it.
  */
 export function WordSetsProvider({ uid, children }: { uid: string; children: ReactNode }) {
-  const { t } = useI18n();
   const [sets, setSets] = useState<WordSet[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LoadFailure | null>(null);
 
   const repository = useMemo(() => wordSetRepositoryFor(uid), [uid]);
 
@@ -90,12 +89,11 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
       if (walk.current === mine) setSets(all);
     } catch (cause) {
       console.error(cause);
-      if (walk.current === mine)
-        setError(loadErrorMessage(cause, t('load.wordSets'), t('load.accessDenied')));
+      if (walk.current === mine) setError(captureLoadFailure(cause, 'load.wordSets'));
     } finally {
       if (walk.current === mine) setLoading(false);
     }
-  }, [repository, t]);
+  }, [repository]);
 
   useEffect(() => {
     setLoading(true);

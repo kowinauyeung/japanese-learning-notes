@@ -8,6 +8,7 @@ import { SessionSummary } from '@/components/practice/SessionSummary';
 import type { Entry } from '@/domain/entry';
 import type { PracticeMode } from '@/domain/practice';
 import { useI18n } from '@/i18n/context';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import {
   describeFilters,
@@ -64,6 +65,7 @@ interface Session {
 
 function Practice({ mode }: { mode: PracticeMode }) {
   const { entries, loading, error } = useEntries();
+  const errorMessage = useLoadErrorMessage(error);
   const {
     weakIds,
     loading: progressLoading,
@@ -219,7 +221,7 @@ function Practice({ mode }: { mode: PracticeMode }) {
 
   if (loading)
     return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
-  if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
+  if (errorMessage) return <p className="py-16 text-center text-sm text-danger">{errorMessage}</p>;
 
   if (!session) {
     return (

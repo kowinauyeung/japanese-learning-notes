@@ -10,6 +10,7 @@ import type {
 } from '@/domain/user';
 import { useI18n } from '@/i18n/context';
 import type { MessageKey } from '@/i18n/messages';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useUserSettings } from '@/lib/userSettingsContext';
 import type { UserSettingsValue } from '@/lib/userSettingsContext';
 
@@ -36,6 +37,7 @@ const THEME_LABEL_KEYS: Record<ThemePreference, MessageKey> = {
 export function Component() {
   const { t } = useI18n();
   const { profile, loading, saving, error, preview, save } = useUserSettings();
+  const errorMessage = useLoadErrorMessage(error);
 
   if (loading) return <p className="text-sm text-muted">{t('settings.loading')}</p>;
 
@@ -44,7 +46,7 @@ export function Component() {
       key={profile.uid}
       profile={profile}
       saving={saving}
-      error={error}
+      error={errorMessage}
       preview={preview}
       save={save}
     />
@@ -57,7 +59,9 @@ function SettingsForm({
   error,
   preview,
   save,
-}: Pick<UserSettingsValue, 'profile' | 'saving' | 'error' | 'preview' | 'save'>) {
+}: Pick<UserSettingsValue, 'profile' | 'saving' | 'preview' | 'save'> & {
+  error: string | null;
+}) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<UserProfileDraft>({
     nickname: profile.nickname,

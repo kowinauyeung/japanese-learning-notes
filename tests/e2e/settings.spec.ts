@@ -76,6 +76,63 @@ test('previews language and theme without persisting them before save', async ({
   await expect(page.getByLabel('ニックネーム')).toHaveValue('Before');
 });
 
+test('does not reload app data when previewing another display language', async ({ page }) => {
+  await seed(page, {
+    signedIn: true,
+    profile: {
+      nickname: 'Before',
+      language: 'ja',
+      translationLanguage: 'en',
+      theme: 'light',
+    },
+  });
+  await page.goto('/settings');
+  await expect(page.getByLabel('表示言語')).toBeVisible();
+
+  const readsBefore = await page.evaluate(() =>
+    structuredClone(
+      (window as unknown as { __GOITEI_E2E_READS__: Record<string, number> }).__GOITEI_E2E_READS__,
+    ),
+  );
+
+  await page.getByLabel('表示言語').selectOption('zh-Hant');
+  await expect(page.getByRole('link', { name: '學習總覽' })).toBeVisible();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+
+  expect(
+    await page.evaluate(() =>
+      structuredClone(
+        (window as unknown as { __GOITEI_E2E_READS__: Record<string, number> })
+          .__GOITEI_E2E_READS__,
+      ),
+    ),
+  ).toEqual(readsBefore);
+});
+
+test('shows save failures in the previewed display language', async ({ page }) => {
+  await seed(page, {
+    signedIn: true,
+    profile: {
+      nickname: 'Before',
+      language: 'ja',
+      translationLanguage: 'en',
+      theme: 'light',
+    },
+    settingsSave: 'fail',
+  });
+  await page.goto('/settings');
+
+  await page.getByLabel('表示言語').selectOption('zh-Hant');
+  await page.getByRole('button', { name: '儲存設定' }).click();
+
+  await expect(page.getByText('無法儲存設定。')).toBeVisible();
+});
+
 test('warns before leaving settings with unsaved changes', async ({ page }) => {
   await seed(page, {
     signedIn: true,

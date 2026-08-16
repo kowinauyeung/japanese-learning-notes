@@ -2,9 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from 'react';
 import type { ProgressRepository } from '@/domain/ports';
 import type { EntryProgress, PracticeSessionDraft } from '@/domain/practice';
-import { useI18n } from '@/i18n/context';
 import { progressRepositoryFor } from '@/lib/backend';
-import { loadErrorMessage } from '@/lib/loadError';
+import { captureLoadFailure } from '@/lib/loadError';
+import type { LoadFailure } from '@/lib/loadError';
 import { weakIdsOf } from '@/lib/practice';
 
 interface ProgressValue {
@@ -12,7 +12,7 @@ interface ProgressValue {
   /** Entries whose most recent attempt was wrong — what 苦手のみ selects. */
   weakIds: Set<string>;
   loading: boolean;
-  error: string | null;
+  error: LoadFailure | null;
   /** Writes a finished session and folds its rows into the state in memory. */
   record: (session: PracticeSessionDraft, rows: EntryProgress[]) => Promise<void>;
   /**
@@ -42,10 +42,9 @@ const ProgressContext = createContext<ProgressValue | null>(null);
  * should still be able to drill.
  */
 export function ProgressProvider({ uid, children }: { uid: string; children: ReactNode }) {
-  const { t } = useI18n();
   const [progress, setProgress] = useState<EntryProgress[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LoadFailure | null>(null);
 
   const repository = useMemo(() => progressRepositoryFor(uid), [uid]);
 
@@ -60,8 +59,7 @@ export function ProgressProvider({ uid, children }: { uid: string; children: Rea
       })
       .catch((cause: unknown) => {
         console.error(cause);
-        if (!cancelled)
-          setError(loadErrorMessage(cause, t('load.progress'), t('load.accessDenied')));
+        if (!cancelled) setError(captureLoadFailure(cause, 'load.progress'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -69,7 +67,7 @@ export function ProgressProvider({ uid, children }: { uid: string; children: Rea
     return () => {
       cancelled = true;
     };
-  }, [repository, t]);
+  }, [repository]);
 
   const record = useCallback(
     async (session: PracticeSessionDraft, rows: EntryProgress[]) => {

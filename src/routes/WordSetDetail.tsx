@@ -7,6 +7,7 @@ import { PickerToolbar } from '@/components/wordsets/PickerToolbar';
 import { WordSetEditModal } from '@/components/wordsets/WordSetEditModal';
 import type { WordSetDraft } from '@/domain/wordSet';
 import { useI18n } from '@/i18n/context';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import { EMPTY_FILTERS } from '@/lib/filters';
 import type { Filters } from '@/lib/filters';
@@ -43,6 +44,8 @@ export function Component() {
   const navigate = useNavigate();
   const { sets, loading, error, refresh, repository } = useWordSets();
   const { entries, loading: entriesLoading, error: entriesError } = useEntries();
+  const errorMessage = useLoadErrorMessage(error);
+  const entriesErrorMessage = useLoadErrorMessage(entriesError);
   const { t } = useI18n();
 
   const [busy, setBusy] = useState(false);
@@ -175,8 +178,10 @@ export function Component() {
    * notebook load with only `error` surfaced renders a set that looks empty
    * instead of a page that says it could not load.
    */
-  if (error || entriesError)
-    return <p className="py-16 text-center text-sm text-danger">{error ?? entriesError}</p>;
+  if (errorMessage || entriesErrorMessage)
+    return (
+      <p className="py-16 text-center text-sm text-danger">{errorMessage ?? entriesErrorMessage}</p>
+    );
 
   if (!set) {
     return (

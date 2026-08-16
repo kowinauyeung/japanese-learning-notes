@@ -43,15 +43,24 @@ interface Seed {
   sessions?: unknown[];
   /** Raw persisted profile; absent means first sign-in. */
   profile?: unknown;
+  /** Force the next settings write to fail so the localized error path is reachable. */
+  settingsSave?: 'fail';
 }
 
 declare global {
   interface Window {
     __GOITEI_E2E__?: Seed;
+    __GOITEI_E2E_READS__?: Record<'entries' | 'progress' | 'wordSets', number>;
   }
 }
 
 const seed = (): Seed => (typeof window === 'undefined' ? {} : (window.__GOITEI_E2E__ ?? {}));
+
+function countRead(store: 'entries' | 'progress' | 'wordSets'): void {
+  if (typeof window === 'undefined') return;
+  const reads = (window.__GOITEI_E2E_READS__ ??= { entries: 0, progress: 0, wordSets: 0 });
+  reads[store] += 1;
+}
 
 const E2E_USER: AuthUser = {
   uid: 'e2e-user',
@@ -168,6 +177,7 @@ export const userRepository: UserRepository = {
     return Promise.resolve(persistedProfile(uid));
   },
   save(uid, draft: UserProfileDraft): Promise<void> {
+    if (seed().settingsSave === 'fail') return Promise.reject(new Error('settings save failed'));
     const existing = persistedProfile(uid);
     const now = new Date().toISOString();
     const profile: UserProfile = {
@@ -245,6 +255,7 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
 
   return {
     list({ limit, cursor }: PageQuery): Promise<Page<Entry>> {
+      countRead('entries');
       const all = [...store.values()].sort(newestFirst);
       const start = cursor ? all.findIndex((entry) => entry.id === cursor) + 1 : 0;
       const items = all.slice(start, start + limit);
@@ -358,6 +369,7 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
 
   return {
     listAll(): Promise<EntryProgress[]> {
+      countRead('progress');
       return Promise.resolve([...progress.values()]);
     },
 
@@ -442,6 +454,7 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
 
   return {
     list({ limit, cursor }: PageQuery): Promise<Page<WordSet>> {
+      countRead('wordSets');
       const all = [...store.values()].sort(
         (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
       );

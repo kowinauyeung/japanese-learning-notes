@@ -10,14 +10,14 @@ import {
 import type { ReactNode } from 'react';
 import type { Entry } from '@/domain/entry';
 import type { EntryRepository } from '@/domain/ports';
-import { useI18n } from '@/i18n/context';
 import { entryRepositoryFor } from '@/lib/backend';
-import { loadErrorMessage } from '@/lib/loadError';
+import { captureLoadFailure } from '@/lib/loadError';
+import type { LoadFailure } from '@/lib/loadError';
 
 interface EntriesValue {
   entries: Entry[];
   loading: boolean;
-  error: string | null;
+  error: LoadFailure | null;
   refresh: () => Promise<void>;
   /**
    * Exposed so the form and the detail page write through the same instance the
@@ -56,10 +56,9 @@ const PAGE_SIZE = 200;
  * every write site.
  */
 export function EntriesProvider({ uid, children }: { uid: string; children: ReactNode }) {
-  const { t } = useI18n();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LoadFailure | null>(null);
 
   // Rebuilt when the signed-in user changes, so the `users/{uid}` path baked
   // into the repository can never outlive the session it belongs to.
@@ -106,12 +105,11 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
       if (walk.current === mine) setEntries(all);
     } catch (cause) {
       console.error(cause);
-      if (walk.current === mine)
-        setError(loadErrorMessage(cause, t('load.entries'), t('load.accessDenied')));
+      if (walk.current === mine) setError(captureLoadFailure(cause, 'load.entries'));
     } finally {
       if (walk.current === mine) setLoading(false);
     }
-  }, [repository, t]);
+  }, [repository]);
 
   useEffect(() => {
     setLoading(true);
