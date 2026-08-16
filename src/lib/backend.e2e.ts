@@ -44,13 +44,14 @@ interface Seed {
   /** Raw persisted profile; absent means first sign-in. */
   profile?: unknown;
   /** Force the next settings write to fail so the localized error path is reachable. */
-  settingsSave?: 'fail';
+  settingsSave?: 'fail' | 'defer';
 }
 
 declare global {
   interface Window {
     __GOITEI_E2E__?: Seed;
     __GOITEI_E2E_READS__?: Record<'entries' | 'progress' | 'wordSets', number>;
+    __GOITEI_E2E_RELEASE_SETTINGS_SAVE__?: () => void;
   }
 }
 
@@ -178,16 +179,16 @@ export const userRepository: UserRepository = {
   },
   save(uid, draft: UserProfileDraft): Promise<void> {
     if (seed().settingsSave === 'fail') return Promise.reject(new Error('settings save failed'));
-    const existing = persistedProfile(uid);
-    const now = new Date().toISOString();
-    const profile: UserProfile = {
-      ...draft,
-      uid,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
-    profileStores.set(uid, profile);
-    save(`profile.${uid}`, profile);
+    if (seed().settingsSave === 'defer') {
+      return new Promise((resolve) => {
+        window.__GOITEI_E2E_RELEASE_SETTINGS_SAVE__ = () => {
+          persistProfile(uid, draft);
+          delete window.__GOITEI_E2E_RELEASE_SETTINGS_SAVE__;
+          resolve();
+        };
+      });
+    }
+    persistProfile(uid, draft);
     return Promise.resolve();
   },
   remove(uid): Promise<void> {
@@ -196,6 +197,19 @@ export const userRepository: UserRepository = {
     return Promise.resolve();
   },
 };
+
+function persistProfile(uid: string, draft: UserProfileDraft): void {
+  const existing = persistedProfile(uid);
+  const now = new Date().toISOString();
+  const profile: UserProfile = {
+    ...draft,
+    uid,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+  profileStores.set(uid, profile);
+  save(`profile.${uid}`, profile);
+}
 
 // --------------------------------------------------------------- entry store
 

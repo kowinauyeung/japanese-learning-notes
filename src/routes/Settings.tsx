@@ -106,18 +106,25 @@ function SettingsForm({
         className="mt-5 space-y-5 rounded-card bg-card p-6 shadow-panel"
         onSubmit={(event) => {
           event.preventDefault();
+          if (saving) return;
           const next = { ...draft, nickname: draft.nickname.trim() };
           setDraft(next);
           preview(next);
-          void save(next).then(() => {
-            setBaseline(next);
-            setSaved(true);
-          });
+          void save(next)
+            .then(() => {
+              setBaseline(next);
+              setSaved(true);
+            })
+            // The provider owns the localized error state; the form still has
+            // to consume the rejection so a failed write is not reported as an
+            // unhandled promise by the browser.
+            .catch(() => undefined);
         }}
       >
         <Field label={t('settings.nickname')} hint={t('settings.nicknameHint')}>
           <input
             value={draft.nickname}
+            disabled={saving}
             maxLength={50}
             onChange={(event) => update('nickname', event.target.value)}
             className="min-h-11 w-full rounded-panel border border-line bg-bg px-4 text-sm"
@@ -129,6 +136,7 @@ function SettingsForm({
             value={draft.language}
             options={UI_LANGUAGES}
             labels={UI_LANGUAGE_LABELS}
+            disabled={saving}
             onChange={(value) => update('language', value)}
           />
         </Field>
@@ -138,6 +146,7 @@ function SettingsForm({
             value={draft.translationLanguage}
             options={TRANSLATION_LANGUAGES}
             labels={TRANSLATION_LANGUAGE_LABELS}
+            disabled={saving}
             onChange={(value) => update('translationLanguage', value)}
           />
         </Field>
@@ -145,6 +154,7 @@ function SettingsForm({
         <Field label={t('settings.theme')}>
           <select
             value={draft.theme}
+            disabled={saving}
             onChange={(event) => update('theme', event.target.value as ThemePreference)}
             className="min-h-11 w-full rounded-panel border border-line bg-bg px-4 text-sm"
           >
@@ -186,16 +196,19 @@ function LanguageSelect<T extends string>({
   value,
   options,
   labels,
+  disabled = false,
   onChange,
 }: {
   value: T;
   options: readonly T[];
   labels: Readonly<Record<T, string>>;
+  disabled?: boolean;
   onChange: (v: T) => void;
 }) {
   return (
     <select
       value={value}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.value as T)}
       className="min-h-11 w-full rounded-panel border border-line bg-bg px-4 text-sm"
     >

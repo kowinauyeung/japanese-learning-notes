@@ -115,6 +115,8 @@ test('does not reload app data when previewing another display language', async 
 });
 
 test('shows save failures in the previewed display language', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
   await seed(page, {
     signedIn: true,
     profile: {
@@ -131,6 +133,40 @@ test('shows save failures in the previewed display language', async ({ page }) =
   await page.getByRole('button', { name: '儲存設定' }).click();
 
   await expect(page.getByText('無法儲存設定。')).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
+
+test('locks the settings draft until a delayed save finishes', async ({ page }) => {
+  await seed(page, {
+    signedIn: true,
+    profile: {
+      nickname: 'Before',
+      language: 'ja',
+      translationLanguage: 'en',
+      theme: 'light',
+    },
+    settingsSave: 'defer',
+  });
+  await page.goto('/settings');
+
+  await page.getByLabel('ニックネーム').fill('After');
+  await page.getByRole('button', { name: '設定を保存' }).click();
+
+  await expect(page.getByLabel('ニックネーム')).toBeDisabled();
+  await expect(page.getByLabel('表示言語')).toBeDisabled();
+  await expect(page.getByLabel(/AI 翻訳言語/)).toBeDisabled();
+  await expect(page.getByLabel('テーマ')).toBeDisabled();
+
+  await page.evaluate(() => {
+    const release = (window as unknown as { __GOITEI_E2E_RELEASE_SETTINGS_SAVE__?: () => void })
+      .__GOITEI_E2E_RELEASE_SETTINGS_SAVE__;
+    if (!release) throw new Error('settings save was not deferred');
+    release();
+  });
+
+  await expect(page.getByText('保存しました。')).toBeVisible();
+  await expect(page.getByText('保存していない変更があります。')).toBeHidden();
+  await expect(page.getByLabel('ニックネーム')).toBeEnabled();
 });
 
 test('warns before leaving settings with unsaved changes', async ({ page }) => {
