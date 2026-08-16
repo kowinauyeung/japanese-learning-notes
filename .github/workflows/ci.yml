@@ -19,9 +19,9 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: yarn
@@ -55,9 +55,9 @@ jobs:
   emulator:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: yarn
@@ -101,9 +101,9 @@ jobs:
       # crashes part way through a run rather than failing an assertion.
       options: --ipc=host
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: yarn
@@ -118,7 +118,7 @@ jobs:
 
       # A screenshot diff is unreadable as a log line, so the report — which
       # embeds expected, actual and diff — is what makes a red run actionable.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: '!cancelled()'
         with:
           name: playwright-report
