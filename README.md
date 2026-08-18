@@ -275,6 +275,11 @@ hitting it:
   check needs `serviceusage.services.get`. Without it the deploy stops on
   `403 Permission denied to get service [firestore.googleapis.com]`, which reads
   like a Firestore problem and is not one.
+- The service account also needs **Firebase Authentication Admin**
+  (`roles/firebaseauth.admin`), for preview sign-in below. Without it the deploy
+  and the preview both still succeed and only Google sign-in fails, on a domain
+  that exists for a week — the failure that is easiest to mistake for a bug in
+  the branch under review.
 - The provider's attribute condition matches on `assertion.repository` and stops
   there, deliberately. Narrowing it further is the obvious-looking improvement
   that breaks previews — see the trust boundary below before changing it.
@@ -291,10 +296,35 @@ hitting it:
   attribute condition cannot reach production. The procedure is reusable; the
   resources are not.
 
+#### Preview sign-in
+
+A preview channel is served from `goitei-dev--pr-<n>-<hash>.web.app`, and
+Firebase Auth refuses to complete a Google sign-in from an origin that is not on
+its authorized domain list. The hash is generated per channel, so every pull
+request lands on a hostname nobody has authorized, and the list accepts no
+wildcard. The `authorize` job in `deploy-dev.yml` appends the hostname through
+the Identity Toolkit admin API once the channel exists.
+
+`preview-cleanup.yml` takes them off again. It prunes by reconciliation —
+every authorized domain starting `goitei-dev--` that no live channel claims —
+rather than by removing the one domain a closing pull request added, because a
+channel expires after seven days on its own and its hostname is then
+unrecoverable. It runs on pull-request close and nightly.
+
+The list is project-wide and finite, which is why the removal matters as much as
+the addition: a stale entry is an origin that stays trusted for authentication
+after the site behind it is gone.
+
+Building previews with `yarn build:e2e` would sidestep all of this — the
+in-memory adapters sign a user in without Google — and it is the wrong trade.
+The preview exists to show the branch against real `goitei-dev` data; a
+Firestore query, index or cursor defect is invisible against fakes, and that is
+the class of defect that has actually reached review here.
+
 #### Trust boundary
 
-The deploy workflow is split into two jobs, and the split is the security
-boundary rather than a build-time optimisation:
+The deploy workflow is split into jobs, and the split is the security boundary
+rather than a build-time optimisation:
 
 - **`build`** runs the pull request's own code. It has `contents: read` and
   nothing else — no `id-token` permission, so `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
@@ -303,11 +333,14 @@ boundary rather than a build-time optimisation:
 - **`deploy`** holds the credentials and runs no code from the pull request. It
   checks out the base branch, installs `firebase-tools` from a lockfile that is
   already merged, and takes only `dist/` from the build job.
+- **`authorize`** holds a credential too, and checks out nothing whatsoever. It
+  needs a token, `curl` and `jq`; none of the three come from this repository,
+  so the cheapest thing it can run from the branch is nothing.
 
 A pull request is otherwise a code-execution primitive: `yarn install` runs
 whatever `postinstall` the branch's lockfile asks for, before any file in the
 diff has been read by a human. Keeping that away from the credential is what
-the two jobs buy.
+the split buys.
 
 The six `VITE_FIREBASE_*` values are the exception, and are scoped to the build
 step. They can already be read out of the deployed bundle by anyone, so a build

@@ -119,6 +119,12 @@ jobs:
       id-token: write
       pull-requests: write
 
+    # Consumed by `authorize`, which deliberately checks out nothing and so has
+    # no other way to learn either fact.
+    outputs:
+      configured: ${{ steps.gate.outputs.configured }}
+      preview-url: ${{ steps.preview.outputs.url }}
+
     steps:
       # Until the federation provider exists there is nothing to deploy to, and
       # failing every pull request over a setup step nobody has done yet trains
@@ -199,3 +205,88 @@ jobs:
             "Serves this branch against the **goitei-dev** Firestore — the same data as the dev site, not a copy. Expires in 7 days." \
             > body.md
           gh pr comment "$PR" --body-file body.md --edit-last --create-if-none
+
+  # Google sign-in refuses an origin that is not on Firebase Auth's authorized
+  # domain list, and a preview channel's hostname carries a hash that is
+  # generated per channel — so every pull request lands on a domain nobody has
+  # ever seen before. The list takes no wildcard, which leaves three options:
+  # add each one by hand, ship previews that cannot sign in, or do this.
+  #
+  # The alternative worth naming, because it looks cheaper than it is: build
+  # previews with `yarn build:e2e`, whose in-memory adapters sign a user in
+  # without Google at all. That trades away the thing a preview is for. The
+  # comment below promises real goitei-dev data, and a Firestore query, index
+  # or cursor defect — the class of bug that has actually reached review here —
+  # is invisible against fakes.
+  #
+  # Runs as its own job rather than a step in `deploy` because of `concurrency`
+  # below, and takes the opportunity to check out nothing at all: it needs a
+  # token, `curl` and `jq`, none of which come from this repository.
+  authorize:
+    needs: deploy
+    if: github.event_name == 'pull_request' && needs.deploy.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    # The API offers no etag and no atomic append, so the update is
+    # read-modify-write and two pull requests deploying at once would leave one
+    # of the two domains off the list. The group is deliberately repository-wide
+    # rather than per pull request — serialising against *other* pull requests
+    # is the entire point — and `cancel-in-progress` stays false, because a
+    # cancelled write here is a preview that cannot sign in.
+    #
+    # `preview-cleanup.yml` names the same group, so a prune cannot interleave
+    # with an append either.
+    concurrency:
+      group: firebase-auth-authorized-domains
+      cancel-in-progress: false
+
+    steps:
+      - uses: google-github-actions/auth@v3
+        id: auth
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          # `deploy` takes the credentials file and lets firebase-tools find it.
+          # This job talks to the Identity Toolkit admin API over plain HTTP, so
+          # it asks for the bearer token directly.
+          token_format: access_token
+
+      - name: Authorize the preview domain for Google sign-in
+        env:
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+          URL: ${{ needs.deploy.outputs.preview-url }}
+          # The .firebaserc `dev` alias, spelled out because this job checks out
+          # no repository to read it from.
+          PROJECT: goitei-dev
+        run: |
+          set -euo pipefail
+
+          host=${URL#https://}
+          host=${host%%/*}
+          if [ -z "$host" ]; then
+            echo "::error::No preview URL to authorize."
+            exit 1
+          fi
+
+          api="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config"
+          domains=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$api" |
+            jq -c '.authorizedDomains // []')
+
+          # Re-running a deploy on the same pull request reuses the channel and
+          # therefore the hostname, so this is the common case, not the edge one.
+          if jq -e --arg h "$host" 'index($h)' <<<"$domains" >/dev/null; then
+            echo "::notice::$host is already authorized."
+            exit 0
+          fi
+
+          curl -sS --fail-with-body -X PATCH \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' \
+            "$api?updateMask=authorizedDomains" \
+            -d "$(jq -c --arg h "$host" '{authorizedDomains: (. + [$h])}' <<<"$domains")" \
+            >/dev/null
+
+          echo "::notice::Authorized $host for Google sign-in."

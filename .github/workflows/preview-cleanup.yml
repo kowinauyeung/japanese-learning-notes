@@ -1,0 +1,132 @@
+name: Preview cleanup
+
+# `deploy-dev.yml` appends a preview channel's hostname to Firebase Auth's
+# authorized domain list so Google sign-in works there. Nothing removes it, and
+# the list is finite and project-wide — every stale entry is an origin that
+# stays trusted for authentication long after the site behind it is gone.
+#
+# The prune is a reconciliation rather than a delete of "the domain this pull
+# request added", and that is the whole design. A channel expires on its own
+# after seven days, so by the time a pull request closes its hostname may
+# already resolve to nothing and be unrecoverable from the API. Comparing the
+# full list against the live channels catches those too, and is idempotent, so
+# a missed run costs nothing but a day.
+on:
+  pull_request:
+    types: [closed]
+    branches-ignore: [main, 'release/**']
+  # Sweeps up channels that expired without their pull request ever closing.
+  # GitHub only schedules workflows from the default branch, so this stays inert
+  # until the file reaches it.
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# The same group `deploy-dev.yml` serialises its append on: the Identity Toolkit
+# config has no etag, so a prune reading the list while a deploy is writing it
+# would drop the domain that deploy just added.
+concurrency:
+  group: firebase-auth-authorized-domains
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    # A fork's pull request never got a preview, so it has nothing to clean up.
+    # `schedule` and `workflow_dispatch` carry no pull request at all.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check for deploy credentials
+        id: gate
+        env:
+          PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        run: |
+          if [ -n "$PROVIDER" ]; then
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+            echo '::notice::Cleanup skipped: GCP_WORKLOAD_IDENTITY_PROVIDER is not set. See README → Deploy credentials.'
+          fi
+
+      # The pull request's base, for the same reason `deploy-dev.yml` does it:
+      # this job holds a credential and must not run code from the branch.
+      - uses: actions/checkout@v7
+        if: steps.gate.outputs.configured == 'true'
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+
+      - uses: actions/setup-node@v7
+        if: steps.gate.outputs.configured == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install firebase-tools
+        if: steps.gate.outputs.configured == 'true'
+        run: yarn install --frozen-lockfile
+
+      - uses: google-github-actions/auth@v3
+        id: auth
+        if: steps.gate.outputs.configured == 'true'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      # Closing the pull request is what makes its channel dead; without this
+      # the reconciliation below would keep treating it as live until it expires.
+      - name: Delete this pull request's channel
+        if: steps.gate.outputs.configured == 'true' && github.event_name == 'pull_request'
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          ./node_modules/.bin/firebase hosting:channel:delete "pr-$PR" \
+            --project dev --force --non-interactive ||
+            echo "::notice::Channel pr-$PR was already gone."
+
+      - name: Prune authorized domains with no live channel
+        if: steps.gate.outputs.configured == 'true'
+        env:
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+          PROJECT: goitei-dev
+          # Firebase names a channel URL `<site>--<channel>-<hash>.web.app`, and
+          # the default site id is the project id. Only domains carrying this
+          # prefix are ours to remove: the list also holds `localhost`, the two
+          # permanent Firebase domains and any custom domain.
+          PREFIX: goitei-dev--
+        run: |
+          set -euo pipefail
+
+          live=$(./node_modules/.bin/firebase hosting:channel:list --project dev --json |
+            jq -c '[.result.channels[]?.url | sub("^https?://"; "") | sub("/.*$"; "")]')
+          echo "Live preview channels: $live"
+
+          api="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config"
+          domains=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$api" |
+            jq -c '.authorizedDomains // []')
+
+          keep=$(jq -c --argjson live "$live" --arg p "$PREFIX" \
+            '[.[] | select((startswith($p) | not) or (IN(.; $live[])))]' <<<"$domains")
+
+          if [ "$keep" = "$domains" ]; then
+            echo "::notice::Nothing to prune."
+            exit 0
+          fi
+
+          echo "Removing: $(jq -c --argjson keep "$keep" '. - $keep' <<<"$domains")"
+
+          curl -sS --fail-with-body -X PATCH \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' \
+            "$api?updateMask=authorizedDomains" \
+            -d "$(jq -c '{authorizedDomains: .}' <<<"$keep")" \
+            >/dev/null
