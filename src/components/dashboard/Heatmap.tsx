@@ -45,6 +45,8 @@ export function Heatmap({
   const [tip, setTip] = useState<{ label: string; anchor: HTMLElement } | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const tipRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const pinned = useRef(false);
 
   /** Centre on the cell, clamp to the viewport, and flip below when the space above is short. */
   const place = useCallback(() => {
@@ -130,6 +132,25 @@ export function Heatmap({
     return result;
   }, [countsByDay]);
 
+  /**
+   * The year runs oldest to newest, so on a viewport too narrow to show all
+   * fifty-three columns the browser opens on the *oldest* weeks and today sits
+   * off-screen to the right — the one column the dashboard exists to show. Pin
+   * the scroller to its right edge instead.
+   *
+   * Before paint, so the reader never sees last August first. Once per mount:
+   * `weeks` is rebuilt whenever an entry is added, and re-pinning there would
+   * yank someone who had deliberately scrolled back into their history. When
+   * nothing overflows, `scrollLeft` clamps to 0 and this is a no-op.
+   */
+  useLayoutEffect(() => {
+    const node = scrollerRef.current;
+    if (!node || pinned.current) return;
+    if (node.scrollWidth <= node.clientWidth) return;
+    node.scrollLeft = node.scrollWidth;
+    pinned.current = true;
+  }, [weeks]);
+
   return (
     <section className="rounded-card bg-card p-5 shadow-panel">
       <h2 className="text-xs font-semibold tracking-wide text-muted">{t('dashboard.heatmap')}</h2>
@@ -153,7 +174,7 @@ export function Heatmap({
             by default, which would pack the year against the left edge on a wide
             viewport. min-w-0 lets it shrink below content width and scroll on a
             narrow one, which min-width:auto would otherwise prevent. */}
-        <div className="min-w-0 flex-1 overflow-x-auto pb-1">
+        <div ref={scrollerRef} className="min-w-0 flex-1 overflow-x-auto pb-1">
           <div className="min-w-max">
             {/* Month label sits above the week that contains the 1st. */}
             <div className="mb-1 grid grid-flow-col gap-[2px]">
