@@ -111,8 +111,16 @@ jobs:
           echo "Live preview channels: $live"
 
           api="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config"
-          domains=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$api" |
-            jq -c '.authorizedDomains // []')
+
+          # Captured rather than piped, for the reason `deploy-dev.yml` gives at
+          # the same call: `--fail-with-body` only helps if something keeps the
+          # body.
+          if ! config=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$api"); then
+            echo "$config"
+            echo "::error::Could not read the Firebase Auth config for $PROJECT. See the response above."
+            exit 1
+          fi
+          domains=$(jq -c '.authorizedDomains // []' <<<"$config")
 
           keep=$(jq -c --argjson live "$live" --arg p "$PREFIX" \
             '[.[] | select((startswith($p) | not) or (IN(.; $live[])))]' <<<"$domains")
@@ -124,9 +132,12 @@ jobs:
 
           echo "Removing: $(jq -c --argjson keep "$keep" '. - $keep' <<<"$domains")"
 
-          curl -sS --fail-with-body -X PATCH \
+          if ! updated=$(curl -sS --fail-with-body -X PATCH \
             -H "Authorization: Bearer $TOKEN" \
             -H 'Content-Type: application/json' \
             "$api?updateMask=authorizedDomains" \
-            -d "$(jq -c '{authorizedDomains: .}' <<<"$keep")" \
-            >/dev/null
+            -d "$(jq -c '{authorizedDomains: .}' <<<"$keep")"); then
+            echo "$updated"
+            echo "::error::Could not prune the authorized domains. See the response above."
+            exit 1
+          fi

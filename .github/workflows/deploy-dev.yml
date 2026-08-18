@@ -272,8 +272,22 @@ jobs:
           fi
 
           api="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config"
-          domains=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$api" |
-            jq -c '.authorizedDomains // []')
+
+          # `--fail-with-body` writes the API's own explanation to stdout before
+          # exiting non-zero, and capturing it is what makes that worth having:
+          # piping it into `jq` or to /dev/null hands the explanation to
+          # something that discards it, and leaves the run log holding a bare
+          # `curl: (22) ... 403` that cannot tell a missing
+          # `roles/firebaseauth.admin` apart from a disabled Identity Toolkit
+          # API. The body is echoed on its own line rather than interpolated
+          # into the `::error::`, because a workflow annotation keeps only its
+          # first line and these responses are multi-line JSON.
+          if ! config=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$api"); then
+            echo "$config"
+            echo "::error::Could not read the Firebase Auth config for $PROJECT. See the response above."
+            exit 1
+          fi
+          domains=$(jq -c '.authorizedDomains // []' <<<"$config")
 
           # Re-running a deploy on the same pull request reuses the channel and
           # therefore the hostname, so this is the common case, not the edge one.
@@ -282,11 +296,14 @@ jobs:
             exit 0
           fi
 
-          curl -sS --fail-with-body -X PATCH \
+          if ! updated=$(curl -sS --fail-with-body -X PATCH \
             -H "Authorization: Bearer $TOKEN" \
             -H 'Content-Type: application/json' \
             "$api?updateMask=authorizedDomains" \
-            -d "$(jq -c --arg h "$host" '{authorizedDomains: (. + [$h])}' <<<"$domains")" \
-            >/dev/null
+            -d "$(jq -c --arg h "$host" '{authorizedDomains: (. + [$h])}' <<<"$domains")"); then
+            echo "$updated"
+            echo "::error::Could not add $host to the authorized domains. See the response above."
+            exit 1
+          fi
 
           echo "::notice::Authorized $host for Google sign-in."
