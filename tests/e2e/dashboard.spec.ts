@@ -32,8 +32,9 @@ test.describe('dashboard', () => {
     // below the fold on a 667px-tall phone, so a viewport check reports the
     // page's vertical scroll and says nothing about the axis under test.
     const overflow = await scroller.evaluate((node) => node.scrollWidth - node.clientWidth);
-    expect(overflow, 'the year must actually overflow, or nothing is being tested')
-      .toBeGreaterThan(0);
+    expect(overflow, 'the year must actually overflow, or nothing is being tested').toBeGreaterThan(
+      0,
+    );
 
     const cell = await today.boundingBox();
     const box = await scroller.boundingBox();
