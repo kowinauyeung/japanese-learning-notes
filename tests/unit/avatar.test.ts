@@ -30,6 +30,24 @@ describe('providerPhotoUrl', () => {
     expect(providerPhotoUrl('http://lh3.googleusercontent.com/a/abc123')).toBeNull();
   });
 
+  /**
+   * https is not enough on its own. The Content-Security-Policy that would stop
+   * the request is deployed Report-Only, so an https URL on any other host is
+   * fetched — handing that host the visitor's IP and the fact that they opened
+   * this app — and no violation report prevents it.
+   */
+  it('refuses an https photo on a host the policy does not allow', () => {
+    expect(providerPhotoUrl('https://evil.test/a/abc123')).toBeNull();
+  });
+
+  it('refuses lh3.googleusercontent.com.evil.test, a host that merely starts with the allowed one', () => {
+    expect(providerPhotoUrl('https://lh3.googleusercontent.com.evil.test/a/abc123')).toBeNull();
+  });
+
+  it('refuses the allowed host on another port, which is another server', () => {
+    expect(providerPhotoUrl('https://lh3.googleusercontent.com:8443/a/abc123')).toBeNull();
+  });
+
   it('treats the empty string as no photo, because that is what the adapter maps a missing one to', () => {
     expect(providerPhotoUrl('')).toBeNull();
     expect(providerPhotoUrl(null)).toBeNull();

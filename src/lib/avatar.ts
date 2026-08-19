@@ -1,4 +1,20 @@
 /**
+ * Hosts an avatar may be fetched from.
+ *
+ * Exactly the hosts `img-src` names in `firebase.json`, and
+ * `tests/unit/csp.test.ts` fails if the two drift apart. Sign-in is Google-only
+ * today, so this is one entry; adding a provider means adding its host in both
+ * places, in the same change.
+ *
+ * Not widened to `*.googleusercontent.com`, even though older accounts are
+ * served from `lh4`–`lh6`: the policy pins `lh3`, and a URL this function
+ * accepts but the policy rejects would render as a broken image the moment the
+ * policy is enforced. An account whose photo lives elsewhere gets the initial —
+ * which is what it got before any of this existed.
+ */
+export const AVATAR_HOSTS = ['lh3.googleusercontent.com'] as const;
+
+/**
  * The profile picture the identity provider supplied, if it can be trusted.
  *
  * `photoUrl` is not a value this app wrote. It arrives on the sign-in token
@@ -6,20 +22,16 @@
  * `<img src>` — so it is checked the same way `safeRedirect` checks `from`:
  * string in, string out, no React around it.
  *
- * Only an absolute `https:` URL is honoured. `javascript:` is still reachable
- * from an image in enough engines to matter, `data:` is a payload rather than a
- * hosted avatar, and `//host/a.png` reads as a host to the browser and as a
- * path to anyone skimming it. Every provider serves avatars over https, so
- * nothing legitimate is refused by narrowing to it.
- *
- * The deployed Content-Security-Policy narrows it further — `img-src` names
- * `https://lh3.googleusercontent.com` and nothing else — so a photo from
- * another host is blocked by the browser rather than by this function, and the
- * caller's fallback is what renders. Two layers, deliberately: the policy is
- * still Report-Only.
+ * Two conditions, and the host one is doing the real work. `https:` alone would
+ * still let any host on the internet receive a request — the visitor's IP, and
+ * a hit that says they opened this app — the moment a provider handed us a URL
+ * pointing at it. The Content-Security-Policy is **not** the backstop for that
+ * today: it is deployed as `Content-Security-Policy-Report-Only`, so `img-src`
+ * reports the violation and the browser makes the request anyway.
  */
 export function providerPhotoUrl(raw: string | null | undefined): string | null {
   if (!raw) return null;
+
   let url: URL;
   try {
     // Rejects the protocol-relative form as a side effect: with no base to
@@ -28,5 +40,11 @@ export function providerPhotoUrl(raw: string | null | undefined): string | null 
   } catch {
     return null;
   }
-  return url.protocol === 'https:' ? raw : null;
+
+  if (url.protocol !== 'https:') return null;
+
+  // `host` rather than `hostname`, so a port has to match too, and an exact
+  // comparison rather than a suffix one: `lh3.googleusercontent.com.evil.test`
+  // ends with the allowed name without being it.
+  return (AVATAR_HOSTS as readonly string[]).includes(url.host) ? raw : null;
 }
