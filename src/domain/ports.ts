@@ -124,6 +124,15 @@ export interface AuthUser {
   uid: string;
   email: string;
   displayName: string;
+  /**
+   * The picture the provider has for this account, or empty when it has none.
+   *
+   * A URL rather than an image: every provider hosts these itself, and copying
+   * one into Storage would mean owning a stale copy of a photo the user changes
+   * somewhere else. Empty is the normal case, not an error — an account created
+   * with an email link has no picture at all.
+   */
+  photoUrl: string;
   emailVerified: boolean;
 }
 

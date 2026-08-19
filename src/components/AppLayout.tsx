@@ -13,6 +13,7 @@ import { UserSettingsProvider } from '@/lib/userSettings';
 import { useUserSettings } from '@/lib/userSettingsContext';
 import { VocabDialogProvider } from '@/lib/vocabDialog';
 import { WordSetsProvider } from '@/lib/wordSets';
+import { Avatar } from './Avatar';
 import { EntryFormModal } from './entry-form/EntryFormModal';
 import { LogoMark } from './Logo';
 import { PublicFooter } from './PublicLayout';
@@ -238,9 +239,11 @@ function AvatarMenu() {
         onClick={() => setOpen((value) => !value)}
         aria-label={t('account.menu')}
         aria-expanded={open}
-        className="grid h-10 w-10 place-items-center rounded-pill bg-accent text-sm font-bold text-on-accent"
+        className="block rounded-pill"
       >
-        {initial}
+        {/* Decorative: the button already carries the label, and an alt here
+            would have a screen reader announce the account twice. */}
+        <Avatar photoUrl={user?.photoUrl} initial={initial} alt="" className="h-10 w-10 text-sm" />
       </button>
 
       {open && (
