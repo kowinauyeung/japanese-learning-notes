@@ -67,6 +67,10 @@ const E2E_USER: AuthUser = {
   uid: 'e2e-user',
   email: 'e2e@example.test',
   displayName: 'テスト太郎',
+  // No picture, so the substitute exercises the fallback. A URL here would be
+  // a request to a host Playwright cannot reach, and the visual baselines would
+  // then be a screenshot of a broken image.
+  photoUrl: '',
   emailVerified: true,
 };
 

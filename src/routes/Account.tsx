@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Avatar } from '@/components/Avatar';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
 import { useI18n } from '@/i18n/context';
@@ -132,9 +133,12 @@ export function Component() {
   return (
     <section className="mx-auto max-w-md space-y-4">
       <div className="rounded-card bg-card p-8 shadow-panel">
-        <div className="mx-auto grid h-20 w-20 place-items-center rounded-pill bg-accent font-display text-3xl font-bold text-on-accent">
-          {initial}
-        </div>
+        <Avatar
+          photoUrl={user?.photoUrl}
+          initial={initial}
+          alt={t('account.photo')}
+          className="mx-auto h-20 w-20 font-display text-3xl"
+        />
 
         <dl className="mt-8 space-y-4 text-sm">
           <div>
