@@ -302,8 +302,17 @@ A preview channel is served from `goitei-dev--pr-<n>-<hash>.web.app`, and
 Firebase Auth refuses to complete a Google sign-in from an origin that is not on
 its authorized domain list. The hash is generated per channel, so every pull
 request lands on a hostname nobody has authorized, and the list accepts no
-wildcard. The `authorize` job in `deploy-dev.yml` appends the hostname through
-the Identity Toolkit admin API once the channel exists.
+wildcard. The `authorize` job in `deploy-dev.yml` adds the hostname through the
+Identity Toolkit admin API once the channel exists.
+
+It adds every live channel's hostname and not only its own, because the job that
+should have added one can be cancelled before it ever runs. A concurrency group
+holds one running job and one pending job, and a third arrival evicts the
+pending one — `cancel-in-progress: false` protects the job that is running, not
+the one queued behind it. Three overlapping previews therefore lose the middle
+one's authorization outright, on a channel that is deployed, linked from its
+pull request and alive for a week. Reading the live channel list makes the next
+append repair it.
 
 `preview-cleanup.yml` takes them off again. It prunes by reconciliation —
 every authorized domain starting `goitei-dev--` that no live channel claims —

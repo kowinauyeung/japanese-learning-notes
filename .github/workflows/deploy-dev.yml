@@ -237,6 +237,17 @@ jobs:
     # is the entire point — and `cancel-in-progress` stays false, because a
     # cancelled write here is a preview that cannot sign in.
     #
+    # False is not sufficient on its own, and the step below is shaped by why.
+    # A concurrency group holds one running job and one *pending* job; a third
+    # arrival evicts the pending one. `cancel-in-progress: false` protects the
+    # job that is running, never the one queued behind it, so three overlapping
+    # previews cancel the middle one's authorization outright — its channel is
+    # deployed and commented on the pull request, and sign-in there is broken
+    # for the week the channel lives. GitHub offers no deeper queue to ask for.
+    # So the step reconciles every live channel rather than appending its own
+    # hostname, and whichever job survives repairs what the evicted one never
+    # got to write.
+    #
     # `preview-cleanup.yml` names the same group, so a prune cannot interleave
     # with an append either.
     concurrency:
@@ -254,13 +265,20 @@ jobs:
           # it asks for the bearer token directly.
           token_format: access_token
 
-      - name: Authorize the preview domain for Google sign-in
+      - name: Authorize the live preview domains for Google sign-in
         env:
           TOKEN: ${{ steps.auth.outputs.access_token }}
           URL: ${{ needs.deploy.outputs.preview-url }}
           # The .firebaserc `dev` alias, spelled out because this job checks out
-          # no repository to read it from.
+          # no repository to read it from. The default Hosting site id is the
+          # project id, which is why one value serves as both.
           PROJECT: goitei-dev
+          SITE: goitei-dev
+          # Firebase names a channel URL `<site>--<channel>-<hash>.web.app`.
+          # Only a domain carrying this prefix is a preview: the list also holds
+          # `localhost`, the two permanent Firebase domains and any custom one,
+          # and none of those are this job's business.
+          PREFIX: goitei-dev--
         run: |
           set -euo pipefail
 
@@ -271,8 +289,6 @@ jobs:
             exit 1
           fi
 
-          api="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config"
-
           # `--fail-with-body` writes the API's own explanation to stdout before
           # exiting non-zero, and capturing it is what makes that worth having:
           # piping it into `jq` or to /dev/null hands the explanation to
@@ -282,6 +298,22 @@ jobs:
           # API. The body is echoed on its own line rather than interpolated
           # into the `::error::`, because a workflow annotation keeps only its
           # first line and these responses are multi-line JSON.
+          #
+          # Every live preview channel is read, not just this pull request's,
+          # for the reason `concurrency` above gives: a job evicted from the
+          # queue never ran and nothing retries it, so the next append is the
+          # only thing that can repair the list.
+          channels="https://firebasehosting.googleapis.com/v1beta1/projects/$PROJECT/sites/$SITE/channels?pageSize=100"
+          if ! listed=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$channels"); then
+            echo "$listed"
+            echo "::error::Could not list the preview channels for $SITE. See the response above."
+            exit 1
+          fi
+          live=$(jq -c '[.channels[]?.url // empty | sub("^https?://"; "") | sub("/.*$"; "")]' <<<"$listed")
+          echo "Live preview channels: $live"
+
+          api="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config"
+
           if ! config=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$api"); then
             echo "$config"
             echo "::error::Could not read the Firebase Auth config for $PROJECT. See the response above."
@@ -289,10 +321,21 @@ jobs:
           fi
           domains=$(jq -c '.authorizedDomains // []' <<<"$config")
 
+          # Additive on purpose. Taking a domain off is `preview-cleanup.yml`'s
+          # job, and doing it from here would mean deciding mid-deploy that
+          # another pull request's preview is dead — off one list read, while
+          # that pull request's own deploy may be seconds behind this one.
+          #
+          # This pull request's hostname is added whether or not the channel
+          # list mentions it: it comes from the deploy that just finished, so it
+          # is the one hostname here that cannot be stale.
+          add=$(jq -c --argjson live "$live" --arg h "$host" --arg p "$PREFIX" \
+            '. as $have | (($live | map(select(startswith($p)))) + [$h] | unique) - $have' <<<"$domains")
+
           # Re-running a deploy on the same pull request reuses the channel and
-          # therefore the hostname, so this is the common case, not the edge one.
-          if jq -e --arg h "$host" 'index($h)' <<<"$domains" >/dev/null; then
-            echo "::notice::$host is already authorized."
+          # therefore the hostname, so nothing to add is the common case.
+          if [ "$add" = '[]' ]; then
+            echo "::notice::$host and every other live preview are already authorized."
             exit 0
           fi
 
@@ -300,10 +343,10 @@ jobs:
             -H "Authorization: Bearer $TOKEN" \
             -H 'Content-Type: application/json' \
             "$api?updateMask=authorizedDomains" \
-            -d "$(jq -c --arg h "$host" '{authorizedDomains: (. + [$h])}' <<<"$domains")"); then
+            -d "$(jq -c --argjson add "$add" '{authorizedDomains: (. + $add)}' <<<"$domains")"); then
             echo "$updated"
-            echo "::error::Could not add $host to the authorized domains. See the response above."
+            echo "::error::Could not add $(jq -r 'join(", ")' <<<"$add") to the authorized domains. See the response above."
             exit 1
           fi
 
-          echo "::notice::Authorized $host for Google sign-in."
+          echo "::notice::Authorized $(jq -r 'join(", ")' <<<"$add") for Google sign-in."
