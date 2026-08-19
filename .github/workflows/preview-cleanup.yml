@@ -84,14 +84,33 @@ jobs:
 
       # Closing the pull request is what makes its channel dead; without this
       # the reconciliation below would keep treating it as live until it expires.
+      #
+      # A channel that has already expired is the ordinary case, not a failure,
+      # and the delete has to tolerate it — but tolerating it by swallowing
+      # every non-zero exit swallows a 403, an expired token and a Hosting
+      # outage with it. The prune below would then read the channel as live,
+      # keep its authorized domain, and the run would go green having deleted
+      # nothing. So the list decides whether there is anything to delete, and
+      # the delete itself is allowed to fail the job, which makes it something
+      # a re-run can fix. `hosting:channel:list` is the same call the prune
+      # makes, so this costs one extra invocation and no new assumption about
+      # how the CLI words its errors.
       - name: Delete this pull request's channel
         if: steps.gate.outputs.configured == 'true' && github.event_name == 'pull_request'
         env:
           PR: ${{ github.event.pull_request.number }}
         run: |
+          set -euo pipefail
+
+          channels=$(./node_modules/.bin/firebase hosting:channel:list --project dev --json)
+          if ! jq -e --arg c "pr-$PR" \
+            'any(.result.channels[]?; (.name | split("/") | last) == $c)' <<<"$channels" >/dev/null; then
+            echo "::notice::Channel pr-$PR has already expired or been deleted."
+            exit 0
+          fi
+
           ./node_modules/.bin/firebase hosting:channel:delete "pr-$PR" \
-            --project dev --force --non-interactive ||
-            echo "::notice::Channel pr-$PR was already gone."
+            --project dev --force --non-interactive
 
       - name: Prune authorized domains with no live channel
         if: steps.gate.outputs.configured == 'true'
