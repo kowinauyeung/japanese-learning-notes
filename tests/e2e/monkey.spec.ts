@@ -133,7 +133,10 @@ async function available(locator: Locator): Promise<AvailableElement[]> {
         centerY < 0 ||
         centerY > innerHeight ||
         html.closest('[inert], [aria-hidden="true"]') ||
-        (top !== html && !html.contains(top))
+        (top !== html && !html.contains(top)) ||
+        html.getAttribute('aria-readonly') === 'true' ||
+        (html instanceof HTMLInputElement && html.readOnly) ||
+        (html instanceof HTMLTextAreaElement && html.readOnly)
       )
         return [];
       if ('disabled' in html && (html as HTMLButtonElement).disabled) return [];
@@ -235,9 +238,13 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
         await test.step(`resolved ${chosen.type} “${label}”`, async () => {
           if (chosen.type === 'checkbox' || chosen.type === 'radio') return field.click();
           if (chosen.type === 'date')
-            return field.fill(['', '2026-02-28', '2026-06-24'][Math.floor(valueDraw * 3)] ?? '');
+            return field.fill(['', '2026-02-28', '2026-06-24'][Math.floor(valueDraw * 3)] ?? '', {
+              timeout: 4000,
+            });
           if (chosen.type === 'number')
-            return field.fill(['-1', '0', '2.7', '999999'][Math.floor(valueDraw * 4)] ?? '0');
+            return field.fill(['-1', '0', '2.7', '999999'][Math.floor(valueDraw * 4)] ?? '0', {
+              timeout: 4000,
+            });
           if (chosen.type === 'range') {
             const bounds = await field.evaluate((element) => {
               const input = element as HTMLInputElement;
@@ -245,7 +252,9 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
             });
             return field.fill(valueDraw < 0.5 ? bounds.min : bounds.max);
           }
-          return field.fill(TEXT_CORPUS[Math.floor(valueDraw * TEXT_CORPUS.length)] ?? '');
+          return field.fill(TEXT_CORPUS[Math.floor(valueDraw * TEXT_CORPUS.length)] ?? '', {
+            timeout: 4000,
+          });
         });
         return `change ${chosen.type} “${label}”`;
       },
