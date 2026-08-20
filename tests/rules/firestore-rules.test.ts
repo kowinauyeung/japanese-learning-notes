@@ -6,6 +6,8 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+import { TAG_MAX_LENGTH } from '@/domain/common';
+import { ENTRY_LIMITS, SESSION_LIMITS, USER_LIMITS, WORD_SET_LIMITS } from '@/domain/limits';
 import type { PracticeSessionDraft } from '@/domain/practice';
 import { emptyDraft } from '@/lib/draft';
 import { makeWordSet } from '../fixtures/wordSet';
@@ -329,6 +331,113 @@ describe('bounds on what an owner may write', () => {
     await assertSucceeds(db.doc(`users/${ALICE}/entries/ok`).set(entry(ALICE)));
     await assertSucceeds(db.doc(`users/${ALICE}/wordSets/ok`).set(wordSet(ALICE)));
     await assertSucceeds(db.doc(`users/${ALICE}/practiceSessions/ok`).set(session(ALICE)));
+  });
+
+  /**
+   * **The direction that can actually hurt somebody, asserted once.**
+   *
+   * Every bound above is a ceiling far past what the client permits — rules
+   * answer the megabyte and `src/domain/limits.ts` answers the product, three
+   * to five times tighter, deliberately and for the deploy-ordering reason
+   * recorded there. So a test that a 4,000-character definition is accepted at
+   * exactly 4,000 pins the rules file against itself: nothing the form can
+   * produce comes near that line, and an off-by-one on it is unobservable.
+   *
+   * The reverse is observable and is a support ticket with nothing on screen to
+   * explain it. If a rule is ever written *tighter* than the matching limit —
+   * a typo, a copied line, a limit raised here without the rule being raised
+   * with it — the form accepts the note, the save is refused by the server, and
+   * no field is at fault because none of them is over its stated maximum.
+   *
+   * So this builds every value at exactly the limit the client enforces, from
+   * the same constants the client reads, and requires the write to succeed. It
+   * is one assertion covering every field rather than a boundary case per
+   * field, and it stays correct when a limit moves, because it is computed from
+   * the limit rather than repeating its value.
+   *
+   * It also puts a number on the headroom: the entry below is the largest note
+   * this application can produce, and it is roughly 130 KB against Firestore's
+   * one-megabyte document ceiling.
+   */
+  it('accepts a note built at every maximum the entry form allows', async () => {
+    const db = as(ALICE);
+    const at = ENTRY_LIMITS;
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/entries/max`).set(
+        entry(ALICE, {
+          headword: long(at.headword),
+          reading: long(at.reading),
+          citationForm: long(at.citationForm),
+          definition: long(at.definition),
+          definitionSub: long(at.definitionSub),
+          source: long(at.source),
+          pitchAccent: at.pitchAccent,
+          learnedOn: at.learnedOnFrom,
+          pos: Array.from({ length: at.pos }, () => '名詞'),
+          tags: Array.from({ length: at.tags }, () => long(TAG_MAX_LENGTH)),
+          senses: Array.from({ length: at.senses.count }, () => ({
+            label: long(at.senses.label),
+            description: long(at.senses.description),
+            example: long(at.senses.text),
+            exampleGloss: long(at.senses.text),
+            translation: long(at.senses.text),
+            usage: long(at.senses.text),
+          })),
+          examples: Array.from({ length: at.examples.count }, () => ({
+            ja: long(at.examples.text),
+            translation: long(at.examples.text),
+          })),
+          related: Array.from({ length: at.related.count }, () => ({
+            headword: long(at.related.headword),
+            note: long(at.related.note),
+          })),
+          context: {
+            original: long(at.context),
+            ja: long(at.context),
+            translation: long(at.context),
+          },
+          usage: {
+            when: long(at.usage),
+            translation: long(at.usage),
+            caution: long(at.usage),
+          },
+          posInfo: {
+            title: long(at.posInfo.title),
+            rows: Array.from({ length: at.posInfo.rows }, () => ({
+              label: long(at.posInfo.label),
+              value: long(at.posInfo.value),
+            })),
+          },
+        }),
+      ),
+    );
+  });
+
+  /** The same invariant for the three collections an entry is not in. */
+  it('accepts a word set, a session and a profile built at every maximum', async () => {
+    const db = as(ALICE);
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/max`).set(
+        wordSet(ALICE, {
+          name: long(WORD_SET_LIMITS.name),
+          description: long(WORD_SET_LIMITS.description),
+          entryIds: Array.from({ length: WORD_SET_LIMITS.entryIds }, (_, i) => `e${i}`),
+          topics: Array.from({ length: WORD_SET_LIMITS.topics }, () => '日常'),
+        }),
+      ),
+    );
+
+    await assertSucceeds(
+      db
+        .doc(`users/${ALICE}/practiceSessions/max`)
+        .set(session(ALICE, { filterLabel: long(SESSION_LIMITS.filterLabel) })),
+    );
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}`).set(profile(ALICE, { nickname: long(USER_LIMITS.nickname) })),
+    );
   });
 
   it('refuses an entry whose text is far past anything a person types', async () => {

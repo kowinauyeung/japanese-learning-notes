@@ -16,7 +16,7 @@ import { describeSizeProblem } from './draft';
  * an IME commit can overshoot it, and any future caller that builds a set
  * without a form — an import, a copy of somebody else's published set — has no
  * input to attach it to. The security rules bound the name at 200 and the
- * description at 2,000, deliberately looser than the product rule, so the gap
+ * description at 1,000, deliberately looser than the product rule, so the gap
  * between the two is reachable by exactly those paths.
  *
  * Returns the same sentinel wording `draftError` returns, so
