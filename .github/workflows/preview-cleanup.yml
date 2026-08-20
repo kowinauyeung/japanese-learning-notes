@@ -6,12 +6,13 @@ name: Preview cleanup
 # more. Closing the pull request is the moment we know the preview is finished
 # with, so the channel goes then rather than a week later.
 #
-# Taking the domain off the list is deliberately not this workflow's job.
-# `firebase hosting:channel:deploy` prunes every `goitei-dev--` domain with no
-# live channel behind it on each run, so deleting the channel here is what makes
-# the next preview deploy drop the domain. Reimplementing that prune would put a
-# second writer on a list whose API has no etag, which is a way to lose a domain
-# rather than a way to remove one.
+# Taking the hostname off Firebase Auth's authorized domain list is part of
+# deleting the channel: `hosting:channel:delete` calls `removeAuthDomain` once
+# the channel is gone. This workflow does not write to that list itself, and
+# should not — a second writer on an API with no etag is a way to lose a domain
+# rather than a way to remove one. It reads the list back afterwards instead,
+# because the CLI answers a failed removal with a warning and a successful
+# delete.
 on:
   pull_request:
     types: [closed]
@@ -62,10 +63,15 @@ jobs:
         run: yarn install --frozen-lockfile
 
       - uses: google-github-actions/auth@v3
+        id: auth
         if: steps.gate.outputs.configured == 'true'
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          # firebase-tools finds the credentials file on its own. The bearer
+          # token is for the verification step at the end, which talks to the
+          # Identity Toolkit admin API over plain HTTP.
+          token_format: access_token
 
       # A channel that has already expired is the ordinary case rather than a
       # failure, and the delete has to tolerate it — but tolerating it by
@@ -91,3 +97,56 @@ jobs:
 
           ./node_modules/.bin/firebase hosting:channel:delete "pr-$PR" \
             --project dev --force --non-interactive
+
+      # Deleting the channel is what takes its hostname off Firebase Auth's
+      # authorized domain list, and firebase-tools answers a failure there with
+      # a warning and a successful delete — the same shape that kept preview
+      # sign-in broken for weeks on the other side of this. The warning does
+      # reach this log, since the step above passes no `--json`, but a warning
+      # on a closed pull request is a thing nobody reads.
+      #
+      # It runs whether or not a channel was deleted, and that is the point: a
+      # re-run after a failed removal takes the "already expired" branch above,
+      # so a check that only ran after a delete would go green having repaired
+      # nothing.
+      #
+      # Nothing is repaired here on purpose, for the reason at the top of the
+      # file. The next preview deploy on any pull request prunes the hostname —
+      # `hosting:channel:deploy` drops every `goitei-dev--` domain no live
+      # channel claims — so this goes green on a re-run once that happens, or
+      # once somebody removes the entry in the console.
+      - name: Verify no domain is left authorized for this pull request
+        if: steps.gate.outputs.configured == 'true'
+        env:
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+          # The .firebaserc `dev` alias, spelled out: this reads the project's
+          # auth config rather than deploying to it, and takes no alias.
+          PROJECT: goitei-dev
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # Captured rather than piped, for the reason `deploy-dev.yml` gives at
+          # the same call: `--fail-with-body` only helps if something keeps the
+          # body, and a 403 with no body cannot tell a missing
+          # `roles/firebaseauth.admin` apart from a disabled Identity Toolkit
+          # API.
+          api="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config"
+          if ! config=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$api"); then
+            echo "$config"
+            echo "::error::Could not read the Firebase Auth config for $PROJECT. See the response above."
+            exit 1
+          fi
+
+          # The trailing hyphen is load-bearing: without it `pr-6` matches the
+          # hostname of `pr-60`.
+          left=$(jq -c --arg p "goitei-dev--pr-$PR-" \
+            '.authorizedDomains // [] | map(select(startswith($p)))' <<<"$config")
+
+          if [ "$left" = '[]' ]; then
+            echo "::notice::No authorized domain is left for pr-$PR."
+            exit 0
+          fi
+
+          echo "::error::$(jq -r 'join(", ")' <<<"$left") is still on the Firebase Auth authorized domain list with no channel behind it, so a dead hostname stays trusted for Google sign-in. Check that the deploy service account still holds roles/firebaseauth.admin. The next preview deploy prunes it; removing it in the console clears it now. See README → Preview sign-in."
+          exit 1

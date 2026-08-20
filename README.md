@@ -323,10 +323,18 @@ channel deploys overlapping — the CLI reads the list, appends and writes it
 back, and the admin API has no etag between the read and the write, so the later
 writer drops the earlier one's hostname. A re-run of the job repairs both.
 
-`preview-cleanup.yml` deletes the channel when its pull request closes. It does
-not touch the domain list: with the channel gone, the next preview deploy prunes
-the hostname on its own. Without it the channel would linger its full seven
-days, and the hostname would stay trusted for authentication that whole time.
+`preview-cleanup.yml` deletes the channel when its pull request closes. The
+hostname goes with it — `hosting:channel:delete` removes it from the authorized
+domain list as part of deleting the channel — and without this the channel would
+linger its full seven days, with the hostname trusted for authentication that
+whole time.
+
+That removal fails the same quiet way the addition does, so the workflow reads
+the list back and fails when a hostname belonging to the closed pull request is
+still on it. It does not remove the hostname itself: a second writer on a list
+whose API has no etag is a way to lose a domain rather than a way to remove one.
+The next preview deploy prunes it, which is what makes a re-run of the job go
+green.
 
 Building previews with `yarn build:e2e` would sidestep all of this — the
 in-memory adapters sign a user in without Google — and it is the wrong trade.
