@@ -1,3 +1,4 @@
+import { USER_LIMITS } from '@/domain/limits';
 import { UI_LANGUAGES } from '@/domain/user';
 import type { ThemePreference, UiLanguage, UserProfile } from '@/domain/user';
 
@@ -36,7 +37,16 @@ export function defaultUserProfile(
       : 'system';
   return {
     uid,
-    nickname: nickname.trim().slice(0, 50),
+    /*
+      The one nickname nobody types. It is the provider's display name — or the
+      local part of the address when there is none — so `maxLength` on the
+      settings field never sees it, and a Google account whose display name runs
+      to forty characters would otherwise have a profile written past the limit
+      before the user has opened the form. Truncated rather than refused,
+      because refusing would mean an account that cannot be created over a name
+      the user did not choose and is free to change.
+    */
+    nickname: nickname.trim().slice(0, USER_LIMITS.nickname),
     language,
     translationLanguage: language,
     theme,

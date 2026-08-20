@@ -126,7 +126,15 @@ function SettingsForm({
         onSubmit={(event) => {
           event.preventDefault();
           if (saving) return;
-          const next = { ...draft, nickname: draft.nickname.trim() };
+          // Trimmed *and* bounded: the attribute on the field stops it being
+          // typed past the limit and stops nothing else, so a value that
+          // arrived from anywhere but the keyboard — a profile stored before
+          // the limit existed, a display name carried over at sign-in — would
+          // be written straight back at whatever length it already had.
+          const next = {
+            ...draft,
+            nickname: draft.nickname.trim().slice(0, USER_LIMITS.nickname),
+          };
           setDraft(next);
           preview(next);
           void save(next)
