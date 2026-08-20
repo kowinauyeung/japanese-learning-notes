@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { INPUT_LIMITS } from '../../src/domain/limits';
 import { seedSignedIn, watchForBlanking } from './fixtures';
 
 /**
@@ -49,10 +50,13 @@ test.describe('browsing', () => {
   });
 
   test('keeps an unbroken search summary inside the viewport', async ({ page }) => {
+    const search = 'W'.repeat(INPUT_LIMITS.search);
     await page.goto('/vocabulary');
-    await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill('W'.repeat(200));
+    await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill(search);
 
-    await expect(page.getByRole('button', { name: new RegExp(`^「W{200}」`) })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: new RegExp(`^「W{${INPUT_LIMITS.search}}」`) }),
+    ).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,

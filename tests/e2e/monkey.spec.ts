@@ -119,13 +119,21 @@ async function available(locator: Locator): Promise<AvailableElement[]> {
       const html = element as HTMLElement;
       const style = getComputedStyle(html);
       const rect = html.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const top = document.elementFromPoint(centerX, centerY);
       if (
         !html.checkVisibility() ||
         style.display === 'none' ||
         style.visibility === 'hidden' ||
         rect.width === 0 ||
         rect.height === 0 ||
-        html.closest('[inert], [aria-hidden="true"]')
+        centerX < 0 ||
+        centerX > innerWidth ||
+        centerY < 0 ||
+        centerY > innerHeight ||
+        html.closest('[inert], [aria-hidden="true"]') ||
+        (top !== html && !html.contains(top))
       )
         return [];
       if ('disabled' in html && (html as HTMLButtonElement).disabled) return [];
