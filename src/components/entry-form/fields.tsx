@@ -37,6 +37,15 @@ export function Field({
  * Making it required is what stops the next field being added without one. Every
  * value comes from `ENTRY_LIMITS`, so a field whose author has to name a number
  * here has to go and look at what the limit is.
+ *
+ * `'unbounded'` is the one deliberate exception, and it exists because the
+ * attribute can *defeat* a check rather than support it. The JSON paste box is
+ * refused above its limit by `jsonToDraft`, which reports the size it got — but
+ * with the attribute on, the browser silently trims the paste to exactly the
+ * limit first, so that branch is unreachable and the user is told their JSON
+ * does not parse, about a document that was truncated mid-object. Opting out is
+ * only legitimate where something else refuses the value and can say how big it
+ * was.
  */
 export function Text({
   value,
@@ -70,14 +79,14 @@ export function Area({
 }: {
   value: string;
   onChange: (value: string) => void;
-  maxLength: number;
+  maxLength: number | 'unbounded';
   rows?: number;
   placeholder?: string;
 }) {
   return (
     <textarea
       value={value}
-      maxLength={maxLength}
+      maxLength={maxLength === 'unbounded' ? undefined : maxLength}
       rows={rows}
       placeholder={placeholder}
       onChange={(event) => onChange(event.target.value)}

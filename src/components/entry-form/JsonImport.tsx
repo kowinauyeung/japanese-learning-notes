@@ -170,10 +170,17 @@ export function JsonImport({
       </details>
 
       <Field label={t('import.pasteJson')}>
+        {/* The one box in the form with no `maxLength`. It is not an oversight
+            and it is not laxer: `jsonToDraft` refuses a paste past
+            `INPUT_LIMITS.jsonPaste` and names the size it received, which is
+            the message the user needs. The attribute would pre-empt it by
+            trimming the paste to exactly the limit, and a JSON document cut off
+            mid-object does not parse — so the one thing that could not be said
+            is the one thing that was wrong with it. */}
         <Area
           value={value.raw}
           onChange={(v) => set('raw', v)}
-          maxLength={INPUT_LIMITS.jsonPaste}
+          maxLength="unbounded"
           rows={10}
           placeholder="{ …"
         />
