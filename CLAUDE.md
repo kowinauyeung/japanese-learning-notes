@@ -94,7 +94,7 @@ Say in the pull request that you did it, and name what went red.
 
 ### Screenshot baselines
 
-The four PNGs under `tests/e2e/__screenshots__` are the expected result, not
+The PNGs under `tests/e2e/__screenshots__` are the expected result, not
 generated output.
 
 - **You may create a new baseline**, but only if you `Read` the generated PNG
@@ -147,7 +147,7 @@ Do not add coverage for these without asking first:
 - Field-by-field wiring in `EntryForm.tsx` — one end-to-end save covers it.
 - Placeholder routes.
 - Tailwind class combinations and colour choices, unless layout carries meaning
-  (furigana, the heatmap), which is what the four screenshots are for.
+  (furigana, the heatmap), which is what the screenshots are for.
 - Transitions and animation timing.
 - The Firebase Hosting deploy pipeline.
 

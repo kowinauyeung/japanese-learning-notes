@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { seed, seedSignedIn } from './fixtures';
 
 /**
- * Visual regression — four baselines, deliberately.
+ * Visual regression — a small set of baselines, deliberately.
  *
  * These exist for one class of defect that every other layer in this repo is
  * structurally blind to: **the markup is correct and the rendering is not.**
@@ -13,9 +13,10 @@ import { seed, seedSignedIn } from './fixtures';
  * snapshot can see it. Only a real browser with real CSS can.
  *
  * The set is kept small on purpose. A screenshot suite that fails often gets
- * ignored, and an ignored gate is worse than no gate. Four images over the
- * places where layout carries meaning — furigana, the heatmap grid, the two
- * page shells — is a set whose red light is worth reading.
+ * ignored, and an ignored gate is worse than no gate. A handful of images over
+ * the places where layout carries meaning — furigana, the pitch line, the
+ * heatmap grid at both widths, the two page shells — is a set whose red light
+ * is worth reading.
  *
  * Baselines are generated on Linux (`yarn test:visual:update`), because macOS
  * and Linux hint Japanese glyphs differently and a laptop-authored baseline
@@ -98,6 +99,31 @@ test.describe('visual', () => {
     const heatmap = page.locator('section').filter({ hasText: '6月' }).first();
     await expect(heatmap).toBeVisible();
     await expect(heatmap).toHaveScreenshot('heatmap.png');
+  });
+
+  /**
+   * The same grid at 375, the width where the year stops fitting. Everything
+   * above is shot at the 1280 in playwright.config.ts, where fifty-three
+   * columns sit inside the card with room to spare — so no committed baseline
+   * has ever seen the heatmap in the state a phone renders it in.
+   *
+   * tests/e2e/dashboard.spec.ts measures the scroll offset and is the test that
+   * would catch the scroller opening on last summer again. This one is about
+   * what surrounds that offset and only a browser can report: the weekday
+   * column staying outside the scroller instead of being carried off with the
+   * year, the cells keeping their size rather than being squeezed by `flex-1`,
+   * and the legend still sitting under a card half the width the shot above
+   * assumes. A wrong answer to any of those is a heatmap that reads as normal
+   * output while saying something false about when the learner studied.
+   */
+  test('the contribution heatmap on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await seedSignedIn(page);
+    await page.goto('/');
+
+    const heatmap = page.locator('section').filter({ hasText: '6月' }).first();
+    await expect(heatmap).toBeVisible();
+    await expect(heatmap).toHaveScreenshot('heatmap-mobile.png');
   });
 
   /**
