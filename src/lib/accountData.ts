@@ -121,18 +121,16 @@ export function exportFilename(now = new Date()): string {
 /**
  * Delete everything this account owns, one document at a time, then the account.
  *
- * **Firestore does not cascade**, and this function deliberately does not
- * delete `users/{uid}`, because that document does not exist. Nothing writes
- * it: the three adapters address subcollections only, `UserRepository` has no
- * adapter, and `firestore.rules` allows the client `read, delete` on the path
- * and nothing else — so there is no code path, here or in `migration/`, that
- * could bring one into being. Deleting a document that was never created is a
- * write billed for nothing.
+ * **Firestore does not cascade**, so the parent document is its own step. It
+ * used to be absent on purpose: nothing wrote `users/{uid}`, `UserRepository`
+ * had no adapter, and the rules allowed the client `read, delete` there and
+ * nothing else. User settings ended that — `createUserRepository` writes the
+ * document and `firestore.rules` allows `create, update` on the path — so the
+ * step below is required rather than skipped.
  *
- * That is an invariant, not an observation, and it is the reason there is no
- * parent step below. If a profile is ever added, `create, update` come back to
- * that rule — and this function grows a last step, after the rows, because a
- * parent removed first leaves every subcollection under it addressable.
+ * It goes **after** the subcollections, not before: a parent removed first
+ * leaves every subcollection under it addressable, because removing a document
+ * in Firestore does not remove what is beneath it.
  *
  * Nothing here is atomic. A failure part way leaves the account partly emptied,
  * which is why it reports what it removed and asks the user to run it again

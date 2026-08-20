@@ -1,12 +1,7 @@
-# Original markdown notes, kept locally until the Firestore migration is verified.
-# Every file remains recoverable from git history.
+# Original markdown notes, superseded by Firestore. Kept locally only; every
+# file also remains recoverable from git history before commit 4fb4ab8, in its
+# pre-correction form.
 bak/
-
-# migration/output.json and review.json are deliberately NOT ignored. The
-# markdown notes they were parsed from are gone, and the corrections made during
-# migration were never committed, so this artefact is the only complete record
-# of what was loaded into Firestore — and the only way to roll production out
-# from the repo alone.
 
 # Private AI-agent workspace
 .kowin/
@@ -32,8 +27,9 @@ dist/
 # build. See the file itself for why.
 !.env.e2e
 
-# Service-account private keys used by the upload script — never commit these.
-migration/service-account-*.json
+# Service-account private keys — never commit these. This project deliberately
+# has none; `yarn auth:login` is the supported path.
+service-account-*.json
 .firebase/
 
 # Repo-local gcloud config, so this project's Google identity never touches the
@@ -48,4 +44,3 @@ migration/service-account-*.json
 coverage/
 playwright-report/
 test-results/
-migration/accents.prompt.txt

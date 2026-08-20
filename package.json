@@ -26,9 +26,6 @@
     "format:check": "prettier --check .",
     "auth:login": "CLOUDSDK_CONFIG=.gcloud gcloud auth application-default login",
     "auth:revoke": "CLOUDSDK_CONFIG=.gcloud gcloud auth application-default revoke",
-    "migrate:parse": "node migration/parse.mjs",
-    "migrate:upload": "node migration/upload.mjs",
-    "migrate:accents": "vite-node migration/accents.ts --",
     "allow": "vite-node admin/allow-user.ts --",
     "rules:dev": "firebase deploy --only firestore:rules --project dev",
     "rules:prod": "firebase deploy --only firestore:rules --project prod"
