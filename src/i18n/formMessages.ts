@@ -74,6 +74,9 @@ const en = {
   'validation.integerMora': 'Enter a whole mora number.',
   'validation.nonnegativeMora': 'Enter 0 (flat) or higher.',
   'validation.moraCount': '{kana} has {count} mora.',
+  'validation.tooLong': '“{path}” is {actual} characters — the limit is {max}.',
+  'validation.tooMany': '“{path}” has {actual} entries — the limit is {max}.',
+  'validation.learnedOnRange': 'Enter a learning date between {from} and {to}.',
 } as const;
 export type FormMessageKey = keyof typeof en;
 type FormMessages = Record<FormMessageKey, string>;
@@ -154,6 +157,9 @@ const ja: FormMessages = {
   'validation.integerMora': '拍の番号なので、整数で入れてください。',
   'validation.nonnegativeMora': '0（平板）以上で入れてください。',
   'validation.moraCount': '{kana} は{count}拍です。',
+  'validation.tooLong': '「{path}」が長すぎます。{actual}字ありますが、上限は{max}字です。',
+  'validation.tooMany': '「{path}」が多すぎます。{actual}件ありますが、上限は{max}件です。',
+  'validation.learnedOnRange': '学習日は {from} から {to} の間で入れてください。',
 };
 const zhHant: FormMessages = {
   'form.headword': '單字',
@@ -230,6 +236,9 @@ const zhHant: FormMessages = {
   'validation.integerMora': '請輸入整數拍數。',
   'validation.nonnegativeMora': '請輸入 0（平板型）或以上。',
   'validation.moraCount': '{kana} 有 {count} 拍。',
+  'validation.tooLong': '「{path}」太長，目前 {actual} 字，上限為 {max} 字。',
+  'validation.tooMany': '「{path}」項目太多，目前 {actual} 項，上限為 {max} 項。',
+  'validation.learnedOnRange': '請輸入 {from} 至 {to} 之間的學習日期。',
 };
 const ko: FormMessages = {
   'form.headword': '표제어',
@@ -306,6 +315,10 @@ const ko: FormMessages = {
   'validation.integerMora': '모라 번호는 정수로 입력해 주세요.',
   'validation.nonnegativeMora': '0(평판형) 이상을 입력해 주세요.',
   'validation.moraCount': '{kana}은(는) {count}모라입니다.',
+  'validation.tooLong': '“{path}”이(가) 너무 깁니다. 현재 {actual}자이며 상한은 {max}자입니다.',
+  'validation.tooMany':
+    '“{path}”의 항목이 너무 많습니다. 현재 {actual}개이며 상한은 {max}개입니다.',
+  'validation.learnedOnRange': '학습일은 {from}부터 {to} 사이로 입력해 주세요.',
 };
 const es: FormMessages = {
   'form.headword': 'Palabra',
@@ -384,5 +397,8 @@ const es: FormMessages = {
   'validation.integerMora': 'Introduce un número entero de moras.',
   'validation.nonnegativeMora': 'Introduce 0 (plano) o más.',
   'validation.moraCount': '{kana} tiene {count} moras.',
+  'validation.tooLong': '“{path}” tiene {actual} caracteres; el límite es {max}.',
+  'validation.tooMany': '“{path}” tiene {actual} elementos; el límite es {max}.',
+  'validation.learnedOnRange': 'Introduce una fecha de aprendizaje entre {from} y {to}.',
 };
 export const formMessages = { en, ja, 'zh-Hant': zhHant, ko, es };

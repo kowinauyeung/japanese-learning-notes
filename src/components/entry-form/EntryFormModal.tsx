@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Entry, EntryDraft } from '@/domain/entry';
+import { ENTRY_LIMITS, TAG_INPUT_MAX } from '@/domain/limits';
 import type { TranslationLanguage } from '@/domain/user';
 import { useI18n } from '@/i18n/context';
 import { localizeFormError } from '@/i18n/localizeFormError';
+import { dateKey } from '@/lib/dates';
 import { draftError, emptyDraft, parseTags, toDraft } from '@/lib/draft';
 import { useEntries } from '@/lib/entries';
 import { jsonToDraft } from '@/lib/jsonImport';
@@ -81,7 +83,10 @@ export function EntryFormModal({
   };
 
   const save = async () => {
-    const invalid = draftError(draft);
+    // The clock is read here rather than inside `draftError`, which takes it as
+    // an argument so it can be tested on any day — `learnedOn` is now bounded
+    // above by today.
+    const invalid = draftError(draft, dateKey(new Date()));
     if (invalid) return setError(localizeFormError(invalid, t));
 
     setSaving(true);
@@ -163,15 +168,24 @@ export function EntryFormModal({
       {tab === 'simple' && !entry && (
         <div className="space-y-3">
           <Field label={t('form.headword')} hint={t('form.required')}>
-            <Text value={draft.headword} onChange={(v) => setDraft({ ...draft, headword: v })} />
+            <Text
+              value={draft.headword}
+              onChange={(v) => setDraft({ ...draft, headword: v })}
+              maxLength={ENTRY_LIMITS.headword}
+            />
           </Field>
           <Field label={t('form.reading')} hint={t('form.kana')}>
-            <Text value={draft.reading} onChange={(v) => setDraft({ ...draft, reading: v })} />
+            <Text
+              value={draft.reading}
+              onChange={(v) => setDraft({ ...draft, reading: v })}
+              maxLength={ENTRY_LIMITS.reading}
+            />
           </Field>
           <Field label={t('form.definition')} hint={t('form.required')}>
             <Area
               value={draft.definition}
               onChange={(v) => setDraft({ ...draft, definition: v })}
+              maxLength={ENTRY_LIMITS.definition}
               rows={4}
             />
           </Field>
@@ -179,6 +193,7 @@ export function EntryFormModal({
             <Area
               value={draft.definitionSub}
               onChange={(v) => setDraft({ ...draft, definitionSub: v })}
+              maxLength={ENTRY_LIMITS.definitionSub}
               rows={3}
             />
           </Field>
@@ -186,6 +201,7 @@ export function EntryFormModal({
             <Text
               value={draft.tags.join(' ')}
               onChange={(v) => setDraft({ ...draft, tags: parseTags(v) })}
+              maxLength={TAG_INPUT_MAX}
               placeholder={t('form.tagsPlaceholder')}
             />
           </Field>

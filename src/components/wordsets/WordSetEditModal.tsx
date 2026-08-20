@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Area, Field, Text } from '@/components/entry-form/fields';
 import { Modal } from '@/components/Modal';
+import { WORD_SET_LIMITS } from '@/domain/limits';
 import type { WordSet } from '@/domain/wordSet';
 import { useI18n } from '@/i18n/context';
 
@@ -87,6 +88,7 @@ export function WordSetEditModal({
         <Field label={t('wordSets.name')} hint={t('wordSets.required')}>
           <Text
             value={name}
+            maxLength={WORD_SET_LIMITS.name}
             onChange={(value) => {
               setName(value);
               setInvalid(false);
@@ -94,7 +96,12 @@ export function WordSetEditModal({
           />
         </Field>
         <Field label={t('wordSets.description')} hint={t('wordSets.optional')}>
-          <Area value={description} onChange={setDescription} rows={3} />
+          <Area
+            value={description}
+            onChange={setDescription}
+            maxLength={WORD_SET_LIMITS.description}
+            rows={3}
+          />
         </Field>
       </div>
     </Modal>

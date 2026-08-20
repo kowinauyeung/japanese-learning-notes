@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { EntryDraft } from '@/domain/entry';
-import { draftError, emptyDraft, invalidTags, parseTags, toDraft } from '@/lib/draft';
+import { ENTRY_LIMITS } from '@/domain/limits';
+import {
+  describeSizeProblem,
+  draftError,
+  draftSizeProblems,
+  emptyDraft,
+  invalidTags,
+  parseTags,
+  toDraft,
+} from '@/lib/draft';
 import { makeEntry } from '../fixtures/entry';
 
 describe('parseTags', () => {
@@ -46,9 +55,15 @@ describe('invalidTags', () => {
     expect(invalidTags([tag])).toEqual([tag]);
   });
 
-  it('rejects a tag longer than 32 characters', () => {
-    expect(invalidTags(['a'.repeat(32)])).toEqual([]);
-    expect(invalidTags(['a'.repeat(33)])).toHaveLength(1);
+  /**
+   * Ten, not the thirty-two this allowed before. A tag is a filter chip and a
+   * URL parameter, and one long enough to wrap the chip is one nothing can use.
+   * The limit lives inside `TAG_PATTERN`, so tightening it also silently drops
+   * a stored tag on read — `sanitize.test.ts` is where that half is pinned.
+   */
+  it('rejects a tag longer than 10 characters', () => {
+    expect(invalidTags(['a'.repeat(10)])).toEqual([]);
+    expect(invalidTags(['a'.repeat(11)])).toHaveLength(1);
   });
 
   it('reports only the offenders, not the whole list', () => {
@@ -142,6 +157,9 @@ describe('emptyDraft', () => {
  * kept, and drawn by nothing.
  */
 describe('draftError', () => {
+  /** The clock, frozen. `draftError` takes it so this file passes on any day. */
+  const TODAY = '2026-06-24';
+
   const ok = (over: Partial<EntryDraft> = {}): EntryDraft => ({
     ...emptyDraft(),
     headword: '兆候',
@@ -151,31 +169,31 @@ describe('draftError', () => {
   });
 
   it('passes a draft with everything it needs', () => {
-    expect(draftError(ok())).toBeNull();
+    expect(draftError(ok(), TODAY)).toBeNull();
   });
 
   it('refuses the fields that were already refused before the accent existed', () => {
-    expect(draftError(ok({ headword: '  ' }))).toContain('見出し語');
-    expect(draftError(ok({ definition: '' }))).toContain('意味・説明');
-    expect(draftError(ok({ tags: ['駄目 な タグ'] }))).toContain('タグ');
-    expect(draftError(ok({ learnedOn: '2026-02-31' }))).toContain('学習日');
+    expect(draftError(ok({ headword: '  ' }), TODAY)).toContain('見出し語');
+    expect(draftError(ok({ definition: '' }), TODAY)).toContain('意味・説明');
+    expect(draftError(ok({ tags: ['駄目 な タグ'] }), TODAY)).toContain('タグ');
+    expect(draftError(ok({ learnedOn: '2026-02-31' }), TODAY)).toContain('学習日');
   });
 
   it('lets a well-formed accent through', () => {
-    expect(draftError(ok({ reading: 'ちょうこう', pitchAccent: 0 }))).toBeNull();
-    expect(draftError(ok({ reading: 'ちょうこう', pitchAccent: 4 }))).toBeNull();
-    expect(draftError(ok({ pitchAccent: null }))).toBeNull();
+    expect(draftError(ok({ reading: 'ちょうこう', pitchAccent: 0 }), TODAY)).toBeNull();
+    expect(draftError(ok({ reading: 'ちょうこう', pitchAccent: 4 }), TODAY)).toBeNull();
+    expect(draftError(ok({ pitchAccent: null }), TODAY)).toBeNull();
   });
 
   /** Stored and then coerced away on the next read — the value simply vanishes. */
   it('refuses an accent that is not a whole non-negative number', () => {
-    expect(draftError(ok({ reading: 'ちょうこう', pitchAccent: 2.5 }))).not.toBeNull();
-    expect(draftError(ok({ reading: 'ちょうこう', pitchAccent: -1 }))).not.toBeNull();
+    expect(draftError(ok({ reading: 'ちょうこう', pitchAccent: 2.5 }), TODAY)).not.toBeNull();
+    expect(draftError(ok({ reading: 'ちょうこう', pitchAccent: -1 }), TODAY)).not.toBeNull();
   });
 
   /** Stored, kept, and drawn by nothing: `pitchShape` refuses what it cannot place. */
   it('refuses an accent past the end of the reading', () => {
-    expect(draftError(ok({ reading: 'たまご', pitchAccent: 9 }))).toContain('3拍');
+    expect(draftError(ok({ reading: 'たまご', pitchAccent: 9 }), TODAY)).toContain('3拍');
   });
 
   /**
@@ -183,7 +201,126 @@ describe('draftError', () => {
    * counting its characters would accept a number that means nothing.
    */
   it('refuses an accent on a word whose kana are unknown', () => {
-    expect(draftError(ok({ headword: '兆候', reading: '', pitchAccent: 0 }))).toContain('読み方');
-    expect(draftError(ok({ headword: 'ちょっと', reading: '', pitchAccent: 0 }))).toBeNull();
+    expect(draftError(ok({ headword: '兆候', reading: '', pitchAccent: 0 }), TODAY)).toContain(
+      '読み方',
+    );
+    expect(draftError(ok({ headword: 'ちょっと', reading: '', pitchAccent: 0 }), TODAY)).toBeNull();
+  });
+
+  /**
+   * A word cannot have been learned tomorrow, and nothing downstream treats the
+   * date with any suspicion: 今週学んだ語, 今月, 今年 and every heatmap cell count
+   * `learnedOn` directly. A typo of `2062` for `2026` therefore does not look
+   * like an error anywhere — it silently leaves the word out of every statistic
+   * for thirty-six years, and the word is still in the notebook, so nothing
+   * about the totals looks wrong enough to investigate.
+   */
+  it('refuses a learning date in the future, which every dashboard count would then omit', () => {
+    expect(draftError(ok({ learnedOn: '2026-06-25' }), TODAY)).toContain('学習日');
+    expect(draftError(ok({ learnedOn: '2062-06-24' }), TODAY)).toContain('学習日');
+    // The boundary itself is a word learned today, which is the common case.
+    expect(draftError(ok({ learnedOn: TODAY }), TODAY)).toBeNull();
+  });
+
+  it('refuses a learning date before the floor, the same typo from the other side', () => {
+    expect(draftError(ok({ learnedOn: '0202-06-24' }), TODAY)).toContain('学習日');
+    expect(draftError(ok({ learnedOn: ENTRY_LIMITS.learnedOnFrom }), TODAY)).toBeNull();
+  });
+
+  it('refuses an over-long field, which nothing else in the save path would', () => {
+    expect(draftError(ok({ headword: 'あ'.repeat(21) }), TODAY)).toContain('headword');
+    expect(draftError(ok({ headword: 'あ'.repeat(20) }), TODAY)).toBeNull();
+  });
+});
+
+/**
+ * The nested limits, which exist here because they can exist nowhere else.
+ *
+ * `firestore.rules` cannot iterate a list — its own comments say so — so
+ * `senses[2].description` is invisible to the security rules at any size, up to
+ * Firestore's 1 MiB document ceiling. If these assertions go green while the
+ * function is gone, nothing in the system bounds those fields at all.
+ */
+describe('draftSizeProblems', () => {
+  const draft = (over: Partial<EntryDraft> = {}): EntryDraft => ({
+    ...emptyDraft(),
+    headword: '兆候',
+    definition: '前ぶれ。',
+    ...over,
+  });
+
+  const sense = (over: Record<string, string> = {}) => ({
+    label: '',
+    description: '',
+    example: '',
+    exampleGloss: '',
+    translation: '',
+    usage: '',
+    ...over,
+  });
+
+  it('finds nothing in an ordinary note', () => {
+    expect(draftSizeProblems(draft())).toEqual([]);
+  });
+
+  it('reaches senses[2].description, which Firestore rules cannot see at any size', () => {
+    const problems = draftSizeProblems(
+      draft({ senses: [sense(), sense(), sense({ description: 'あ'.repeat(501) })] }),
+    );
+
+    expect(problems).toEqual([
+      { path: 'senses[2].description', unit: 'characters', actual: 501, max: 500 },
+    ]);
+  });
+
+  it('reaches context.original, which rules see only as one key of a map', () => {
+    const problems = draftSizeProblems(
+      draft({ context: { original: 'あ'.repeat(501), ja: '', translation: '' } }),
+    );
+    expect(problems.map((problem) => problem.path)).toEqual(['context.original']);
+  });
+
+  /**
+   * Every violation, not the first. The JSON tab is the reason: a pasted note
+   * with six oversize fields reported one at a time is six round trips through
+   * an assistant, and nobody finishes that.
+   */
+  it('reports every oversize field at once rather than stopping at the first', () => {
+    const problems = draftSizeProblems(
+      draft({
+        headword: 'あ'.repeat(21),
+        definition: 'あ'.repeat(1001),
+        source: 'あ'.repeat(101),
+      }),
+    );
+
+    expect(problems.map((problem) => problem.path)).toEqual(['headword', 'definition', 'source']);
+  });
+
+  it('counts elements as well as characters', () => {
+    const problems = draftSizeProblems(
+      draft({ senses: Array.from({ length: 11 }, () => sense()) }),
+    );
+    expect(problems).toEqual([{ path: 'senses', unit: 'items', actual: 11, max: 10 }]);
+  });
+
+  /** The boundary. A limit that refuses the value equal to it is off by one. */
+  it('accepts a value of exactly the limit', () => {
+    expect(draftSizeProblems(draft({ definition: 'あ'.repeat(1000) }))).toEqual([]);
+    expect(draftSizeProblems(draft({ definition: 'あ'.repeat(1001) }))).toHaveLength(1);
+  });
+
+  /**
+   * The wording `localizeFormError` parses back into a message key. If the two
+   * drift apart the message does not throw — it falls through and renders the
+   * raw Japanese sentinel to a user who chose Spanish.
+   */
+  it('describes a problem in the shape localizeFormError parses', () => {
+    expect(
+      describeSizeProblem({ path: 'definition', unit: 'characters', actual: 1200, max: 1000 }),
+    ).toBe('definition が長すぎます: 1200字（上限 1000字）。');
+    expect(describeSizeProblem({ path: 'senses', unit: 'items', actual: 14, max: 10 })).toBe(
+      'senses が多すぎます: 14件（上限 10件）。',
+    );
   });
 });

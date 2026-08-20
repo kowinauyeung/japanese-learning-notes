@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useBlocker } from 'react-router-dom';
+import { USER_LIMITS } from '@/domain/limits';
 import { THEME_PREFERENCES, TRANSLATION_LANGUAGES, UI_LANGUAGES } from '@/domain/user';
 import type {
   ThemePreference,
@@ -33,6 +34,24 @@ const THEME_LABEL_KEYS: Record<ThemePreference, MessageKey> = {
   dark: 'settings.themeDark',
   system: 'settings.themeSystem',
 };
+
+/**
+ * A nickname is one line of text, and `maxLength` is not what makes it one.
+ *
+ * The field is the creator name on anything this account publishes, so what
+ * lands in it is eventually rendered beside somebody else's content. Pasting
+ * from a document brings newlines and Unicode control characters with it —
+ * `\p{C}` covers both, plus the bidirectional overrides that can make a
+ * displayed name read as something other than what is stored. Stripping them as
+ * they arrive keeps the stored value the same as the displayed one.
+ *
+ * Whitespace is collapsed rather than trimmed here: trimming on every keystroke
+ * would stop the user typing a space between two words. The submit handler
+ * already trims.
+ */
+function cleanNickname(value: string): string {
+  return value.replace(/\p{C}/gu, '').replace(/\s+/gu, ' ');
+}
 
 export function Component() {
   const { t } = useI18n();
@@ -125,8 +144,8 @@ function SettingsForm({
           <input
             value={draft.nickname}
             disabled={saving}
-            maxLength={50}
-            onChange={(event) => update('nickname', event.target.value)}
+            maxLength={USER_LIMITS.nickname}
+            onChange={(event) => update('nickname', cleanNickname(event.target.value))}
             className="min-h-11 w-full rounded-panel border border-line bg-bg px-4 text-sm"
           />
         </Field>

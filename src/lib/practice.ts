@@ -1,5 +1,6 @@
 import { JLPT_LEVELS, POS, WORD_ORIGINS } from '@/domain/entry';
 import type { Entry } from '@/domain/entry';
+import { SESSION_LIMITS } from '@/domain/limits';
 import type { EntryProgress, PracticeMode, PracticeSessionDraft } from '@/domain/practice';
 import type { WordSet } from '@/domain/wordSet';
 import { addDays, dateKey, subtractMonths } from '@/lib/dates';
@@ -317,7 +318,22 @@ export function summariseSession(input: {
 }): PracticeSessionDraft {
   return {
     mode: input.mode,
-    filterLabel: input.filterLabel,
+    /*
+      Truncated rather than refused, and it is the one place in this change that
+      is right.
+
+      Nothing here is typed: the label is assembled from the tag, set and level
+      names already chosen on the setup screen, so its length is a consequence
+      of choices the user made somewhere else entirely. Refusing the write would
+      throw away a finished practice run — the answers, the score, the missed
+      words — to protect a caption, and there is no field to send them back to
+      to fix it. An ellipsis loses the tail of a description of filters they can
+      see on screen anyway.
+    */
+    filterLabel:
+      input.filterLabel.length > SESSION_LIMITS.filterLabel
+        ? `${input.filterLabel.slice(0, SESSION_LIMITS.filterLabel - 1)}…`
+        : input.filterLabel,
     total: input.answers.length,
     correct: input.answers.filter((answer) => answer.correct).length,
     missed: input.answers.filter((answer) => !answer.correct).map((answer) => answer.entryId),

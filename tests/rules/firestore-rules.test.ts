@@ -334,24 +334,85 @@ describe('bounds on what an owner may write', () => {
   it('refuses an entry whose text is far past anything a person types', async () => {
     const db = as(ALICE);
     await assertFails(
-      db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { headword: long(201) })),
+      db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { headword: long(101) })),
     );
     await assertFails(
-      db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { definition: long(20001) })),
+      db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { definition: long(4001) })),
     );
   });
 
   it('refuses an entry carrying an unbounded number of rows', async () => {
     const db = as(ALICE);
-    const many = Array.from({ length: 101 }, () => ({ label: 'x' }));
+    const many = Array.from({ length: 31 }, () => ({ label: 'x' }));
     await assertFails(db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { senses: many })));
+  });
+
+  /**
+   * A mora index, which had a type and no range. `is int` accepts 2^53, and a
+   * number is not where the megabyte lives — but a field with a type check and
+   * no bound reads as bounded to whoever audits this next, and it was not.
+   *
+   * The bound that means something is elsewhere and cannot be here: `draftError`
+   * refuses an accent past the end of the reading, which rules cannot see.
+   */
+  it('refuses a pitch accent outside any possible mora index', async () => {
+    const db = as(ALICE);
+    await assertFails(
+      db.doc(`users/${ALICE}/entries/x`).set(entry(ALICE, { pitchAccent: 1_000_000 })),
+    );
+    await assertFails(db.doc(`users/${ALICE}/entries/x`).set(entry(ALICE, { pitchAccent: -1 })));
+    await assertSucceeds(db.doc(`users/${ALICE}/entries/x`).set(entry(ALICE, { pitchAccent: 3 })));
   });
 
   /** The one list a word set is made of, and the one that grows without limit. */
   it('refuses a word set holding more ids than a notebook has words', async () => {
     const db = as(ALICE);
-    const ids = Array.from({ length: 2001 }, (_, i) => `e${i}`);
+    const ids = Array.from({ length: 1001 }, (_, i) => `e${i}`);
     await assertFails(db.doc(`users/${ALICE}/wordSets/big`).set(wordSet(ALICE, { entryIds: ids })));
+  });
+
+  /**
+   * **How `size()` counts, measured rather than assumed.**
+   *
+   * The client bounds every field with `String.length`, which counts UTF-16
+   * code units: an emoji outside the BMP is a surrogate pair and costs two. If
+   * `size()` counted anything else — code points, or UTF-8 bytes — the two
+   * layers would disagree about what a character is, and the disagreement would
+   * surface as a save the form accepted and Firestore refused, with no field to
+   * blame and nothing on screen to explain it.
+   *
+   * They agree. Measured against the emulator with all three cases, each
+   * turning over at exactly the same number the client would compute:
+   *
+   *   - ASCII, one unit per character: 100 accepted, 101 refused.
+   *   - かな, one unit and three UTF-8 bytes: 100 accepted, 101 refused — so
+   *     `size()` is not counting bytes.
+   *   - U+1F1EF, two units and four bytes: 50 accepted, 51 refused — so it is
+   *     not counting code points either. `String.length` of 50 of them is 100.
+   *
+   * This test exists to pin somebody else's implementation detail, and that is
+   * the point: nothing else here would notice if `size()` moved to code points
+   * and every note carrying an emoji quietly started saving against a different
+   * limit than the form enforces.
+   */
+  it('counts UTF-16 code units, the same unit String.length counts', async () => {
+    const db = as(ALICE);
+    const at = (headword: string) =>
+      db.doc(`users/${ALICE}/entries/size`).set(entry(ALICE, { headword }));
+
+    // The headword bound is 100. Each case is written so String.length is 100
+    // and 101 -- if the server agreed, every accept and refuse below lines up.
+    await assertSucceeds(at('a'.repeat(100)));
+    await assertFails(at('a'.repeat(101)));
+
+    // Three UTF-8 bytes each: refused at 101 rather than at 34, so not bytes.
+    await assertSucceeds(at('あ'.repeat(100)));
+    await assertFails(at('あ'.repeat(101)));
+
+    // A surrogate pair, two units each: refused at 51 rather than at 101, so
+    // not code points. 50 of them are String.length 100.
+    await assertSucceeds(at('\u{1F1EF}'.repeat(50)));
+    await assertFails(at('\u{1F1EF}'.repeat(51)));
   });
 
   it('refuses a session claiming more correct answers than questions', async () => {

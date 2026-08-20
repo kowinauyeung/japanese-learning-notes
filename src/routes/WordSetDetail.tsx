@@ -5,6 +5,7 @@ import { MemberList } from '@/components/wordsets/MemberList';
 import { MemberPicker } from '@/components/wordsets/MemberPicker';
 import { PickerToolbar } from '@/components/wordsets/PickerToolbar';
 import { WordSetEditModal } from '@/components/wordsets/WordSetEditModal';
+import { WORD_SET_LIMITS } from '@/domain/limits';
 import type { WordSetDraft } from '@/domain/wordSet';
 import { useI18n } from '@/i18n/context';
 import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
@@ -79,6 +80,22 @@ export function Component() {
 
   const write = async (draft: WordSetDraft): Promise<boolean> => {
     if (!set || busy) return false;
+    /*
+      Every mutation on this page routes through here — add one, add all the
+      filtered candidates, drag to reorder, remove — so this is the only place
+      the size of a set has to be checked. Reordering and removing cannot grow
+      it, which leaves 追加 as the one path that can reach the limit and the one
+      that gets an error worth reading.
+
+      Refusing rather than truncating, unlike `summariseSession`: the order of
+      `entryIds` is the study order, so dropping the tail would silently discard
+      whichever words happened to sort last, and the user asked for all of them.
+    */
+    if (draft.entryIds.length > WORD_SET_LIMITS.entryIds) {
+      setWriteError(t('wordSets.tooManyMembers', { max: WORD_SET_LIMITS.entryIds }));
+      setPending(null);
+      return false;
+    }
     setBusy(true);
     setWriteError(null);
     try {

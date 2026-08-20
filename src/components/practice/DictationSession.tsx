@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Ruby } from '@/components/Ruby';
 import { SpeechStatusNote } from '@/components/SpeakButton';
 import type { Entry } from '@/domain/entry';
+import { INPUT_LIMITS } from '@/domain/limits';
 import { useI18n } from '@/i18n/context';
 import { isCorrectAnswer } from '@/lib/dictation';
 import { canSpeak, spokenForm, useJapaneseSpeech } from '@/lib/speech';
@@ -131,6 +132,7 @@ export function DictationSession({
             ref={inputRef}
             value={typed}
             readOnly={result !== null}
+            maxLength={INPUT_LIMITS.dictationAnswer}
             onChange={(event) => setTyped(event.target.value)}
             onCompositionStart={() => (composing.current = true)}
             onCompositionEnd={() => (composing.current = false)}

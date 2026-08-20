@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WordSetCard } from '@/components/wordsets/WordSetCard';
+import { WORD_SET_LIMITS } from '@/domain/limits';
 import { useI18n } from '@/i18n/context';
 import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
@@ -85,6 +86,7 @@ export function Component() {
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
+          maxLength={WORD_SET_LIMITS.name}
           placeholder={t('wordSets.newName')}
           aria-label={t('wordSets.newName')}
           className="min-h-11 min-w-0 flex-1 rounded-pill border border-line bg-bg px-4 text-sm text-ink placeholder:text-muted"

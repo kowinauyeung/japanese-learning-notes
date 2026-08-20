@@ -23,8 +23,19 @@ export type IsoDate = string;
  * and kana are fine. Excluding whitespace and punctuation is what keeps a tag
  * usable in `?tag=…` — the value still gets percent-encoded, but it survives
  * the round trip and browsers display it decoded.
+ *
+ * The length is built into the pattern rather than checked beside it because
+ * both sides of the tag rule read this one value: `invalidTags` refuses a bad
+ * tag on save, and `validTags` drops one on read. A separate length check would
+ * have to be added to both, and the read path is the one that gets forgotten.
+ *
+ * **Tightening this drops stored tags that were legal when they were written.**
+ * `validTags` runs on every read, so a tag above the limit stops appearing
+ * rather than being reported — which is the right degradation for a value no
+ * filter chip could match anyway, and is worth knowing before changing it.
  */
-export const TAG_PATTERN = /^[\p{L}\p{N}_]{1,32}$/u;
+export const TAG_MAX_LENGTH = 10;
+export const TAG_PATTERN = new RegExp(`^[\\p{L}\\p{N}_]{1,${TAG_MAX_LENGTH}}$`, 'u');
 export type Tag = string;
 
 /**
