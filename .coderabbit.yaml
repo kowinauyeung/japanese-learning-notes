@@ -1,0 +1,151 @@
+# yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+#
+# Reviews are written in English: the repository's Git artifacts are English
+# (see CLAUDE.md), and a reviewer comment is a Git artifact.
+#
+# CLAUDE.md itself needs no wiring here. CodeRabbit detects it by default and
+# applies it as review criteria; the path instructions below only add the
+# per-directory detail that a single root file cannot scope.
+language: en-US
+
+reviews:
+  # quiet | chill | assertive. `chill` is the default; move to `quiet` if the
+  # signal-to-noise ratio is not worth the reading time on a solo repository.
+  profile: chill
+  high_level_summary: true
+  collapse_walkthrough: true
+  assess_linked_issues: true
+
+  auto_review:
+    enabled: true
+    drafts: false
+    # Review a pull request whatever it targets, for the reason ci.yml gives for
+    # running CI on all of them: a pull request stacked on another feature branch
+    # would otherwise go unreviewed until it was retargeted, which is exactly when
+    # it is easiest to merge something wrong.
+    base_branches:
+      - '.*'
+    # Dependency bumps are already gated by CI; a review of a version string
+    # spends the hourly allowance without telling anyone anything.
+    ignore_usernames:
+      - dependabot[bot]
+    ignore_title_keywords:
+      - 'chore(deps)'
+      - 'chore(deps-dev)'
+      - 'ci: bump'
+    # The open-source plan allows as few as one PR review per hour on a
+    # repository with no stars. Re-reviewing every push would spend that on the
+    # same pull request, so re-reviews are requested by hand with
+    # `@coderabbitai review` instead.
+    auto_incremental_review: false
+
+  # Exclusions only. Adding a positive pattern here turns this list into an
+  # allow-list and silently drops everything unnamed — including package.json,
+  # vite.config.ts, firestore.indexes.json and eslint.config.js.
+  path_filters:
+    - '!dist/**'
+    - '!test-results/**'
+    - '!yarn.lock'
+    - '!public/**'
+
+  path_instructions:
+    - path: 'src/domain/**'
+      instructions: |
+        This is the domain layer. It must not import from src/infra. Japanese
+        identifiers and vocabulary are deliberate here and are not to be
+        translated or flagged as inconsistent naming.
+
+    - path: 'src/infra/**'
+      instructions: |
+        Firestore adapters. Flag any change to a query, an index, a cursor value
+        or a server timestamp that has no matching test under tests/integration:
+        this layer cannot be covered by a unit test, and a pagination defect
+        already survived a full unit suite here once.
+
+    - path: 'src/lib/**'
+      instructions: |
+        Any function that reads the clock must take the current time as an
+        argument (`summarise(entries, now)`, never `summarise(entries)`).
+        Flag `Date.now()` or `new Date()` called inside logic that a test
+        would need to pin down.
+
+    - path: 'tests/unit/**'
+      instructions: |
+        The default test layer. Two rules that override any general testing
+        advice:
+        - Nothing that touches a Firestore query, index, cursor or server
+          timestamp belongs here — that goes to tests/integration, against the
+          emulator.
+        - Never mock code the repository owns (src/lib, src/domain,
+          src/components). Substituting an external service is fine.
+        Test names must name the defect ("rejects 2026-02-31, which Date
+        silently rolls forward"), not the unit under test ("tests
+        isValidIsoDate").
+
+    - path: 'tests/component/**'
+      instructions: |
+        jsdom tests, for claims about rendered DOM structure, text or roles.
+        These may not import from @/infra. If an assertion looks structural
+        (asserting on a class attribute, an element's absence, a wrapper), the
+        comment above it must say what breaks in the product when it fails —
+        flag structural assertions that carry no such comment.
+
+    - path: 'tests/integration/**'
+      instructions: |
+        Adapter tests against the Firestore emulator. This is the only layer
+        allowed to import from @/infra.
+
+    - path: 'tests/rules/**'
+      instructions: |
+        Firestore security rules are the entire authorization boundary of a
+        client-only application. For every rule change, check that both the
+        allowed and the denied case are asserted.
+
+    - path: 'tests/e2e/**'
+      instructions: |
+        Playwright. Pure logic — filtering, sorting, date arithmetic, coercion —
+        does not belong here; it is covered exhaustively in tests/unit, and a
+        Playwright case proves less at a much higher cost. Flag any new spec
+        that only varies a filter combination.
+        Time is frozen in tests/e2e/fixtures.ts; flag a spec that reads the real
+        clock. Prefer locator.toHaveScreenshot() over a full-page shot.
+
+    - path: 'tests/e2e/__screenshots__/**'
+      instructions: |
+        These PNGs are the expected result, not generated output. If a pull
+        request modifies or deletes an existing baseline, say so prominently and
+        ask what rendering change justifies it: a screenshot diff is a bug
+        report, and updating the baseline to turn a failing test green is
+        forbidden here. A newly added baseline must be described in the pull
+        request by someone who looked at it.
+
+    - path: 'firestore.rules'
+      instructions: |
+        The entire authorization boundary. Treat every widened condition, new
+        allow clause or relaxed match as the most important finding in the pull
+        request, and check tests/rules covers it in both directions.
+
+    - path: '.github/workflows/**'
+      instructions: |
+        Check permissions are minimal and that no step regenerates screenshot
+        baselines. Baselines are only ever regenerated through
+        `yarn test:visual:update`, which runs in the same container image CI
+        uses; a macOS-authored baseline fails every CI run.
+
+  tools:
+    # Most tools default to enabled; these are the ones that matter here.
+    eslint:
+      enabled: true
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true
+    gitleaks:
+      enabled: true
+    github-checks:
+      enabled: true
+    # Prettier owns Markdown formatting in this repository.
+    markdownlint:
+      enabled: false
+    languagetool:
+      enabled: false
