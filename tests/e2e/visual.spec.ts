@@ -38,7 +38,18 @@ test.describe('visual', () => {
     'Baselines are generated on Linux. Run `yarn test:visual:update`.',
   );
 
-  test('the login screen', async ({ page }) => {
+  /**
+   * Chromium alone for the shots that are not about ruby.
+   *
+   * WebKit is here for one class of difference, and every extra baseline is a
+   * file somebody has to regenerate and read. A page shell, a heatmap grid and
+   * a card layout render the same in both up to antialiasing — which is exactly
+   * what a second baseline would spend its life reporting.
+   */
+  const notRuby = 'Chromium covers this; WebKit is here for the ruby cases.';
+
+  test('the login screen', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', notRuby);
     await seed(page, {});
     await page.goto('/login');
     await expect(page.getByRole('button', { name: 'Google でログイン' })).toBeVisible();
@@ -58,6 +69,42 @@ test.describe('visual', () => {
     const heading = page.locator('.has-ruby').first();
     await expect(heading).toBeVisible();
     await expect(heading).toHaveScreenshot('furigana-heading.png');
+  });
+
+  /**
+   * The clamped headword, shot in **both** engines. This is the one the second
+   * project exists for.
+   *
+   * `line-clamp-1` was used here first and shipped a bug that no test, no
+   * baseline and no local check could see: it compiles to `display:
+   * -webkit-box`, and iOS Safari lays a `<ruby>` out inside one by painting the
+   * annotation and dropping the base — so every headword on the dashboard
+   * rendered as bare furigana with the kanji simply absent. Chromium renders
+   * the same declaration correctly, and Chromium is all this suite had.
+   *
+   * `truncate` replaces it: `overflow` and `white-space` clip a line without
+   * touching `display`, so nothing goes near the ruby formatting context. What
+   * this shot has to show, in each engine, is both halves at once — the reading
+   * sitting above its kanji, *and* the kanji still there.
+   *
+   * Playwright's WebKit does not reproduce the original defect, which is worth
+   * knowing before trusting this: it is a WebKit build, not iOS Safari. So this
+   * baseline documents the correct rendering rather than having been proved to
+   * go red on the bug — the assertion that *was* proved red is the
+   * `-webkit-box` guard below, which is about the cause instead of the symptom.
+   */
+  test('the reading sits above a headword that is clamped to one line', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
+    // The vocabulary grid and not the dashboard, which carries the same clamp:
+    // the heatmap scrolls itself to today on mount, and `toHaveScreenshot`
+    // waits for the element to stop moving before it shoots. In WebKit that
+    // wait never ends, so the shot times out rather than failing on pixels.
+    await page.goto('/vocabulary');
+
+    const headword = page.locator('.has-ruby').first();
+    await expect(headword).toBeVisible();
+    await expect(headword).toHaveScreenshot('clamped-headword.png');
   });
 
   /**
@@ -92,7 +139,8 @@ test.describe('visual', () => {
    * when the learner studied, and reads as ordinary output while doing it.
    * Frozen clock and fixed data come from fixtures.ts.
    */
-  test('the contribution heatmap', async ({ page }) => {
+  test('the contribution heatmap', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', notRuby);
     await seedSignedIn(page);
     await page.goto('/');
 
@@ -116,7 +164,8 @@ test.describe('visual', () => {
    * assumes. A wrong answer to any of those is a heatmap that reads as normal
    * output while saying something false about when the learner studied.
    */
-  test('the contribution heatmap on a phone', async ({ page }) => {
+  test('the contribution heatmap on a phone', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', notRuby);
     await page.setViewportSize({ width: 375, height: 667 });
     await seedSignedIn(page);
     await page.goto('/');
@@ -144,7 +193,8 @@ test.describe('visual', () => {
    * either way, which is what the gate is for, but the diff is not purely a
    * story about placement.
    */
-  test('the dashboard', async ({ page }) => {
+  test('the dashboard', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', notRuby);
     await seedSignedIn(page);
     await page.goto('/');
     await expect(page.getByText('今週学んだ語')).toBeVisible();
@@ -171,7 +221,8 @@ test.describe('visual', () => {
    * one line clips the furigana off the top of it, since the annotation is drawn
    * above the base text inside the same line box.
    */
-  test('a headword too long for its card is clipped, not spilled', async ({ page }) => {
+  test('a headword too long for its card is clipped, not spilled', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', notRuby);
     await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
     await page.goto('/vocabulary');
 
@@ -190,7 +241,8 @@ test.describe('visual', () => {
    * taken at, and the width where a row that will not shrink has least room to
    * hide.
    */
-  test('a long headword keeps the dashboard row on one line at 375', async ({ page }) => {
+  test('a long headword keeps the dashboard row on one line at 375', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', notRuby);
     await page.setViewportSize({ width: 375, height: 667 });
     await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
     await page.goto('/');
@@ -349,4 +401,51 @@ test.describe('long values must not widen the page', () => {
     expect(expanded).toBeGreaterThan(collapsed);
     await expect(page.getByRole('button', { name: '折りたたむ' })).toBeVisible();
   });
+});
+
+/**
+ * The cause rather than the symptom, and the only assertion here that could be
+ * proved red against the defect it exists for.
+ *
+ * A `<ruby>` inside a `display: -webkit-box` loses its base text on iOS Safari:
+ * the annotation paints and the kanji does not. `line-clamp` compiles to
+ * exactly that, so clamping a headword to one line — which looks like a pure
+ * layout decision — silently deletes the word from the screen on the device
+ * most of this app is read on.
+ *
+ * Reading `display` off the element is the whole check, and it looks like an
+ * implementation detail until you know what it stands for: `-webkit-box` there
+ * *is* the bug, and there is no rendered-output assertion that can see it,
+ * because Playwright's WebKit renders the case correctly and only the real
+ * device does not.
+ *
+ * **Only the WebKit run can fail it, and that is the point.** Given the same
+ * `line-clamp` declaration Chromium computes `display: flow-root` and WebKit
+ * computes `-webkit-box` — measured, both engines, on the reverted code. So the
+ * Chromium copy of this test is green whether the bug is present or not, and
+ * the second project is not redundancy here but the entire mechanism.
+ *
+ * It takes no screenshot, so unlike the baselines above it also runs on a
+ * laptop — where those are skipped and this is the only thing standing between
+ * a clamp and another iPhone-only regression.
+ */
+test.describe('a ruby wrapper may never be laid out as a -webkit-box', () => {
+  for (const { name, path } of [
+    { name: 'the dashboard', path: '/' },
+    { name: 'the vocabulary grid', path: '/vocabulary' },
+  ]) {
+    test(`${name} keeps every headword in normal flow`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
+      await page.goto(path);
+      await expect(page.locator('.has-ruby').first()).toBeVisible();
+
+      const displays = await page
+        .locator('.has-ruby')
+        .evaluateAll((els) => els.map((el) => getComputedStyle(el).display));
+
+      expect(displays.length).toBeGreaterThan(0);
+      expect(displays).not.toContain('-webkit-box');
+    });
+  }
 });

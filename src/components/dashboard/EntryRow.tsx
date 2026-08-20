@@ -23,7 +23,7 @@ export function EntryRow({ entry }: { entry: Entry }) {
       <Ruby
         headword={entry.headword}
         reading={entry.reading}
-        className="has-ruby line-clamp-1 max-w-1/2 min-w-0 font-display text-base font-bold"
+        className="has-ruby max-w-1/2 min-w-0 truncate font-display text-base font-bold"
       />
       <span className="prose-cjk min-w-0 flex-1 truncate text-sm text-muted">
         {entry.senses[0]?.description || entry.definition}

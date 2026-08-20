@@ -15,13 +15,13 @@ went wrong here, not by general principle.
 
 ### Pick the cheapest layer that can see the defect
 
-| Layer               | Directory           | Runs on                   | Use it when                                                                 |
-| ------------------- | ------------------- | ------------------------- | --------------------------------------------------------------------------- |
-| Unit                | `tests/unit`        | node, no dependencies     | The behaviour is a function of its inputs. **Default. Most tests go here.** |
-| Component           | `tests/component`   | jsdom                     | The claim is about rendered DOM structure, text or roles.                   |
-| Adapter integration | `tests/integration` | Firestore emulator        | The claim involves a query, an index, a cursor or a server timestamp.       |
-| Rules               | `tests/rules`       | Firestore emulator        | The claim is "who may read or write what".                                  |
-| End-to-end / visual | `tests/e2e`         | Chromium + `vite preview` | The claim spans routing, the URL and a provider — or is about layout.       |
+| Layer               | Directory           | Runs on               | Use it when                                                                 |
+| ------------------- | ------------------- | --------------------- | --------------------------------------------------------------------------- |
+| Unit                | `tests/unit`        | node, no dependencies | The behaviour is a function of its inputs. **Default. Most tests go here.** |
+| Component           | `tests/component`   | jsdom                 | The claim is about rendered DOM structure, text or roles.                   |
+| Adapter integration | `tests/integration` | Firestore emulator    | The claim involves a query, an index, a cursor or a server timestamp.       |
+| Rules               | `tests/rules`       | Firestore emulator    | The claim is "who may read or write what".                                  |
+| End-to-end / visual | `tests/e2e`         | Chromium (+ WebKit)   | The claim spans routing, the URL and a provider — or is about layout.       |
 
 Two consequences worth stating outright, because getting either wrong produces a
 suite that looks thorough and proves nothing:
@@ -92,10 +92,35 @@ before you treat it as a fact about the test.
 
 Say in the pull request that you did it, and name what went red.
 
+### Two browsers, and which claims need the second
+
+Chromium runs every end-to-end spec. **WebKit runs `visual.spec.ts` only**, and
+it is there for one reason: `line-clamp` compiles to `display: -webkit-box`, and
+iOS Safari lays a `<ruby>` out inside one by painting the annotation and
+dropping the base — so a headword clamped to one line rendered as bare furigana
+on an iPhone, with the kanji absent. Chromium renders the same declaration
+correctly, so the suite, the baselines and a local browser all agreed the layout
+was fine while the app was broken on the device most of it is read on.
+
+Put a claim in the WebKit project when it is about **rendering** — ruby, a
+`-webkit-` prefixed property, iOS viewport behaviour. Routing, providers and
+state machines do not need a second engine to be checked in, and every extra
+baseline is a file somebody has to regenerate and read.
+
+Note that the two engines disagree about what they _report_, not only what they
+draw: given the same `line-clamp`, Chromium computes `display: flow-root` and
+WebKit computes `-webkit-box`. A guard written against that value passes
+vacuously in Chromium, which is why the WebKit project is the mechanism rather
+than a duplicate.
+
 ### Screenshot baselines
 
 The PNGs under `tests/e2e/__screenshots__` are the expected result, not
 generated output.
+
+Baselines are keyed by browser as well as platform
+(`{arg}-{projectName}-{platform}.png`). A WebKit shot must never be compared
+against — or written over — the Chromium file beside it.
 
 - **You may create a new baseline**, but only if you `Read` the generated PNG
   and describe in your reply what it shows. A baseline you have not looked at is

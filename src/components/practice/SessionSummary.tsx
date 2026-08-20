@@ -58,7 +58,7 @@ export function SessionSummary({
                   <Ruby
                     headword={entry.headword}
                     reading={entry.reading}
-                    className="has-ruby line-clamp-1 max-w-1/2 min-w-0 font-display font-bold"
+                    className="has-ruby max-w-1/2 min-w-0 truncate font-display font-bold"
                   />
                   <span className="line-clamp-1 min-w-0 text-xs text-muted">
                     {entry.senses[0]?.description || entry.definition}
