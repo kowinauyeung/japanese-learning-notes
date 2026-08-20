@@ -110,6 +110,23 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * iOS Safari zooms the page in whenever a focused form control computes to a
+ * font-size under 16px, and does not reliably zoom back out on blur: the
+ * keyboard changes the layout mid-gesture and the visual viewport keeps the
+ * scale, leaving the page stuck magnified with no API to reset it. The controls
+ * are deliberately sized down for density with text-sm and text-xs, which is
+ * right on a pointer device and is exactly what trips the zoom on a phone, so
+ * on a coarse pointer the threshold wins instead.
+ */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* Japanese and Cantonese prose needs the extra leading for furigana and wrapping. */
 .prose-cjk {
   font-family: var(--font-cjk);
