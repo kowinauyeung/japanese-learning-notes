@@ -119,22 +119,68 @@ function parseTolerantly(text: string): unknown {
 }
 
 /**
- * Rewrite only the curly quotes standing where JSON expects a delimiter: an
- * opening one after `{`, `[`, `,` or `:`, and a closing one before `:`, `,`,
- * `}` or `]`.
+ * Rewrite the quotes delimiting each value, leaving the ones inside it alone.
  *
- * A curly quote inside a value is left as it is, because it is already legal
- * there. Rewriting every one of them instead would end a string early — a
- * definition that quotes a word would parse as something other than what was
- * written, or stop parsing at all, which is worse than the refusal this is
- * trying to avoid.
+ * Which is which cannot be decided from the neighbouring punctuation, because
+ * that does not say what opened the value being read. A straight-quoted value
+ * holding a ” is the case it gets wrong: read as a delimiter, the note parses,
+ * imports, and is missing a character the user wrote — a silent edit, which is
+ * worse than the refusal this is trying to avoid. So the scan tracks the quote
+ * that opened the value it is standing in.
  *
- * A closing quote inside a value that happens to sit before an ASCII comma is
- * the case this reads wrongly. That paste fails today too, so it is left
- * failing rather than guessed at.
+ * A straight-quoted value ends where JSON says it ends. A curly-quoted one ends
+ * at a ” standing where a delimiter can stand, which keeps a curly quote used
+ * as punctuation mid-sentence inside the sentence.
+ *
+ * That last rule is a reading, not a proof: a ” inside a value that happens to
+ * sit before a `:` `,` `}` or `]` still closes it early. What follows then reads
+ * as structure and the parse fails, which is the refusal the caller reports —
+ * but nothing here guarantees it fails for every such note, only that the two
+ * shapes covered in the tests do.
  */
 function straightenDelimiters(text: string): string {
-  return text.replace(/(?<=[{[,:]\s*)\u201C/g, '"').replace(/\u201D(?=\s*[:,}\]])/g, '"');
+  const out: string[] = [];
+  let opener: '"' | '“' | undefined;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text.charAt(i);
+
+    if (opener === undefined) {
+      if (ch === '"' || ch === '“') {
+        opener = ch;
+        out.push('"');
+      } else {
+        out.push(ch);
+      }
+      continue;
+    }
+
+    // An escape takes the character after it with it, so a quote the assistant
+    // escaped never reads as the end of the value.
+    if (ch === '\\') {
+      out.push(ch, text.charAt(i + 1));
+      i += 1;
+      continue;
+    }
+
+    const ends = opener === '"' ? ch === '"' : ch === '”' && delimiterMayStandAt(text, i + 1);
+    if (ends) {
+      opener = undefined;
+      out.push('"');
+      continue;
+    }
+
+    out.push(ch);
+  }
+
+  return out.join('');
+}
+
+/** Whether the next thing after `from`, ignoring whitespace, follows a value. */
+function delimiterMayStandAt(text: string, from: number): boolean {
+  let i = from;
+  while (i < text.length && /\s/.test(text.charAt(i))) i += 1;
+  return i === text.length || ':,}]'.includes(text.charAt(i));
 }
 
 /**

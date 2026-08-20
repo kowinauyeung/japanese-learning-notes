@@ -109,6 +109,51 @@ describe('jsonToDraft — quotes an iOS app substituted on the way to the clipbo
     expect(jsonToDraft(raw).draft?.definition).toBe('“やばい”という語の説明。');
   });
 
+  /**
+   * The repair must know which quote opened the string it is standing in. This
+   * value is delimited by straight quotes, so the ” inside it is ordinary text.
+   * Reading it as a delimiter does not fail the parse — it succeeds, drops the
+   * character, and imports a definition the user never wrote. A refusal the
+   * user can see is the only acceptable outcome; a silent edit is not.
+   */
+  it('refuses a straight-quoted value holding a curly quote, rather than importing it with the quote deleted', () => {
+    const raw = '{"headword":"兆候","definition":"末尾の引用 ”, "source":"x"}';
+
+    const { draft, error } = jsonToDraft(raw);
+
+    expect(draft).toBeUndefined();
+    expect(error).toBe('JSON として解析できませんでした。');
+  });
+
+  /**
+   * Nested curly quotes that could close the value in more than one place are
+   * not guessable. Splitting the value at the wrong one would move half of a
+   * definition into a field of its own, which sanitisation then discards — an
+   * import that looks like it worked and is missing the second half.
+   */
+  it('refuses nested curly quotes it cannot place, rather than splitting the value into another field', () => {
+    const raw = '{“headword”:“x”,“definition”:“A, “B”: “C””}';
+
+    const { draft, error } = jsonToDraft(raw);
+
+    expect(draft).toBeUndefined();
+    expect(error).toBe('JSON として解析できませんでした。');
+  });
+
+  /**
+   * An escaped quote is content, not the end of the string. Treating it as a
+   * delimiter would put the repair back outside the value halfway through it,
+   * where the rest of the sentence reads as structure.
+   */
+  it('does not end a value at an escaped quote, which would resume repairing inside the sentence', () => {
+    const raw = '{“headword”:“兆候”,“definition”:“\\"前ぶれ\\" のこと。”}';
+
+    const { draft, error } = jsonToDraft(raw);
+
+    expect(error).toBeUndefined();
+    expect(draft?.definition).toBe('"前ぶれ" のこと。');
+  });
+
   it('still reports input that curly quotes were not the problem with', () => {
     expect(jsonToDraft('{“headword”: }').error).toBe('JSON として解析できませんでした。');
   });
