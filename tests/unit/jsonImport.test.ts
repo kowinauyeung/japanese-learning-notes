@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { INPUT_LIMITS } from '@/domain/limits';
 import { buildPrompt, jsonToDraft, promptLanguageName, SCHEMA } from '@/lib/jsonImport';
 
 /**
@@ -211,6 +212,77 @@ describe('jsonToDraft — required fields', () => {
       related: [],
       tags: [],
     });
+  });
+});
+
+/**
+ * The size checks, which are the import path's own and not the form's.
+ *
+ * The form has `maxLength` on every field and this path has none: it builds a
+ * whole draft from a string in one go, without a keystroke anywhere. So the
+ * attribute that stops a user typing too much is not in play here at all, and
+ * an assistant asked for a definition will happily write three thousand
+ * characters of prose.
+ */
+describe('jsonToDraft — size', () => {
+  const oversize = (over: Record<string, unknown>) =>
+    jsonToDraft(JSON.stringify({ ...minimal, ...over })).oversize;
+
+  it('refuses a paste too large to parse without hanging the tab', () => {
+    const huge = 'x'.repeat(INPUT_LIMITS.jsonPaste + 1);
+    const { error, draft } = jsonToDraft(huge);
+
+    expect(error).toContain('貼り付けが大きすぎます');
+    expect(draft).toBeUndefined();
+  });
+
+  /**
+   * Every offender named, because the alternative is a round trip per field:
+   * a note with three oversize values reported one at a time is three more
+   * visits to whichever assistant wrote it.
+   */
+  it('names every oversize field rather than stopping at the first', () => {
+    const problems = oversize({
+      headword: 'あ'.repeat(21),
+      definition: 'あ'.repeat(1001),
+      source: 'あ'.repeat(101),
+    });
+
+    expect(problems).toHaveLength(3);
+    expect(problems?.join(' ')).toContain('headword');
+    expect(problems?.join(' ')).toContain('definition');
+    expect(problems?.join(' ')).toContain('source');
+  });
+
+  /**
+   * Not truncated, and this is the assertion that says so. Keeping the first
+   * thousand characters would import a note whose explanation stops
+   * mid-sentence, with nothing on screen reporting the edit — and the user is
+   * looking at the JSON that produced it and can shorten the field themselves.
+   */
+  it('imports nothing at all rather than a note silently cut short', () => {
+    const { draft, oversize: problems } = jsonToDraft(
+      JSON.stringify({ ...minimal, definition: 'あ'.repeat(1001) }),
+    );
+
+    expect(draft).toBeUndefined();
+    expect(problems).toHaveLength(1);
+  });
+
+  it('reaches a nested field, which the security rules cannot see at any size', () => {
+    const problems = oversize({
+      senses: [{ label: '', description: 'あ'.repeat(501), example: '' }],
+    });
+    expect(problems?.[0]).toContain('senses[0].description');
+  });
+
+  it('lets a note at exactly the limit through', () => {
+    const { draft, oversize: problems } = jsonToDraft(
+      JSON.stringify({ ...minimal, definition: 'あ'.repeat(1000) }),
+    );
+
+    expect(problems).toBeUndefined();
+    expect(draft?.definition).toHaveLength(1000);
   });
 });
 

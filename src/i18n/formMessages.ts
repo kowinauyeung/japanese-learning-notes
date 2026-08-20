@@ -77,6 +77,8 @@ const en = {
   'validation.tooLong': '“{path}” is {actual} characters — the limit is {max}.',
   'validation.tooMany': '“{path}” has {actual} entries — the limit is {max}.',
   'validation.learnedOnRange': 'Enter a learning date between {from} and {to}.',
+  'import.pasteTooLarge': 'This paste is {actual} characters — the limit is {max}.',
+  'import.oversizeTitle': 'Nothing was imported. Shorten these in the JSON and paste again:',
 } as const;
 export type FormMessageKey = keyof typeof en;
 type FormMessages = Record<FormMessageKey, string>;
@@ -160,6 +162,9 @@ const ja: FormMessages = {
   'validation.tooLong': '「{path}」が長すぎます。{actual}字ありますが、上限は{max}字です。',
   'validation.tooMany': '「{path}」が多すぎます。{actual}件ありますが、上限は{max}件です。',
   'validation.learnedOnRange': '学習日は {from} から {to} の間で入れてください。',
+  'import.pasteTooLarge': '貼り付けが大きすぎます。{actual}字ありますが、上限は{max}字です。',
+  'import.oversizeTitle':
+    '読み込みませんでした。JSON の次の項目を短くして、もう一度貼り付けてください:',
 };
 const zhHant: FormMessages = {
   'form.headword': '單字',
@@ -239,6 +244,8 @@ const zhHant: FormMessages = {
   'validation.tooLong': '「{path}」太長，目前 {actual} 字，上限為 {max} 字。',
   'validation.tooMany': '「{path}」項目太多，目前 {actual} 項，上限為 {max} 項。',
   'validation.learnedOnRange': '請輸入 {from} 至 {to} 之間的學習日期。',
+  'import.pasteTooLarge': '貼上的內容太大，目前 {actual} 字，上限為 {max} 字。',
+  'import.oversizeTitle': '未匯入。請在 JSON 中縮短以下項目後再貼上一次：',
 };
 const ko: FormMessages = {
   'form.headword': '표제어',
@@ -319,6 +326,8 @@ const ko: FormMessages = {
   'validation.tooMany':
     '“{path}”의 항목이 너무 많습니다. 현재 {actual}개이며 상한은 {max}개입니다.',
   'validation.learnedOnRange': '학습일은 {from}부터 {to} 사이로 입력해 주세요.',
+  'import.pasteTooLarge': '붙여넣은 내용이 너무 큽니다. 현재 {actual}자이며 상한은 {max}자입니다.',
+  'import.oversizeTitle': '가져오지 않았습니다. JSON에서 다음 항목을 줄인 뒤 다시 붙여넣어 주세요:',
 };
 const es: FormMessages = {
   'form.headword': 'Palabra',
@@ -400,5 +409,7 @@ const es: FormMessages = {
   'validation.tooLong': '“{path}” tiene {actual} caracteres; el límite es {max}.',
   'validation.tooMany': '“{path}” tiene {actual} elementos; el límite es {max}.',
   'validation.learnedOnRange': 'Introduce una fecha de aprendizaje entre {from} y {to}.',
+  'import.pasteTooLarge': 'El texto pegado tiene {actual} caracteres; el límite es {max}.',
+  'import.oversizeTitle': 'No se importó nada. Acorta lo siguiente en el JSON y pega de nuevo:',
 };
 export const formMessages = { en, ja, 'zh-Hant': zhHant, ko, es };

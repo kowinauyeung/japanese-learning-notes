@@ -37,6 +37,11 @@ export function localizeFormError(error: string, t: Translate): string {
     return t('validation.tooMany', { path: tooMany[1], actual: tooMany[2], max: tooMany[3] });
   }
 
+  const paste = error.match(/^貼り付けが大きすぎます: (\d+)字（上限 (\d+)字）。$/u);
+  if (paste?.[1] && paste[2]) {
+    return t('import.pasteTooLarge', { actual: paste[1], max: paste[2] });
+  }
+
   const range = error.match(/^学習日は (\S+) から (\S+) の間で入れてください。$/u);
   if (range?.[1] && range[2]) {
     return t('validation.learnedOnRange', { from: range[1], to: range[2] });
