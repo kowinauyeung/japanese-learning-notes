@@ -72,7 +72,7 @@ export function buildPrompt(word: string, language: string, context: PromptConte
     ? `- "source" には「${source}」をそのまま入れてください。`
     : `- "source" は空のままにしてください。`;
 
-  return `「${word}」という日本語の単語について、次のJSONスキーマだけを出力してください。説明文やコードフェンスは不要です。
+  return `「${word}」という日本語の単語について、次のJSONスキーマだけを出力してください。説明文は不要で、JSON全体を \`\`\`json のコードブロックに入れてください。
 ${contextLines}
 
 - "definitionSub" と各 "translation" は${language}で書いてください。
@@ -91,6 +91,99 @@ ${SCHEMA}`;
 }
 
 /**
+ * Copying an assistant's reply out of a phone app is not a byte-for-byte
+ * transfer. The same answer copied from a browser arrives with U+0022 and
+ * copied from an iOS app arrives with U+201C and U+201D, because what the app
+ * puts on the clipboard is the typographically substituted prose rather than
+ * the source it rendered. `JSON.parse` accepts only U+0022, so the note is
+ * refused for a reason that has nothing to do with the note.
+ *
+ * Asking for a code fence — which `buildPrompt` now does — is the better half
+ * of the fix, because a fenced reply is copied verbatim. This is the other
+ * half, for the paste that arrives substituted anyway.
+ */
+function parseTolerantly(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Falls through to the repair. Anything that parsed as written is returned
+    // above untouched, so the rewrite below only ever sees input that is
+    // already broken and cannot make a good note worse.
+  }
+
+  try {
+    return JSON.parse(straightenDelimiters(text));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Rewrite the quotes delimiting each value, leaving the ones inside it alone.
+ *
+ * Which is which cannot be decided from the neighbouring punctuation, because
+ * that does not say what opened the value being read. A straight-quoted value
+ * holding a ” is the case it gets wrong: read as a delimiter, the note parses,
+ * imports, and is missing a character the user wrote — a silent edit, which is
+ * worse than the refusal this is trying to avoid. So the scan tracks the quote
+ * that opened the value it is standing in.
+ *
+ * A straight-quoted value ends where JSON says it ends. A curly-quoted one ends
+ * at a ” standing where a delimiter can stand, which keeps a curly quote used
+ * as punctuation mid-sentence inside the sentence.
+ *
+ * That last rule is a reading, not a proof: a ” inside a value that happens to
+ * sit before a `:` `,` `}` or `]` still closes it early. What follows then reads
+ * as structure and the parse fails, which is the refusal the caller reports —
+ * but nothing here guarantees it fails for every such note, only that the two
+ * shapes covered in the tests do.
+ */
+function straightenDelimiters(text: string): string {
+  const out: string[] = [];
+  let opener: '"' | '“' | undefined;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text.charAt(i);
+
+    if (opener === undefined) {
+      if (ch === '"' || ch === '“') {
+        opener = ch;
+        out.push('"');
+      } else {
+        out.push(ch);
+      }
+      continue;
+    }
+
+    // An escape takes the character after it with it, so a quote the assistant
+    // escaped never reads as the end of the value.
+    if (ch === '\\') {
+      out.push(ch, text.charAt(i + 1));
+      i += 1;
+      continue;
+    }
+
+    const ends = opener === '"' ? ch === '"' : ch === '”' && delimiterMayStandAt(text, i + 1);
+    if (ends) {
+      opener = undefined;
+      out.push('"');
+      continue;
+    }
+
+    out.push(ch);
+  }
+
+  return out.join('');
+}
+
+/** Whether the next thing after `from`, ignoring whitespace, follows a value. */
+function delimiterMayStandAt(text: string, from: number): boolean {
+  let i = from;
+  while (i < text.length && /\s/.test(text.charAt(i))) i += 1;
+  return i === text.length || ':,}]'.includes(text.charAt(i));
+}
+
+/**
  * Import a note written by an assistant elsewhere. Only headword and
  * definition are required; every other field falls back to the blank draft,
  * so a partial answer still saves.
@@ -103,19 +196,16 @@ export function jsonToDraft(
   raw: string,
   context: PromptContext = {},
 ): { draft?: EntryDraft; error?: string } {
-  let parsed: Record<string, unknown>;
-  try {
-    // Tolerate a ```json fence, which assistants add even when told not to.
-    // The shape is validated by the guards below; JSON.parse's `any` stops here.
-    parsed = JSON.parse(
-      raw
-        .replace(/^\s*```(?:json)?/, '')
-        .replace(/```\s*$/, '')
-        .trim(),
-    ) as Record<string, unknown>;
-  } catch {
-    return { error: 'JSON として解析できませんでした。' };
-  }
+  // Tolerate a ```json fence. The prompt now asks for one, and assistants used
+  // to add it even when told not to, so both eras of pasted note arrive here.
+  const unfenced = raw
+    .replace(/^\s*```(?:json)?/, '')
+    .replace(/```\s*$/, '')
+    .trim();
+
+  // The shape is validated by the guards below; JSON.parse's `any` stops here.
+  const parsed = parseTolerantly(unfenced) as Record<string, unknown> | undefined;
+  if (parsed === undefined) return { error: 'JSON として解析できませんでした。' };
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     return { error: 'JSON オブジェクトではありません。' };
   }
