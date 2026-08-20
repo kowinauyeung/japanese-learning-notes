@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { INPUT_LIMITS } from '@/domain/limits';
 import { useI18n } from '@/i18n/context';
 
 export function VocabularySearch({
@@ -23,6 +24,7 @@ export function VocabularySearch({
   return (
     <input
       type="search"
+      maxLength={INPUT_LIMITS.search}
       value={compositionValue ?? value}
       onChange={(event) => {
         const next = event.currentTarget.value;

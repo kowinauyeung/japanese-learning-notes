@@ -91,6 +91,73 @@ export const WORDS: Record<string, unknown>[] = [
 ];
 
 /**
+ * A note whose fields are long enough to break the layout, in the two ways that
+ * actually did.
+ *
+ * **Deliberately not in `WORDS`.** Every committed screenshot is taken against
+ * that array, so adding a fourth entry there would put a red diff on baselines
+ * that have nothing to do with this — and the only way to clear it would be to
+ * regenerate images to make a failing test pass, which is the one thing the
+ * testing rules refuse outright.
+ *
+ * Both headwords are drawn from what a real notebook produced, not invented:
+ *
+ *  - An unbroken run of Latin letters. This is the one that escapes its
+ *    container, because CJK breaks between almost any two characters and Latin
+ *    offers no break opportunity at all — which is why a notebook written in
+ *    Japanese hid the defect until somebody typed `wwww…`.
+ *  - A 60-character Japanese headword, which wraps but does not overflow. It
+ *    grows the card instead: the tallest card in a row sets the height of every
+ *    card beside it, so one long word leaves a grid of otherwise short entries
+ *    with a band of empty space through it.
+ */
+export const OVERSIZE_WORDS: Record<string, unknown>[] = [
+  {
+    id: 'w-latin',
+    headword: 'W'.repeat(200),
+    reading: '',
+    definition: 'W'.repeat(200),
+    pos: ['名詞'],
+    jlpt: 'レベル外',
+    freq: 3,
+    tags: [],
+    learnedOn: '2026-06-23',
+    createdAt: '2026-06-23T01:00:00.000Z',
+    updatedAt: '2026-06-23T01:00:00.000Z',
+  },
+  {
+    id: 'w-longja',
+    headword: '龍の宮の乙姫の元結の上の外し'.repeat(4),
+    reading: '',
+    definition: '長い見出し語がカードの高さを決めてしまう場合。'.repeat(4),
+    pos: ['名詞'],
+    jlpt: 'レベル外',
+    freq: 3,
+    tags: [],
+    learnedOn: '2026-06-23',
+    createdAt: '2026-06-23T02:00:00.000Z',
+    updatedAt: '2026-06-23T02:00:00.000Z',
+  },
+];
+
+/**
+ * A 単語集 whose name is far past its limit, holding the oversize entries.
+ *
+ * Stored data, not typed data: `maxLength` and `wordSetError` between them make
+ * this unreachable through the form now, and every screen that renders a set
+ * still has to survive one — a set written before the limit existed, or by
+ * anything that is not this client.
+ */
+export const OVERSIZE_SET: Record<string, unknown>[] = [
+  {
+    id: 'set-oversize',
+    name: 'W'.repeat(400),
+    description: 'この単語集の説明。'.repeat(40),
+    entryIds: ['w-latin', 'w-longja', 'w-kiriwake'],
+  },
+];
+
+/**
  * Must be called before the first navigation: `addInitScript` runs ahead of the
  * app's own scripts, which is the only point at which the in-memory adapters
  * can still read their seed.

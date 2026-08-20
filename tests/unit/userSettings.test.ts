@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { USER_LIMITS } from '@/domain/limits';
 import { sanitizeUserProfile } from '@/lib/sanitize';
 import { defaultUserProfile, resolveUiLanguage } from '@/lib/userPreferences';
 
@@ -31,6 +32,20 @@ describe('defaultUserProfile', () => {
 
   it('keeps an existing local theme choice when creating the durable copy', () => {
     expect(defaultUserProfile('u1', 'K', ['en'], 'dark').theme).toBe('dark');
+  });
+
+  /**
+   * The nickname nobody types, and therefore the one the settings field's
+   * `maxLength` cannot bound: it is the identity provider's display name, and
+   * this profile is written the first time the account signs in — before the
+   * form has ever been opened. A provider display name is not the account
+   * holder's choice of length.
+   */
+  it('bounds a display name the account holder never typed', () => {
+    const long = 'ゆ'.repeat(USER_LIMITS.nickname + 20);
+    expect(defaultUserProfile('u1', long, ['ja'], null).nickname).toHaveLength(
+      USER_LIMITS.nickname,
+    );
   });
 });
 

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { seed, seedSignedIn } from './fixtures';
+import { OVERSIZE_SET, OVERSIZE_WORDS, seed, seedSignedIn, WORDS } from './fixtures';
 
 /**
  * Visual regression — a small set of baselines, deliberately.
@@ -38,7 +38,18 @@ test.describe('visual', () => {
     'Baselines are generated on Linux. Run `yarn test:visual:update`.',
   );
 
-  test('the login screen', async ({ page }) => {
+  /**
+   * Chromium alone for the shots that are not about ruby.
+   *
+   * WebKit is here for one class of difference, and every extra baseline is a
+   * file somebody has to regenerate and read. A page shell, a heatmap grid and
+   * a card layout render the same in both up to antialiasing — which is exactly
+   * what a second baseline would spend its life reporting.
+   */
+  const notRuby = 'Chromium covers this; WebKit is here for the ruby cases.';
+
+  test('the login screen', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', notRuby);
     await seed(page, {});
     await page.goto('/login');
     await expect(page.getByRole('button', { name: 'Google でログイン' })).toBeVisible();
@@ -58,6 +69,42 @@ test.describe('visual', () => {
     const heading = page.locator('.has-ruby').first();
     await expect(heading).toBeVisible();
     await expect(heading).toHaveScreenshot('furigana-heading.png');
+  });
+
+  /**
+   * The clamped headword, shot in **both** engines. This is the one the second
+   * project exists for.
+   *
+   * `line-clamp-1` was used here first and shipped a bug that no test, no
+   * baseline and no local check could see: it compiles to `display:
+   * -webkit-box`, and iOS Safari lays a `<ruby>` out inside one by painting the
+   * annotation and dropping the base — so every headword on the dashboard
+   * rendered as bare furigana with the kanji simply absent. Chromium renders
+   * the same declaration correctly, and Chromium is all this suite had.
+   *
+   * `truncate` replaces it: `overflow` and `white-space` clip a line without
+   * touching `display`, so nothing goes near the ruby formatting context. What
+   * this shot has to show, in each engine, is both halves at once — the reading
+   * sitting above its kanji, *and* the kanji still there.
+   *
+   * Playwright's WebKit does not reproduce the original defect, which is worth
+   * knowing before trusting this: it is a WebKit build, not iOS Safari. So this
+   * baseline documents the correct rendering rather than having been proved to
+   * go red on the bug — the assertion that *was* proved red is the
+   * `-webkit-box` guard below, which is about the cause instead of the symptom.
+   */
+  test('the reading sits above a headword that is clamped to one line', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
+    // The vocabulary grid and not the dashboard, which carries the same clamp:
+    // the heatmap scrolls itself to today on mount, and `toHaveScreenshot`
+    // waits for the element to stop moving before it shoots. In WebKit that
+    // wait never ends, so the shot times out rather than failing on pixels.
+    await page.goto('/vocabulary');
+
+    const headword = page.locator('.has-ruby').first();
+    await expect(headword).toBeVisible();
+    await expect(headword).toHaveScreenshot('clamped-headword.png');
   });
 
   /**
@@ -92,7 +139,8 @@ test.describe('visual', () => {
    * when the learner studied, and reads as ordinary output while doing it.
    * Frozen clock and fixed data come from fixtures.ts.
    */
-  test('the contribution heatmap', async ({ page }) => {
+  test('the contribution heatmap', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', notRuby);
     await seedSignedIn(page);
     await page.goto('/');
 
@@ -116,7 +164,8 @@ test.describe('visual', () => {
    * assumes. A wrong answer to any of those is a heatmap that reads as normal
    * output while saying something false about when the learner studied.
    */
-  test('the contribution heatmap on a phone', async ({ page }) => {
+  test('the contribution heatmap on a phone', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', notRuby);
     await page.setViewportSize({ width: 375, height: 667 });
     await seedSignedIn(page);
     await page.goto('/');
@@ -144,12 +193,63 @@ test.describe('visual', () => {
    * either way, which is what the gate is for, but the diff is not purely a
    * story about placement.
    */
-  test('the dashboard', async ({ page }) => {
+  test('the dashboard', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', notRuby);
     await seedSignedIn(page);
     await page.goto('/');
     await expect(page.getByText('今週学んだ語')).toBeVisible();
 
     await expect(page).toHaveScreenshot('dashboard.png', { fullPage: true });
+  });
+
+  /**
+   * A note long enough to break the layout, shot where it broke it.
+   *
+   * The defect: an unbroken run of Latin characters has no break opportunity,
+   * so before `overflow-wrap: anywhere` it set the width of its card, the card
+   * set the width of the grid, and the grid set the scroll width of the
+   * document. On a phone the browser answers a document wider than the viewport
+   * by zooming out to fit it — so the symptom was the *whole page* rendering as
+   * a narrow column against a field of white, with nothing at all wrong at the
+   * place the diff would point to.
+   *
+   * The measurement in the describe below is what proves the overflow is gone,
+   * and it is the assertion that would catch a regression. This shot is here for
+   * what a measurement cannot see: whether the ellipsis lands, whether the JLPT
+   * pill is still inside the card, and — the reason a Japanese app cannot use a
+   * plain `truncate` here without checking — whether clipping the headword to
+   * one line clips the furigana off the top of it, since the annotation is drawn
+   * above the base text inside the same line box.
+   */
+  test('a headword too long for its card is clipped, not spilled', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', notRuby);
+    await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
+    await page.goto('/vocabulary');
+
+    const cards = page.locator('a[href^="/vocabulary/"]');
+    await expect(cards.first()).toBeVisible();
+    await expect(page.locator('main')).toHaveScreenshot('long-entry-cards.png');
+  });
+
+  /**
+   * The same note on the dashboard list, which fails differently: the row is
+   * flex, and a flex item will not shrink below its content unless it is told
+   * to, so the headword pushed the definition and the date out of the row
+   * rather than wrapping inside it.
+   *
+   * At 375 because that is the width the screenshots in the bug report were
+   * taken at, and the width where a row that will not shrink has least room to
+   * hide.
+   */
+  test('a long headword keeps the dashboard row on one line at 375', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', notRuby);
+    await page.setViewportSize({ width: 375, height: 667 });
+    await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
+    await page.goto('/');
+
+    const recent = page.locator('section').filter({ hasText: '最近追加した語' }).first();
+    await expect(recent).toBeVisible();
+    await expect(recent).toHaveScreenshot('long-entry-rows.png');
   });
 });
 
@@ -167,4 +267,185 @@ test.describe('visual — the empty notebook', () => {
     await expect(page.getByText('今日の単語')).toBeHidden();
     await expect(page.getByText('JLPTレベル（全 0 語）')).toBeVisible();
   });
+});
+
+/**
+ * The overflow itself, measured rather than photographed.
+ *
+ * This is the assertion that actually states the property — "no long value makes
+ * the document wider than the viewport" — and unlike the screenshots above it
+ * runs on every platform, needs no committed baseline, and cannot be made to
+ * pass by regenerating anything. The images say the clipping *looks* right; this
+ * says the page does not scroll sideways.
+ *
+ * `scrollWidth` on the documentElement and not on the card, because the bug is
+ * not local to the element holding the long word: the visible symptom was a
+ * dashboard zoomed out to a narrow column, and the cause was one row several
+ * sections away. Anything that widens the document is caught here wherever it
+ * lives.
+ *
+ * One pixel of tolerance because a scrollbar or a sub-pixel layout rounding can
+ * put `scrollWidth` a fraction above `clientWidth` on a page that does not
+ * scroll; the defect being guarded against was hundreds of pixels wide.
+ */
+test.describe('long values must not widen the page', () => {
+  const overflow = (page: import('@playwright/test').Page) =>
+    page.evaluate(() => {
+      const root = document.documentElement;
+      return root.scrollWidth - root.clientWidth;
+    });
+
+  /*
+    Every screen a long value can reach, because the first pass fixed the two
+    that were reported and left four that were not. The word set detail page in
+    particular was 6,115 pixels wide at a 1,280 viewport: `min-width: auto` is
+    the default for a grid item *and* for a flex item, so the picker and member
+    panels each refused to go below their content, and the one row holding a long
+    headword carried the whole page with it. A per-screen loop is what stops the
+    next one being found in a screenshot instead.
+  */
+  for (const { name, path } of [
+    { name: 'the dashboard', path: '/' },
+    { name: 'the vocabulary grid', path: '/vocabulary' },
+    { name: 'the word set list', path: '/wordsets' },
+    { name: 'the word set detail page', path: '/wordsets/set-oversize' },
+    { name: 'the flashcard setup', path: '/practice/flashcards' },
+    { name: 'the dictation setup', path: '/practice/dictation' },
+  ]) {
+    for (const width of [375, 1280]) {
+      test(`${name} does not scroll sideways at ${width}`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 800 });
+        await seed(page, {
+          signedIn: true,
+          entries: [...WORDS, ...OVERSIZE_WORDS],
+          wordSets: OVERSIZE_SET,
+        });
+        await page.goto(path);
+        await expect(page.locator('main')).toBeVisible();
+
+        expect(await overflow(page)).toBeLessThanOrEqual(1);
+      });
+    }
+  }
+
+  /*
+    Height, which the overflow measurement above is blind to and which is how
+    three of the four missed cases actually presented.
+
+    Nothing here overflowed once `overflow-wrap: anywhere` landed — the long
+    value wrapped instead, and then grew its container downwards: a word set
+    card eight lines tall setting the height of every card in its row, and a
+    filter chip six lines tall that stopped reading as a control.
+
+    One assertion per test rather than both in one, because the first failure
+    ends the test: with the two together a card at 872px hid whether the chip
+    was still 152px, and a red proof that cannot see its second case is not a
+    proof of it.
+
+    The bounds are generous on purpose. This guards against a clamp being
+    removed, not against a particular pixel — a card is ~112px and fails at 200.
+  */
+  test('a long word set name does not decide the height of its whole row', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: OVERSIZE_SET });
+    await page.goto('/wordsets');
+
+    const card = page.locator('a[href="/wordsets/set-oversize"]');
+    await expect(card).toBeVisible();
+    expect((await card.boundingBox())?.height ?? 0).toBeLessThan(200);
+  });
+
+  test('a long word set name keeps its filter chip the shape of a control', async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: [...WORDS, ...OVERSIZE_WORDS],
+      wordSets: OVERSIZE_SET,
+    });
+    await page.goto('/practice/dictation');
+
+    const chip = page.getByRole('button', { name: /W{20,}/ }).first();
+    await expect(chip).toBeVisible();
+    expect((await chip.boundingBox())?.height ?? 0).toBeLessThan(48);
+  });
+
+  /**
+   * The word-set description, which overflows downward rather than sideways.
+   *
+   * An essay in that field pushed the member list off the screen with nothing
+   * on the page to say it was still down there, so the set read as empty. Ten
+   * lines, then a control to open the rest.
+   */
+  test('a very long word set description collapses behind a control', async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS,
+      wordSets: [
+        {
+          id: 'set-wordy',
+          name: '長い説明のセット',
+          description: 'この単語集の説明はとても長い。'.repeat(80),
+          entryIds: ['w-kiriwake'],
+        },
+      ],
+    });
+    await page.goto('/wordsets/set-wordy');
+
+    const description = page.getByText('この単語集の説明はとても長い。').first();
+    await expect(description).toBeVisible();
+
+    // Collapsed: the member list is what has to stay reachable, and the whole
+    // point of the clamp is that it is on screen without scrolling past an essay.
+    const collapsed = await description.evaluate((el) => el.clientHeight);
+    await page.getByRole('button', { name: 'もっと見る' }).click();
+    const expanded = await description.evaluate((el) => el.clientHeight);
+
+    expect(expanded).toBeGreaterThan(collapsed);
+    await expect(page.getByRole('button', { name: '折りたたむ' })).toBeVisible();
+  });
+});
+
+/**
+ * The cause rather than the symptom, and the only assertion here that could be
+ * proved red against the defect it exists for.
+ *
+ * A `<ruby>` inside a `display: -webkit-box` loses its base text on iOS Safari:
+ * the annotation paints and the kanji does not. `line-clamp` compiles to
+ * exactly that, so clamping a headword to one line — which looks like a pure
+ * layout decision — silently deletes the word from the screen on the device
+ * most of this app is read on.
+ *
+ * Reading `display` off the element is the whole check, and it looks like an
+ * implementation detail until you know what it stands for: `-webkit-box` there
+ * *is* the bug, and there is no rendered-output assertion that can see it,
+ * because Playwright's WebKit renders the case correctly and only the real
+ * device does not.
+ *
+ * **Only the WebKit run can fail it, and that is the point.** Given the same
+ * `line-clamp` declaration Chromium computes `display: flow-root` and WebKit
+ * computes `-webkit-box` — measured, both engines, on the reverted code. So the
+ * Chromium copy of this test is green whether the bug is present or not, and
+ * the second project is not redundancy here but the entire mechanism.
+ *
+ * It takes no screenshot, so unlike the baselines above it also runs on a
+ * laptop — where those are skipped and this is the only thing standing between
+ * a clamp and another iPhone-only regression.
+ */
+test.describe('a ruby wrapper may never be laid out as a -webkit-box', () => {
+  for (const { name, path } of [
+    { name: 'the dashboard', path: '/' },
+    { name: 'the vocabulary grid', path: '/vocabulary' },
+  ]) {
+    test(`${name} keeps every headword in normal flow`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
+      await page.goto(path);
+      await expect(page.locator('.has-ruby').first()).toBeVisible();
+
+      const displays = await page
+        .locator('.has-ruby')
+        .evaluateAll((els) => els.map((el) => getComputedStyle(el).display));
+
+      expect(displays.length).toBeGreaterThan(0);
+      expect(displays).not.toContain('-webkit-box');
+    });
+  }
 });

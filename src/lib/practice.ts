@@ -1,5 +1,6 @@
 import { JLPT_LEVELS, POS, WORD_ORIGINS } from '@/domain/entry';
 import type { Entry } from '@/domain/entry';
+import { SESSION_LIMITS } from '@/domain/limits';
 import type { EntryProgress, PracticeMode, PracticeSessionDraft } from '@/domain/practice';
 import type { WordSet } from '@/domain/wordSet';
 import { addDays, dateKey, subtractMonths } from '@/lib/dates';
@@ -309,6 +310,21 @@ export function mergeProgress(
   return [...touched.values()];
 }
 
+/**
+ * `text` shortened to at most `max` UTF-16 code units, ellipsis included.
+ *
+ * The slice is by code unit because the limit is, and a set name may end in an
+ * emoji — so a cut that lands between the two halves of a surrogate pair leaves
+ * a lone high surrogate as the last character. That is not a character: it
+ * renders as a replacement glyph, and it is not encodable as UTF-8, so what
+ * Firestore stores is not what was measured. Dropping the orphan costs one more
+ * unit off a caption that is already being shortened.
+ */
+function ellipsise(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).replace(/[\uD800-\uDBFF]$/u, '')}…`;
+}
+
 export function summariseSession(input: {
   mode: PracticeMode;
   filterLabel: string;
@@ -317,7 +333,19 @@ export function summariseSession(input: {
 }): PracticeSessionDraft {
   return {
     mode: input.mode,
-    filterLabel: input.filterLabel,
+    /*
+      Truncated rather than refused, and it is the one place in this change that
+      is right.
+
+      Nothing here is typed: the label is assembled from the tag, set and level
+      names already chosen on the setup screen, so its length is a consequence
+      of choices the user made somewhere else entirely. Refusing the write would
+      throw away a finished practice run — the answers, the score, the missed
+      words — to protect a caption, and there is no field to send them back to
+      to fix it. An ellipsis loses the tail of a description of filters they can
+      see on screen anyway.
+    */
+    filterLabel: ellipsise(input.filterLabel, SESSION_LIMITS.filterLabel),
     total: input.answers.length,
     correct: input.answers.filter((answer) => answer.correct).length,
     missed: input.answers.filter((answer) => !answer.correct).map((answer) => answer.entryId),

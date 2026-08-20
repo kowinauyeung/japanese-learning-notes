@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { INPUT_LIMITS } from '@/domain/limits';
 import type { TranslationLanguage } from '@/domain/user';
 import { useI18n } from '@/i18n/context';
 import { buildPrompt, promptLanguageName, SCHEMA } from '@/lib/jsonImport';
@@ -102,6 +103,7 @@ export function JsonImport({
             type="text"
             value={value.word}
             onChange={(event) => set('word', event.target.value)}
+            maxLength={INPUT_LIMITS.importWord}
             placeholder="兆候"
             className={inputClass}
           />
@@ -111,6 +113,7 @@ export function JsonImport({
             type="text"
             value={value.language}
             onChange={(event) => set('language', event.target.value)}
+            maxLength={INPUT_LIMITS.importLanguage}
             className={inputClass}
           />
         </Field>
@@ -120,6 +123,7 @@ export function JsonImport({
         <Area
           value={value.original}
           onChange={(v) => set('original', v)}
+          maxLength={INPUT_LIMITS.importOriginal}
           rows={2}
           placeholder="あやしい兆候ではあるのだろうけれど"
         />
@@ -130,6 +134,7 @@ export function JsonImport({
           type="text"
           value={value.source}
           onChange={(event) => set('source', event.target.value)}
+          maxLength={INPUT_LIMITS.importSource}
           placeholder="会議、同僚、小説「海辺のカフカ」…"
           className={inputClass}
         />
@@ -165,7 +170,20 @@ export function JsonImport({
       </details>
 
       <Field label={t('import.pasteJson')}>
-        <Area value={value.raw} onChange={(v) => set('raw', v)} rows={10} placeholder="{ …" />
+        {/* The one box in the form with no `maxLength`. It is not an oversight
+            and it is not laxer: `jsonToDraft` refuses a paste past
+            `INPUT_LIMITS.jsonPaste` and names the size it received, which is
+            the message the user needs. The attribute would pre-empt it by
+            trimming the paste to exactly the limit, and a JSON document cut off
+            mid-object does not parse — so the one thing that could not be said
+            is the one thing that was wrong with it. */}
+        <Area
+          value={value.raw}
+          onChange={(v) => set('raw', v)}
+          maxLength="unbounded"
+          rows={10}
+          placeholder="{ …"
+        />
       </Field>
     </div>
   );

@@ -50,12 +50,17 @@ export function SessionSummary({
                   entryId={entry.id}
                   className="flex items-baseline justify-between gap-3 py-2.5"
                 >
+                  {/* Same treatment as the dashboard's recent list, for the
+                      same reason: a flex item does not shrink below its content
+                      unless told to, so one long headword turned this row into
+                      sixteen lines and pushed the 再挑戦 buttons under the fold —
+                      the two controls the summary exists to offer. */}
                   <Ruby
                     headword={entry.headword}
                     reading={entry.reading}
-                    className="has-ruby font-display font-bold"
+                    className="has-ruby max-w-1/2 min-w-0 truncate font-display font-bold"
                   />
-                  <span className="line-clamp-1 text-xs text-muted">
+                  <span className="line-clamp-1 min-w-0 text-xs text-muted">
                     {entry.senses[0]?.description || entry.definition}
                   </span>
                 </VocabLink>

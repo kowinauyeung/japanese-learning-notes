@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FilterPanel } from '@/components/browse/FilterPanel';
+import { INPUT_LIMITS } from '@/domain/limits';
 import { useI18n } from '@/i18n/context';
 import { EMPTY_FILTERS, isDefault } from '@/lib/filters';
 import type { Filters } from '@/lib/filters';
@@ -37,6 +38,7 @@ export function PickerToolbar({
           type="search"
           value={filters.q}
           onChange={(event) => onChange({ ...filters, q: event.target.value })}
+          maxLength={INPUT_LIMITS.search}
           placeholder={t('vocabulary.searchPlaceholder')}
           className="min-h-11 min-w-0 flex-1 rounded-pill border border-line bg-bg px-4 text-sm text-ink placeholder:text-muted"
         />

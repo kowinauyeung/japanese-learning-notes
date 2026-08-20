@@ -1,5 +1,7 @@
 import type { EntryDraft } from '@/domain/entry';
+import { INPUT_LIMITS } from '@/domain/limits';
 import type { TranslationLanguage } from '@/domain/user';
+import { describeSizeProblem, draftSizeProblems } from './draft';
 import { sanitizeDraft } from './sanitize';
 
 const PROMPT_LANGUAGE_NAMES = {
@@ -195,7 +197,18 @@ function delimiterMayStandAt(text: string, from: number): boolean {
 export function jsonToDraft(
   raw: string,
   context: PromptContext = {},
-): { draft?: EntryDraft; error?: string } {
+): { draft?: EntryDraft; error?: string; oversize?: string[] } {
+  // Before the parse, not after: `JSON.parse` on a multi-megabyte paste blocks
+  // the main thread long enough to read as a hung tab, and every check below
+  // this line runs on the parsed result. A paste that large is not a note — the
+  // schema's own worst case is a few kilobytes — so refusing it outright costs
+  // nothing a real import needed.
+  if (raw.length > INPUT_LIMITS.jsonPaste) {
+    return {
+      error: `貼り付けが大きすぎます: ${raw.length}字（上限 ${INPUT_LIMITS.jsonPaste}字）。`,
+    };
+  }
+
   // Tolerate a ```json fence. The prompt now asks for one, and assistants used
   // to add it even when told not to, so both eras of pasted note arrive here.
   const unfenced = raw
@@ -221,5 +234,25 @@ export function jsonToDraft(
 
   if (!draft.headword) return { error: '"headword" が空です。' };
   if (!draft.definition) return { error: '"definition" が空です。' };
+
+  /*
+    Length is checked here rather than left to the save button, and every
+    violation is reported rather than the first.
+
+    `sanitizeDraft` above has already coerced types and dropped unusable values,
+    and it does **not** truncate — deliberately. An assistant asked for a
+    definition writes prose, and silently keeping the first thousand characters
+    would import a note whose explanation stops mid-sentence, with nothing on
+    screen saying so. The user is looking at the JSON that produced it and can
+    shorten the field themselves; that is the one situation where refusing is
+    cheaper for them than repairing.
+
+    All of them at once because the alternative is a round trip per field: a
+    pasted note with six oversize values would otherwise be re-pasted six times,
+    each time revealing one more problem.
+  */
+  const oversize = draftSizeProblems(draft).map(describeSizeProblem);
+  if (oversize.length) return { oversize };
+
   return { draft };
 }

@@ -4,7 +4,9 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { MemberList } from '@/components/wordsets/MemberList';
 import { MemberPicker } from '@/components/wordsets/MemberPicker';
 import { PickerToolbar } from '@/components/wordsets/PickerToolbar';
+import { SetDescription } from '@/components/wordsets/SetDescription';
 import { WordSetEditModal } from '@/components/wordsets/WordSetEditModal';
+import { WORD_SET_LIMITS } from '@/domain/limits';
 import type { WordSetDraft } from '@/domain/wordSet';
 import { useI18n } from '@/i18n/context';
 import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
@@ -79,6 +81,22 @@ export function Component() {
 
   const write = async (draft: WordSetDraft): Promise<boolean> => {
     if (!set || busy) return false;
+    /*
+      Every mutation on this page routes through here — add one, add all the
+      filtered candidates, drag to reorder, remove — so this is the only place
+      the size of a set has to be checked. Reordering and removing cannot grow
+      it, which leaves 追加 as the one path that can reach the limit and the one
+      that gets an error worth reading.
+
+      Refusing rather than truncating, unlike `summariseSession`: the order of
+      `entryIds` is the study order, so dropping the tail would silently discard
+      whichever words happened to sort last, and the user asked for all of them.
+    */
+    if (draft.entryIds.length > WORD_SET_LIMITS.entryIds) {
+      setWriteError(t('wordSets.tooManyMembers', { max: WORD_SET_LIMITS.entryIds }));
+      setPending(null);
+      return false;
+    }
     setBusy(true);
     setWriteError(null);
     try {
@@ -213,9 +231,7 @@ export function Component() {
                 {t('wordSets.count', { count: members.length })}
               </span>
             </h1>
-            {set.description && (
-              <p className="prose-cjk mt-2 text-sm text-muted">{set.description}</p>
-            )}
+            {set.description && <SetDescription description={set.description} />}
           </div>
           <button
             type="button"
@@ -240,7 +256,7 @@ export function Component() {
         viewport rather than a fixed height: two of them still fit.
       */}
       <div className="grid gap-4 nav:grid-cols-2">
-        <div className="flex max-h-[46vh] min-h-64 nav:max-h-[62vh]">
+        <div className="flex max-h-[46vh] min-h-64 min-w-0 nav:max-h-[62vh]">
           <MemberPicker
             shown={candidates.shown}
             total={candidates.total}
@@ -253,7 +269,7 @@ export function Component() {
             }
           />
         </div>
-        <div className="flex max-h-[46vh] min-h-64 nav:max-h-[62vh]">
+        <div className="flex max-h-[46vh] min-h-64 min-w-0 nav:max-h-[62vh]">
           <MemberList
             members={members}
             list={MEMBERS}

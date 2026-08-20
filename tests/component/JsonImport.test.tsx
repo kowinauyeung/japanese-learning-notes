@@ -127,3 +127,35 @@ describe('JsonImport — copying the prompt when the clipboard is unavailable', 
     );
   });
 });
+
+/**
+ * The paste box is the one field in this form with no `maxLength`, and it has
+ * to stay that way.
+ *
+ * This reads as an assertion about an attribute and is not one. `jsonToDraft`
+ * refuses a paste past `INPUT_LIMITS.jsonPaste` and says how large it was, and
+ * the browser applies `maxlength` to a paste by *inserting the first n
+ * characters* — so with the attribute present the oversized branch is dead
+ * code, the value handed to the parser is a JSON document cut off mid-object,
+ * and what the user is told is that their JSON does not parse. The one fact
+ * they need, that it was simply too big, is the one that can no longer be said.
+ *
+ * jsdom will not reproduce that: `maxlength` constrains user editing, and
+ * setting `value` from a test is not user editing. The attribute's presence is
+ * what the browser acts on, so the attribute is what this checks.
+ */
+describe('JsonImport — the paste box', () => {
+  it('does not cap the pasted JSON, which would truncate it out of the size check', () => {
+    render(<Harness initial={emptyJsonImport('ja')} />);
+
+    const paste = screen.getByRole('textbox', { name: 'AI の返した JSON を貼り付け' });
+    expect(paste).not.toHaveAttribute('maxlength');
+  });
+
+  /** The fields beside it are bounded, so the absence above is a decision. */
+  it('still caps the short fields the user types by hand', () => {
+    render(<Harness initial={emptyJsonImport('ja')} />);
+
+    expect(screen.getByRole('textbox', { name: '訳の言語' })).toHaveAttribute('maxlength');
+  });
+});

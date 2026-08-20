@@ -42,7 +42,7 @@ export function MemberPicker({
 }) {
   const { t } = useI18n();
   return (
-    <section className="flex min-h-0 flex-1 flex-col rounded-card bg-card shadow-panel">
+    <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col rounded-card bg-card shadow-panel">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line p-4">
         <h2 className="text-sm font-semibold">
           {t('wordSets.findWords')}

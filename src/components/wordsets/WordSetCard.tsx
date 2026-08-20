@@ -17,7 +17,12 @@ export function WordSetCard({ set, count }: { set: WordSet; count: number }) {
       to={`/wordsets/${set.id}`}
       className="flex flex-col gap-2 rounded-card bg-card p-4 shadow-panel transition hover:-translate-y-0.5"
     >
-      <h2 className="font-display text-lg font-bold">{set.name}</h2>
+      {/* Two lines, not one: a set name is chosen prose rather than a single
+          word, so the second line often carries the half that distinguishes two
+          sets. Unclamped it reached eight lines and set the height of every
+          card in the row — a grid of short sets with a band of empty space
+          through it. */}
+      <h2 className="line-clamp-2 font-display text-lg font-bold">{set.name}</h2>
       {set.description && (
         <p className="prose-cjk line-clamp-2 text-sm text-muted">{set.description}</p>
       )}

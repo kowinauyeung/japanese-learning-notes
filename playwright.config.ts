@@ -26,12 +26,22 @@ export default defineConfig({
   reporter: CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
 
   /**
-   * Screenshots are compared per platform. Baselines are generated on Linux —
-   * see `yarn test:visual:update` — because macOS and Linux hint and antialias
-   * Japanese glyphs differently, and a baseline authored on a laptop would fail
-   * on every CI run for reasons that have nothing to do with the change.
+   * Screenshots are compared per platform **and per browser**.
+   *
+   * Baselines are generated on Linux — see `yarn test:visual:update` — because
+   * macOS and Linux hint and antialias Japanese glyphs differently, and a
+   * baseline authored on a laptop would fail on every CI run for reasons that
+   * have nothing to do with the change.
+   *
+   * `{projectName}` was added when WebKit was: without it a WebKit run compares
+   * against the Chromium baseline sitting beside it, which fails on
+   * antialiasing alone and, worse, is silently overwritten by
+   * `--update-snapshots`. Two engines rendering the same markup differently is
+   * the entire reason the second project exists, so their expected results
+   * cannot share a file.
    */
-  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}-{platform}{ext}',
+  snapshotPathTemplate:
+    '{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}-{platform}{ext}',
 
   expect: {
     toHaveScreenshot: {
@@ -70,7 +80,43 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
   },
 
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  /**
+   * Chromium runs everything; WebKit runs the specs that are about rendering.
+   *
+   * **The reason WebKit is here is a bug it shipped.** `line-clamp` compiles to
+   * `display: -webkit-box`, and WebKit lays a `<ruby>` out inside one by
+   * dropping the base text and painting only the annotation — so every headword
+   * on the dashboard rendered as bare furigana on an iPhone, with the kanji
+   * simply absent. Chromium implements the same property and renders it
+   * correctly, so the whole suite, the committed baselines and a hand check in
+   * a local Chromium all agreed the layout was fine.
+   *
+   * That is not a one-off. This is a Japanese vocabulary notebook read mostly on
+   * a phone: ruby, `-webkit-` prefixed layout and iOS Safari's viewport
+   * behaviour are the parts most likely to differ, and they are precisely the
+   * parts nothing here could see. The previous change to this repository was
+   * also an iOS-only defect.
+   *
+   * **Scoped by `testMatch` rather than run wholesale.** WebKit doubles the
+   * suite for a second opinion that only differs on rendering; routing,
+   * providers and state machines do not need a second browser to be checked in.
+   * `visual.spec.ts` is where the layout claims live, so that is what runs.
+   *
+   * **No screenshots are taken here.** `snapshotPathTemplate` keys baselines on
+   * platform and not on browser, so a WebKit run would compare against — and
+   * `--update-snapshots` would overwrite — the Chromium baselines committed
+   * beside it. The assertions this project exists for measure the DOM instead,
+   * which is browser-independent by construction; `test.skip` on the screenshot
+   * block keeps them out of its way.
+   */
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'webkit',
+      testMatch: /visual\.spec\.ts/,
+      use: { ...devices['iPhone 14'], isMobile: false, hasTouch: false },
+    },
+  ],
 
   webServer: {
     // `--host 127.0.0.1` is not decoration: vite preview otherwise binds to

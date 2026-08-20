@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Entry, EntryDraft } from '@/domain/entry';
+import { ENTRY_LIMITS, TAG_INPUT_MAX } from '@/domain/limits';
 import type { TranslationLanguage } from '@/domain/user';
 import { useI18n } from '@/i18n/context';
 import { localizeFormError } from '@/i18n/localizeFormError';
+import { dateKey } from '@/lib/dates';
 import { draftError, emptyDraft, parseTags, toDraft } from '@/lib/draft';
 import { useEntries } from '@/lib/entries';
 import { jsonToDraft } from '@/lib/jsonImport';
@@ -43,7 +45,13 @@ export function EntryFormModal({
   const [tab, setTab] = useState<Tab>('simple');
   const [draft, setDraft] = useState<EntryDraft>(emptyDraft);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /**
+   * One or more messages. The JSON tab reports every oversize field at once —
+   * see `jsonToDraft` — and a paste with six of them fixed one per round trip
+   * is a paste nobody finishes fixing. Everything else still sets a single
+   * entry, so the footer renders a list of one without looking like a list.
+   */
+  const [errors, setErrors] = useState<string[]>([]);
   /**
    * The JSON tab's fields live here rather than inside `JsonImport`, because
    * its 読み込む button is rendered into the modal footer and needs the pasted
@@ -64,16 +72,27 @@ export function EntryFormModal({
     setDraft(entry ? toDraft(entry) : emptyDraft());
     setTab(entry ? 'full' : 'simple');
     setJson(emptyJsonImport(translationLanguage));
-    setError(null);
+    setErrors([]);
   }, [open, entry, translationLanguage]);
 
   const loadJson = () => {
-    const { draft: loaded, error: failure } = jsonToDraft(json.raw, {
-      original: json.original,
-      source: json.source,
-    });
-    if (failure) return setError(localizeFormError(failure, t));
-    setError(null);
+    const {
+      draft: loaded,
+      error: failure,
+      oversize,
+    } = jsonToDraft(json.raw, { original: json.original, source: json.source });
+    if (failure) return setErrors([localizeFormError(failure, t)]);
+    // Deliberately not loaded and not truncated: the user is looking at the JSON
+    // that produced these, so naming every field they have to shorten is both
+    // actionable and the only way to avoid silently importing a note whose
+    // explanation stops mid-sentence.
+    if (oversize?.length) {
+      return setErrors([
+        t('import.oversizeTitle'),
+        ...oversize.map((problem) => localizeFormError(problem, t)),
+      ]);
+    }
+    setErrors([]);
     if (loaded) {
       setDraft(loaded);
       setTab('full');
@@ -81,11 +100,14 @@ export function EntryFormModal({
   };
 
   const save = async () => {
-    const invalid = draftError(draft);
-    if (invalid) return setError(localizeFormError(invalid, t));
+    // The clock is read here rather than inside `draftError`, which takes it as
+    // an argument so it can be tested on any day — `learnedOn` is now bounded
+    // above by today.
+    const invalid = draftError(draft, dateKey(new Date()));
+    if (invalid) return setErrors([localizeFormError(invalid, t)]);
 
     setSaving(true);
-    setError(null);
+    setErrors([]);
     try {
       const id = entry
         ? (await repository.update(entry.id, draft), entry.id)
@@ -95,7 +117,7 @@ export function EntryFormModal({
       onClose();
     } catch (cause) {
       console.error(cause);
-      setError(t('form.saveError'));
+      setErrors([t('form.saveError')]);
     } finally {
       setSaving(false);
     }
@@ -108,7 +130,15 @@ export function EntryFormModal({
       onClose={onClose}
       footer={
         <div className="flex items-center gap-3">
-          {error && <p className="flex-1 text-xs text-danger">{error}</p>}
+          {errors.length > 0 && (
+            <ul className="max-h-24 min-w-0 flex-1 space-y-0.5 overflow-y-auto text-xs text-danger">
+              {errors.map((message) => (
+                <li key={message} className="wrap-anywhere">
+                  {message}
+                </li>
+              ))}
+            </ul>
+          )}
           {tab === 'json' && !entry && (
             <button
               type="button"
@@ -145,10 +175,10 @@ export function EntryFormModal({
               type="button"
               onClick={() => {
                 setTab(item.id);
-                // `error` carries both a JSON parse failure and a save failure.
+                // `errors` carries both a JSON parse failure and a save failure.
                 // Left alone, a malformed paste kept complaining from the footer
                 // of the 詳細 tab, next to a 保存する it had nothing to do with.
-                setError(null);
+                setErrors([]);
               }}
               className={`flex-1 rounded-pill py-1.5 text-xs font-semibold transition ${
                 tab === item.id ? 'bg-card text-ink shadow-panel' : 'text-muted'
@@ -163,15 +193,24 @@ export function EntryFormModal({
       {tab === 'simple' && !entry && (
         <div className="space-y-3">
           <Field label={t('form.headword')} hint={t('form.required')}>
-            <Text value={draft.headword} onChange={(v) => setDraft({ ...draft, headword: v })} />
+            <Text
+              value={draft.headword}
+              onChange={(v) => setDraft({ ...draft, headword: v })}
+              maxLength={ENTRY_LIMITS.headword}
+            />
           </Field>
           <Field label={t('form.reading')} hint={t('form.kana')}>
-            <Text value={draft.reading} onChange={(v) => setDraft({ ...draft, reading: v })} />
+            <Text
+              value={draft.reading}
+              onChange={(v) => setDraft({ ...draft, reading: v })}
+              maxLength={ENTRY_LIMITS.reading}
+            />
           </Field>
           <Field label={t('form.definition')} hint={t('form.required')}>
             <Area
               value={draft.definition}
               onChange={(v) => setDraft({ ...draft, definition: v })}
+              maxLength={ENTRY_LIMITS.definition}
               rows={4}
             />
           </Field>
@@ -179,6 +218,7 @@ export function EntryFormModal({
             <Area
               value={draft.definitionSub}
               onChange={(v) => setDraft({ ...draft, definitionSub: v })}
+              maxLength={ENTRY_LIMITS.definitionSub}
               rows={3}
             />
           </Field>
@@ -186,6 +226,7 @@ export function EntryFormModal({
             <Text
               value={draft.tags.join(' ')}
               onChange={(v) => setDraft({ ...draft, tags: parseTags(v) })}
+              maxLength={TAG_INPUT_MAX}
               placeholder={t('form.tagsPlaceholder')}
             />
           </Field>
