@@ -302,27 +302,31 @@ A preview channel is served from `goitei-dev--pr-<n>-<hash>.web.app`, and
 Firebase Auth refuses to complete a Google sign-in from an origin that is not on
 its authorized domain list. The hash is generated per channel, so every pull
 request lands on a hostname nobody has authorized, and the list accepts no
-wildcard. The `authorize` job in `deploy-dev.yml` adds the hostname through the
-Identity Toolkit admin API once the channel exists.
+wildcard.
 
-It adds every live channel's hostname and not only its own, because the job that
-should have added one can be cancelled before it ever runs. A concurrency group
-holds one running job and one pending job, and a third arrival evicts the
-pending one — `cancel-in-progress: false` protects the job that is running, not
-the one queued behind it. Three overlapping previews therefore lose the middle
-one's authorization outright, on a channel that is deployed, linked from its
-pull request and alive for a week. Reading the live channel list makes the next
-append repair it.
+`firebase hosting:channel:deploy` handles both halves of that on its own. It
+adds the new channel's hostname to the list, and it prunes every `goitei-dev--`
+hostname no live channel claims, unless it is asked not to with
+`--no-authorized-domains`. Nothing in this repository reimplements either.
 
-`preview-cleanup.yml` takes them off again. It prunes by reconciliation —
-every authorized domain starting `goitei-dev--` that no live channel claims —
-rather than by removing the one domain a closing pull request added, because a
-channel expires after seven days on its own and its hostname is then
-unrecoverable. It runs on pull-request close and nightly.
+**It needs `roles/firebaseauth.admin` to do it, and says almost nothing when it
+cannot.** Without the role the call fails, firebase-tools logs a warning and
+reports a successful deploy, and `--json` — which `deploy-dev.yml` passes to
+read the channel URL — suppresses the warning too. That is not a hypothetical:
+it is how preview sign-in came to be broken for weeks with every check green,
+and why reviewers were adding hostnames by hand.
 
-The list is project-wide and finite, which is why the removal matters as much as
-the addition: a stale entry is an origin that stays trusted for authentication
-after the site behind it is gone.
+So `deploy-dev.yml` ends with a step that reads the authorized domain list back
+and fails the job when the hostname it just deployed is missing. Two things
+cause that, and neither surfaces any other way: the role being revoked, and two
+channel deploys overlapping — the CLI reads the list, appends and writes it
+back, and the admin API has no etag between the read and the write, so the later
+writer drops the earlier one's hostname. A re-run of the job repairs both.
+
+`preview-cleanup.yml` deletes the channel when its pull request closes. It does
+not touch the domain list: with the channel gone, the next preview deploy prunes
+the hostname on its own. Without it the channel would linger its full seven
+days, and the hostname would stay trusted for authentication that whole time.
 
 Building previews with `yarn build:e2e` would sidestep all of this — the
 in-memory adapters sign a user in without Google — and it is the wrong trade.
@@ -342,9 +346,6 @@ rather than a build-time optimisation:
 - **`deploy`** holds the credentials and runs no code from the pull request. It
   checks out the base branch, installs `firebase-tools` from a lockfile that is
   already merged, and takes only `dist/` from the build job.
-- **`authorize`** holds a credential too, and checks out nothing whatsoever. It
-  needs a token, `curl` and `jq`; none of the three come from this repository,
-  so the cheapest thing it can run from the branch is nothing.
 
 A pull request is otherwise a code-execution primitive: `yarn install` runs
 whatever `postinstall` the branch's lockfile asks for, before any file in the

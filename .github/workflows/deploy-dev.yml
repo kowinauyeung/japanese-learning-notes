@@ -119,12 +119,6 @@ jobs:
       id-token: write
       pull-requests: write
 
-    # Consumed by `authorize`, which deliberately checks out nothing and so has
-    # no other way to learn either fact.
-    outputs:
-      configured: ${{ steps.gate.outputs.configured }}
-      preview-url: ${{ steps.preview.outputs.url }}
-
     steps:
       # Until the federation provider exists there is nothing to deploy to, and
       # failing every pull request over a setup step nobody has done yet trains
@@ -168,10 +162,15 @@ jobs:
           path: dist
 
       - uses: google-github-actions/auth@v3
+        id: auth
         if: steps.gate.outputs.configured == 'true'
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          # firebase-tools finds the credentials file on its own. The bearer
+          # token is for the verification step at the end, which talks to the
+          # Identity Toolkit admin API over plain HTTP.
+          token_format: access_token
 
       # Hosting and rules together, and only from develop. `--project dev` is
       # the .firebaserc alias for goitei-dev; prod is not reachable from this
@@ -206,86 +205,45 @@ jobs:
             > body.md
           gh pr comment "$PR" --body-file body.md --edit-last --create-if-none
 
-  # Google sign-in refuses an origin that is not on Firebase Auth's authorized
-  # domain list, and a preview channel's hostname carries a hash that is
-  # generated per channel — so every pull request lands on a domain nobody has
-  # ever seen before. The list takes no wildcard, which leaves three options:
-  # add each one by hand, ship previews that cannot sign in, or do this.
-  #
-  # The alternative worth naming, because it looks cheaper than it is: build
-  # previews with `yarn build:e2e`, whose in-memory adapters sign a user in
-  # without Google at all. That trades away the thing a preview is for. The
-  # comment below promises real goitei-dev data, and a Firestore query, index
-  # or cursor defect — the class of bug that has actually reached review here —
-  # is invisible against fakes.
-  #
-  # Runs as its own job rather than a step in `deploy` because of `concurrency`
-  # below, and takes the opportunity to check out nothing at all: it needs a
-  # token, `curl` and `jq`, none of which come from this repository.
-  authorize:
-    needs: deploy
-    if: github.event_name == 'pull_request' && needs.deploy.outputs.configured == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-
-    # The API offers no etag and no atomic append, so the update is
-    # read-modify-write and two pull requests deploying at once would leave one
-    # of the two domains off the list. The group is deliberately repository-wide
-    # rather than per pull request — serialising against *other* pull requests
-    # is the entire point — and `cancel-in-progress` stays false, because a
-    # cancelled write here is a preview that cannot sign in.
-    #
-    # False is not sufficient on its own, and the step below is shaped by why.
-    # A concurrency group holds one running job and one *pending* job; a third
-    # arrival evicts the pending one. `cancel-in-progress: false` protects the
-    # job that is running, never the one queued behind it, so three overlapping
-    # previews cancel the middle one's authorization outright — its channel is
-    # deployed and commented on the pull request, and sign-in there is broken
-    # for the week the channel lives. GitHub offers no deeper queue to ask for.
-    # So the step reconciles every live channel rather than appending its own
-    # hostname, and whichever job survives repairs what the evicted one never
-    # got to write.
-    #
-    # `preview-cleanup.yml` names the same group, so a prune cannot interleave
-    # with an append either.
-    concurrency:
-      group: firebase-auth-authorized-domains
-      cancel-in-progress: false
-
-    steps:
-      - uses: google-github-actions/auth@v3
-        id: auth
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
-          # `deploy` takes the credentials file and lets firebase-tools find it.
-          # This job talks to the Identity Toolkit admin API over plain HTTP, so
-          # it asks for the bearer token directly.
-          token_format: access_token
-
-      - name: Authorize the live preview domains for Google sign-in
+      # Google sign-in refuses an origin that is not on Firebase Auth's
+      # authorized domain list, and a channel's hostname carries a hash
+      # generated per channel, so every preview lands on a domain nobody has
+      # ever seen. `firebase hosting:channel:deploy` adds it to the list itself
+      # — `--no-authorized-domains` turns that off, and the step above does not
+      # pass it — and prunes the `goitei-dev--` domains no live channel claims
+      # while it is there.
+      #
+      # That call is also why previews could not sign in for weeks without
+      # anyone finding out. It needs `roles/firebaseauth.admin`, the service
+      # account did not have it, and firebase-tools answers a failure here with
+      # a warning and a successful deploy. `--json` above suppresses even the
+      # warning. The preview deployed, the comment below promised a working
+      # preview, and sign-in was broken on it for the seven days it lived.
+      #
+      # So this asks the question the deploy will not. Two things put the
+      # hostname back out of the list, and neither shows up as a failure:
+      # the role being revoked, and a concurrent channel deploy — the CLI reads
+      # the list, appends to it and writes it back, and the admin API offers no
+      # etag between the read and the write, so the later writer drops the
+      # earlier one's domain.
+      #
+      # Read-only, runs after the comment so a reviewer still gets the link,
+      # and a re-run of the job is the fix in both cases.
+      - name: Verify the preview domain is authorized for Google sign-in
+        if: steps.gate.outputs.configured == 'true' && github.event_name == 'pull_request'
         env:
           TOKEN: ${{ steps.auth.outputs.access_token }}
-          URL: ${{ needs.deploy.outputs.preview-url }}
-          # The .firebaserc `dev` alias, spelled out because this job checks out
-          # no repository to read it from. The default Hosting site id is the
-          # project id, which is why one value serves as both.
+          URL: ${{ steps.preview.outputs.url }}
+          # The .firebaserc `dev` alias, spelled out: this reads the project's
+          # auth config rather than deploying to it, and takes no alias.
           PROJECT: goitei-dev
-          SITE: goitei-dev
-          # Firebase names a channel URL `<site>--<channel>-<hash>.web.app`.
-          # Only a domain carrying this prefix is a preview: the list also holds
-          # `localhost`, the two permanent Firebase domains and any custom one,
-          # and none of those are this job's business.
-          PREFIX: goitei-dev--
         run: |
           set -euo pipefail
 
           host=${URL#https://}
           host=${host%%/*}
           if [ -z "$host" ]; then
-            echo "::error::No preview URL to authorize."
+            echo "::error::No preview URL to check."
             exit 1
           fi
 
@@ -298,55 +256,17 @@ jobs:
           # API. The body is echoed on its own line rather than interpolated
           # into the `::error::`, because a workflow annotation keeps only its
           # first line and these responses are multi-line JSON.
-          #
-          # Every live preview channel is read, not just this pull request's,
-          # for the reason `concurrency` above gives: a job evicted from the
-          # queue never ran and nothing retries it, so the next append is the
-          # only thing that can repair the list.
-          channels="https://firebasehosting.googleapis.com/v1beta1/projects/$PROJECT/sites/$SITE/channels?pageSize=100"
-          if ! listed=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$channels"); then
-            echo "$listed"
-            echo "::error::Could not list the preview channels for $SITE. See the response above."
-            exit 1
-          fi
-          live=$(jq -c '[.channels[]?.url // empty | sub("^https?://"; "") | sub("/.*$"; "")]' <<<"$listed")
-          echo "Live preview channels: $live"
-
           api="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config"
-
           if ! config=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$api"); then
             echo "$config"
             echo "::error::Could not read the Firebase Auth config for $PROJECT. See the response above."
             exit 1
           fi
-          domains=$(jq -c '.authorizedDomains // []' <<<"$config")
 
-          # Additive on purpose. Taking a domain off is `preview-cleanup.yml`'s
-          # job, and doing it from here would mean deciding mid-deploy that
-          # another pull request's preview is dead — off one list read, while
-          # that pull request's own deploy may be seconds behind this one.
-          #
-          # This pull request's hostname is added whether or not the channel
-          # list mentions it: it comes from the deploy that just finished, so it
-          # is the one hostname here that cannot be stale.
-          add=$(jq -c --argjson live "$live" --arg h "$host" --arg p "$PREFIX" \
-            '. as $have | (($live | map(select(startswith($p)))) + [$h] | unique) - $have' <<<"$domains")
-
-          # Re-running a deploy on the same pull request reuses the channel and
-          # therefore the hostname, so nothing to add is the common case.
-          if [ "$add" = '[]' ]; then
-            echo "::notice::$host and every other live preview are already authorized."
+          if jq -e --arg h "$host" '.authorizedDomains // [] | index($h)' <<<"$config" >/dev/null; then
+            echo "::notice::$host is authorized for Google sign-in."
             exit 0
           fi
 
-          if ! updated=$(curl -sS --fail-with-body -X PATCH \
-            -H "Authorization: Bearer $TOKEN" \
-            -H 'Content-Type: application/json' \
-            "$api?updateMask=authorizedDomains" \
-            -d "$(jq -c --argjson add "$add" '{authorizedDomains: (. + $add)}' <<<"$domains")"); then
-            echo "$updated"
-            echo "::error::Could not add $(jq -r 'join(", ")' <<<"$add") to the authorized domains. See the response above."
-            exit 1
-          fi
-
-          echo "::notice::Authorized $(jq -r 'join(", ")' <<<"$add") for Google sign-in."
+          echo "::error::$host was deployed but is not on the Firebase Auth authorized domain list, so Google sign-in will fail on this preview. Check that the deploy service account still holds roles/firebaseauth.admin, then re-run this job. See README → Preview sign-in."
+          exit 1
