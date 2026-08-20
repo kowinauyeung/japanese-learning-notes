@@ -30,6 +30,25 @@ export function SetDescription({ description }: { description: string }) {
   const [clipped, setClipped] = useState(false);
   const ref = useRef<HTMLParagraphElement>(null);
 
+  /*
+    Nothing here remounts when the text changes: editing a set happens on this
+    page, so a description opened to its full length and then rewritten to one
+    line arrives at the same mounted component with `expanded` still true. The
+    measurement below then declines to run — its guard is exactly that — and the
+    control keeps offering to collapse a paragraph that no longer overflows.
+
+    Adjusted during render rather than in an effect, which is what React asks
+    for when state has to follow a prop: the component re-runs before anything
+    is committed, so the new description is never painted expanded on the way to
+    being collapsed, and the measurement below sees the corrected value on its
+    first pass instead of on a second one.
+  */
+  const [measuring, setMeasuring] = useState(description);
+  if (measuring !== description) {
+    setMeasuring(description);
+    setExpanded(false);
+  }
+
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
