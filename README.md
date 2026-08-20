@@ -275,6 +275,11 @@ hitting it:
   check needs `serviceusage.services.get`. Without it the deploy stops on
   `403 Permission denied to get service [firestore.googleapis.com]`, which reads
   like a Firestore problem and is not one.
+- The service account also needs **Firebase Authentication Admin**
+  (`roles/firebaseauth.admin`), for preview sign-in below. Without it the deploy
+  and the preview both still succeed and only Google sign-in fails, on a domain
+  that exists for a week — the failure that is easiest to mistake for a bug in
+  the branch under review.
 - The provider's attribute condition matches on `assertion.repository` and stops
   there, deliberately. Narrowing it further is the obvious-looking improvement
   that breaks previews — see the trust boundary below before changing it.
@@ -291,10 +296,56 @@ hitting it:
   attribute condition cannot reach production. The procedure is reusable; the
   resources are not.
 
+#### Preview sign-in
+
+A preview channel is served from `goitei-dev--pr-<n>-<hash>.web.app`, and
+Firebase Auth refuses to complete a Google sign-in from an origin that is not on
+its authorized domain list. The hash is generated per channel, so every pull
+request lands on a hostname nobody has authorized, and the list accepts no
+wildcard.
+
+`firebase hosting:channel:deploy` handles both halves of that on its own. It
+adds the new channel's hostname to the list, and it prunes every `goitei-dev--`
+hostname no live channel claims, unless it is asked not to with
+`--no-authorized-domains`. Nothing in this repository reimplements either.
+
+**It needs `roles/firebaseauth.admin` to do it, and says almost nothing when it
+cannot.** Without the role the call fails, firebase-tools logs a warning and
+reports a successful deploy, and `--json` — which `deploy-dev.yml` passes to
+read the channel URL — suppresses the warning too. That is not a hypothetical:
+it is how preview sign-in came to be broken for weeks with every check green,
+and why reviewers were adding hostnames by hand.
+
+So `deploy-dev.yml` ends with a step that reads the authorized domain list back
+and fails the job when the hostname it just deployed is missing. Two things
+cause that, and neither surfaces any other way: the role being revoked, and two
+channel deploys overlapping — the CLI reads the list, appends and writes it
+back, and the admin API has no etag between the read and the write, so the later
+writer drops the earlier one's hostname. A re-run of the job repairs both.
+
+`preview-cleanup.yml` deletes the channel when its pull request closes. The
+hostname goes with it — `hosting:channel:delete` removes it from the authorized
+domain list as part of deleting the channel — and without this the channel would
+linger its full seven days, with the hostname trusted for authentication that
+whole time.
+
+That removal fails the same quiet way the addition does, so the workflow reads
+the list back and fails when a hostname belonging to the closed pull request is
+still on it. It does not remove the hostname itself: a second writer on a list
+whose API has no etag is a way to lose a domain rather than a way to remove one.
+The next preview deploy prunes it, which is what makes a re-run of the job go
+green.
+
+Building previews with `yarn build:e2e` would sidestep all of this — the
+in-memory adapters sign a user in without Google — and it is the wrong trade.
+The preview exists to show the branch against real `goitei-dev` data; a
+Firestore query, index or cursor defect is invisible against fakes, and that is
+the class of defect that has actually reached review here.
+
 #### Trust boundary
 
-The deploy workflow is split into two jobs, and the split is the security
-boundary rather than a build-time optimisation:
+The deploy workflow is split into jobs, and the split is the security boundary
+rather than a build-time optimisation:
 
 - **`build`** runs the pull request's own code. It has `contents: read` and
   nothing else — no `id-token` permission, so `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
@@ -307,7 +358,7 @@ boundary rather than a build-time optimisation:
 A pull request is otherwise a code-execution primitive: `yarn install` runs
 whatever `postinstall` the branch's lockfile asks for, before any file in the
 diff has been read by a human. Keeping that away from the credential is what
-the two jobs buy.
+the split buys.
 
 The six `VITE_FIREBASE_*` values are the exception, and are scoped to the build
 step. They can already be read out of the deployed bundle by anyone, so a build
