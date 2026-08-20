@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { INPUT_LIMITS } from '../../src/domain/limits';
 import { seedSignedIn, watchForBlanking } from './fixtures';
 
 /**
@@ -46,6 +47,33 @@ test.describe('browsing', () => {
     // The real assertion: a fresh load of that URL restores the same view.
     await page.reload();
     await expect(page.getByText('1 語')).toBeVisible();
+  });
+
+  test('keeps an unbroken search summary inside the viewport', async ({ page }) => {
+    const search = 'W'.repeat(INPUT_LIMITS.search);
+    await page.goto('/vocabulary');
+    await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill(search);
+
+    await expect(
+      page.getByRole('button', { name: new RegExp(`^「W{${INPUT_LIMITS.search}}」`) }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+      ),
+    ).toBe(true);
+  });
+
+  test('keeps furigana and pitch annotations at their content width', async ({ page }) => {
+    await page.goto('/vocabulary/w-kiriwake');
+    const furigana = page.locator('.has-ruby').first();
+    await expect(furigana).toBeVisible();
+    expect((await furigana.boundingBox())?.width ?? Infinity).toBeLessThan(400);
+
+    await page.goto('/vocabulary/w-choukou');
+    const pitch = page.locator('.has-accent').first();
+    await expect(pitch).toBeVisible();
+    expect((await pitch.boundingBox())?.width ?? Infinity).toBeLessThan(400);
   });
 
   test('opens a word in a dialog without leaving the list', async ({ page }) => {

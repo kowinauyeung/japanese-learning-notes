@@ -30,7 +30,7 @@ export function TodayWord({ entry }: { entry: Entry }) {
   return (
     <VocabLink
       entryId={entry.id}
-      className="relative block overflow-hidden rounded-card border border-line bg-linear-to-br from-accent-soft to-card p-5 shadow-panel transition hover:-translate-y-0.5"
+      className="relative block min-w-0 overflow-hidden rounded-card border border-line bg-linear-to-br from-accent-soft to-card p-5 shadow-panel transition hover:-translate-y-0.5"
     >
       {/* Decorative, and already announced by the heading below. */}
       <LogoMark className="pointer-events-none absolute -right-6 -bottom-8 h-40 w-40 opacity-[0.06]" />
@@ -48,7 +48,7 @@ export function TodayWord({ entry }: { entry: Entry }) {
         <Ruby
           headword={entry.headword}
           reading={entry.reading}
-          className="has-ruby mt-3 block font-display text-4xl font-bold"
+          className="has-ruby mt-3 block font-display text-4xl font-bold [overflow-wrap:anywhere]"
         />
 
         {summary && <p className="prose-cjk mt-2 line-clamp-2 text-sm">{summary}</p>}

@@ -13,6 +13,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   # Everything that needs neither a JDK nor a browser. Kept first and fastest so
   # a typo is reported in about a minute rather than behind an emulator boot.
@@ -20,6 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
@@ -123,4 +128,37 @@ jobs:
         with:
           name: playwright-report
           path: playwright-report/
+          retention-days: 7
+
+  # Replayable random journeys over the same Firebase-free build as E2E.
+  # Kept separate so a failure says "unexpected interaction sequence", and so
+  # its trace and exact seed are available without obscuring a deterministic
+  # scenario failure.
+  monkey:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      - name: Replayable monkey test
+        run: yarn test:monkey
+        env:
+          MONKEY_SEED: ${{ github.run_id }}
+
+      - uses: actions/upload-artifact@v7
+        if: '!cancelled()'
+        with:
+          name: monkey-report
+          path: monkey-report/
           retention-days: 7

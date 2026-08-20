@@ -8,9 +8,9 @@ export function EntryCard({ entry }: { entry: Entry }) {
   return (
     <VocabLink
       entryId={entry.id}
-      className="flex flex-col gap-3 rounded-card bg-card p-4 shadow-panel transition hover:-translate-y-0.5"
+      className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-card bg-card p-4 shadow-panel transition hover:-translate-y-0.5"
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex min-w-0 items-start justify-between gap-2">
         {/* `min-w-0` and `line-clamp-1` together, and neither is enough alone: a
             flex item defaults to `min-width: auto`, so without the first it
             refuses to shrink below its content and pushes the JLPT pill out of

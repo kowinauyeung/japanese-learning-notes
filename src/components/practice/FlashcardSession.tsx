@@ -134,11 +134,11 @@ export function FlashcardSession({
     <section className="mx-auto max-w-2xl space-y-4">
       <SessionHeader title={t('practice.flashcard')} index={index} total={total} onQuit={onQuit} />
 
-      <div className="min-h-64 space-y-5 rounded-card bg-card p-6 text-center shadow-panel">
+      <div className="min-h-64 min-w-0 space-y-5 overflow-hidden rounded-card bg-card p-6 text-center shadow-panel">
         <Ruby
           headword={entry.headword}
           reading={flipped ? entry.reading : ''}
-          className="has-ruby block font-display text-4xl font-bold"
+          className="has-ruby block font-display text-4xl font-bold [overflow-wrap:anywhere]"
         />
 
         {flipped ? (
@@ -151,12 +151,16 @@ export function FlashcardSession({
                 </li>
               ))}
             </ul>
-            {entry.definitionSub && <p className="text-sm text-muted">{entry.definitionSub}</p>}
+            {entry.definitionSub && (
+              <p className="text-sm [overflow-wrap:anywhere] text-muted">{entry.definitionSub}</p>
+            )}
             {example && (
               <div className="rounded-panel bg-bg-alt p-3">
                 <p className="prose-cjk text-sm">{example}</p>
                 {exampleTranslation && (
-                  <p className="mt-1 text-xs text-muted">{exampleTranslation}</p>
+                  <p className="mt-1 text-xs [overflow-wrap:anywhere] text-muted">
+                    {exampleTranslation}
+                  </p>
                 )}
               </div>
             )}

@@ -224,8 +224,8 @@ export function Component() {
 
       <header className="rounded-card bg-card p-5 shadow-panel">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="font-display text-2xl font-bold">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-2xl font-bold [overflow-wrap:anywhere]">
               {set.name}
               <span className="ml-2 text-sm font-normal text-muted tabular-nums">
                 {t('wordSets.count', { count: members.length })}
@@ -255,7 +255,7 @@ export function Component() {
         breakpoint they stack, which is why the cap is a fraction of the
         viewport rather than a fixed height: two of them still fit.
       */}
-      <div className="grid gap-4 nav:grid-cols-2">
+      <div className="grid min-w-0 gap-4 nav:grid-cols-2">
         <div className="flex max-h-[46vh] min-h-64 min-w-0 nav:max-h-[62vh]">
           <MemberPicker
             shown={candidates.shown}
@@ -344,7 +344,7 @@ export function Component() {
         <div
           aria-hidden
           style={{ left: drag.point.x, top: drag.point.y }}
-          className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 rounded-pill bg-accent px-3 py-1 font-display text-xs font-bold text-on-accent shadow-panel"
+          className="pointer-events-none fixed z-50 max-w-[min(20rem,calc(100vw-1rem))] -translate-x-1/2 -translate-y-1/2 truncate rounded-pill bg-accent px-3 py-1 font-display text-xs font-bold text-on-accent shadow-panel"
         >
           {entries.find((entry) => entry.id === drag.dragging?.id)?.headword}
         </div>

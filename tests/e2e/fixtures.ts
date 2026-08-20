@@ -17,6 +17,8 @@ export interface E2ESeed {
   /** Entry ids to start marked wrong, so 苦手のみ has something to select. */
   weak?: string[];
   wordSets?: Record<string, unknown>[];
+  /** Keep a word-set write in flight long enough to exercise the busy gate. */
+  wordSetWriteDelayMs?: number;
   /** Finished sessions, so 履歴 can be reached without drilling first. */
   sessions?: Record<string, unknown>[];
   profile?: Record<string, unknown>;

@@ -45,7 +45,7 @@ export function RecentPractice({
             <Link
               key={mode}
               to={MODE_PATH[mode]}
-              className="rounded-panel bg-bg-alt p-4 transition hover:bg-accent-soft"
+              className="min-w-0 overflow-hidden rounded-panel bg-bg-alt p-4 transition hover:bg-accent-soft"
             >
               <p className="text-sm font-medium">{modeLabel[mode]}</p>
               {session ? (
@@ -53,7 +53,10 @@ export function RecentPractice({
                   <p className="mt-1 font-display text-lg font-bold tabular-nums">
                     {session.correct} / {session.total}
                   </p>
-                  <p className="text-xs text-muted">
+                  <p
+                    className="min-w-0 truncate overflow-hidden text-xs text-muted"
+                    title={session.filterLabel}
+                  >
                     {sessionTime(session.finishedAt, locale)} · {session.filterLabel}
                   </p>
                 </>

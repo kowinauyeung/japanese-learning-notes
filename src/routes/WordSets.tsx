@@ -38,7 +38,7 @@ export function Component() {
 
   const create = async () => {
     const trimmed = name.trim();
-    if (!trimmed || creating) return;
+    if (creating) return;
 
     // maxLength stops the box growing; this is what refuses the write. See
     // `wordSetError` for why the two are not the same guard.
@@ -92,15 +92,19 @@ export function Component() {
       >
         <input
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => {
+            setName(event.target.value);
+            setCreateError(null);
+          }}
           maxLength={WORD_SET_LIMITS.name}
           placeholder={t('wordSets.newName')}
           aria-label={t('wordSets.newName')}
+          aria-invalid={createError ? true : undefined}
           className="min-h-11 min-w-0 flex-1 rounded-pill border border-line bg-bg px-4 text-sm text-ink placeholder:text-muted"
         />
         <button
           type="submit"
-          disabled={creating || !name.trim()}
+          disabled={creating}
           className="min-h-11 rounded-pill bg-accent px-6 text-sm font-semibold text-on-accent disabled:opacity-60"
         >
           {creating ? t('wordSets.creating') : t('wordSets.create')}

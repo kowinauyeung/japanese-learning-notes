@@ -101,7 +101,10 @@ export function WordSetEditModal({
         <Field label={t('wordSets.description')} hint={t('wordSets.optional')}>
           <Area
             value={description}
-            onChange={setDescription}
+            onChange={(value) => {
+              setDescription(value);
+              setInvalid(null);
+            }}
             maxLength={WORD_SET_LIMITS.description}
             rows={3}
           />
