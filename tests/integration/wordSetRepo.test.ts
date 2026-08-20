@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { deleteApp, initializeApp } from 'firebase/app';
 import type { FirebaseApp } from 'firebase/app';
-import { connectFirestoreEmulator, doc, getDoc, getFirestore } from 'firebase/firestore';
+import {
+  connectFirestoreEmulator,
+  doc,
+  getDoc,
+  getFirestore,
+  setDoc,
+  Timestamp,
+} from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { WordSetRepository } from '@/domain/ports';
@@ -117,9 +124,27 @@ describe('deleting a set', () => {
 });
 
 describe('listing', () => {
+  /**
+   * The timestamps are written rather than taken from the clock, for the reason
+   * recorded at length on `entryRepo`'s copy of this test: the emulator
+   * resolves `serverTimestamp()` to the millisecond and two awaited creates are
+   * about a millisecond apart, so three of them tie often enough to fail this
+   * assertion by chance — the query then orders the tied pair by document id,
+   * which is random.
+   */
   it('returns sets newest first', async () => {
-    const { repo } = freshRepo();
-    for (const name of ['一', '二', '三']) await repo.create(draft({ name }));
+    const { repo, uid } = freshRepo();
+    const ids: string[] = [];
+    for (const name of ['一', '二', '三']) ids.push(await repo.create(draft({ name })));
+
+    // A minute apart, which no clock resolution can tie.
+    for (const [minute, id] of ids.entries()) {
+      await setDoc(
+        doc(db, 'users', uid, 'wordSets', id),
+        { createdAt: Timestamp.fromDate(new Date(Date.UTC(2026, 5, 24, 9, minute))) },
+        { merge: true },
+      );
+    }
 
     const page = await repo.list({ limit: 10, cursor: null });
     expect(page.items.map((item) => item.name)).toEqual(['三', '二', '一']);

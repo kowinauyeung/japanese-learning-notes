@@ -175,9 +175,43 @@ describe('list — pagination', () => {
     expect((await repo.list({ limit: 2, cursor: null })).cursor).toBeNull();
   });
 
+  /**
+   * **The timestamps are written here rather than inherited from the clock,
+   * and that is the fix for a flake this test used to produce.**
+   *
+   * Seeding through `create` and trusting the order the writes arrived in was
+   * wrong, and the measurement says why. The emulator resolves
+   * `serverTimestamp()` to the millisecond — across 180 documents every value
+   * it returned was a whole number of milliseconds — while two awaited creates
+   * are roughly one millisecond apart: over 120 consecutive pairs the median
+   * gap was 999,936ns and the minimum was zero. Three documents seeded this way
+   * therefore shared a `createdAt` in 3 rounds out of 60.
+   *
+   * A tie is not a defect and the query already answers it: it falls through to
+   * `documentId() desc`, and an auto-id is random, so the tied pair comes back
+   * in an order unrelated to when it was written. What was broken was this
+   * test, which reported an ordering bug that was not there — and reported it
+   * rarely enough to read as noise.
+   *
+   * Written through the adapter first so the document shape is real, then given
+   * distinct timestamps directly. The claim is that the query orders by
+   * `createdAt` descending, and that is exactly what is still exercised; the
+   * resolution of somebody else's clock never was the claim.
+   */
   it('orders newest first', async () => {
-    const repo = freshRepo();
-    await seed(repo, ['一番目', '二番目', '三番目']);
+    const uid = `it-order-${randomUUID()}`;
+    const repo = createEntryRepository(db, uid);
+    const ids = await seed(repo, ['一番目', '二番目', '三番目']);
+
+    // A minute apart, which no clock resolution can tie.
+    for (const [minute, id] of ids.entries()) {
+      await setDoc(
+        doc(db, 'users', uid, 'entries', id),
+        { createdAt: Timestamp.fromDate(new Date(Date.UTC(2026, 5, 24, 9, minute))) },
+        { merge: true },
+      );
+    }
+
     const page = await repo.list({ limit: 10, cursor: null });
     expect(page.items.map((entry) => entry.headword)).toEqual(['三番目', '二番目', '一番目']);
   });
@@ -195,7 +229,11 @@ describe('list — pagination', () => {
     const tied = createEntryRepository(db, uid);
 
     // Written through the adapter first so the shape is real, then given an
-    // identical createdAt directly — serverTimestamp() cannot be made to collide.
+    // identical createdAt directly. Not because serverTimestamp() cannot
+    // collide — measured against this emulator it collides about one seeding in
+    // twenty, which is what the ordering test above had to be rewritten for —
+    // but because a tie that happens sometimes proves nothing on the runs where
+    // it does not.
     const ids = await seed(tied, ['甲', '乙', '丙', '丁', '戊']);
     for (const id of ids) {
       await setDoc(doc(db, 'users', uid, 'entries', id), { createdAt: shared }, { merge: true });
