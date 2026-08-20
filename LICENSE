@@ -27,11 +27,10 @@ SCOPE
 
 It does not include the Japanese vocabulary entries. Those are personal study
 notes -- headwords, readings, definitions, example sentences, usage notes and
-Cantonese translations, written by hand over a year. They were committed as
-import artefacts while the migration into Firestore ran, so they remain in this
-repository's history although the working tree no longer carries them. They
-were published to make that import inspectable, not as a corpus offered for
-reuse.
+Cantonese translations, written by hand over a year. They were used to populate
+Firestore during the completed migration, and the current source tree no longer
+includes the import artefacts. Any historical import material that contains them
+was published for migration review, not as a corpus offered for reuse.
 
 The vocabulary entries are Copyright (c) 2026 Kowin Au Yeung, all rights
 reserved. For any use of them, ask first.

@@ -3,10 +3,10 @@
 A personal web app for recording and reviewing Japanese vocabulary picked up in
 daily life and at work, with Cantonese translations and notes.
 
-This repository began as 67 hand-written Markdown notes. They were imported into
-Firestore, which now holds the live data — the Markdown and the one-shot import
-scripts have both been removed. The import is recorded in the history of this
-repository rather than in a folder it no longer carries.
+This repository began as 67 hand-written Markdown notes. The one-shot migration
+into Firestore has finished, and Firestore now holds the live data. The original
+Markdown, migration tooling and temporary import artefacts are no longer part of
+the working tree.
 
 ## Features
 
@@ -366,7 +366,7 @@ rules enforce account access only, never document shape.
 Source code: [MIT](LICENSE).
 
 The Japanese vocabulary entries are **not** covered by it. They are personal
-study notes and they are reserved. They were committed as import artefacts
-while the migration ran, so they remain in this repository's history even
-though the working tree no longer carries them. The scope note at the bottom of
-[`LICENSE`](LICENSE) is the authoritative wording.
+study notes and they are reserved. They were used to populate Firestore during
+the completed migration, and the current working tree no longer carries the
+import artefacts. The scope note at the bottom of [`LICENSE`](LICENSE) is the
+authoritative wording.
