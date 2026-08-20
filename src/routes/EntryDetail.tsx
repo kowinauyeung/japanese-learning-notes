@@ -5,11 +5,13 @@ import { KeyValueTable, Section } from '@/components/detail/Section';
 import { EntryFormModal } from '@/components/entry-form/EntryFormModal';
 import { PitchAccent } from '@/components/PitchAccent';
 import { Ruby } from '@/components/Ruby';
+import { SpeakButton, SpeechStatusNote } from '@/components/SpeakButton';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import { accentKana } from '@/lib/mora';
+import { spokenForm, useJapaneseSpeech } from '@/lib/speech';
 
 /** ①②③… for sense and example numbering, matching the notes. */
 function circled(index: number): string {
@@ -31,6 +33,7 @@ export function Component() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { status: speechStatus, speak } = useJapaneseSpeech();
 
   /**
    * Navigate only once both the delete and the refresh have succeeded. If the
@@ -132,7 +135,13 @@ export function Component() {
             )}
           </div>
 
-          <div className="flex shrink-0 gap-2">
+          {/* Playing the word sits with edit and delete rather than beside the
+              headword: the heading is a block that fills its column, and moving
+              it into a row with a button next to it re-flows the box that
+              `tests/e2e/visual.spec.ts` crops to prove furigana lands above the
+              word it reads. */}
+          <div className="flex shrink-0 items-center gap-2">
+            <SpeakButton status={speechStatus} onSpeak={() => speak(spokenForm(entry))} />
             <button
               type="button"
               onClick={() => setEditing(true)}
@@ -149,6 +158,10 @@ export function Component() {
             </button>
           </div>
         </div>
+
+        {/* Under the whole row rather than under the button: it is a sentence,
+            and the button sits in a column sized for pills. */}
+        <SpeechStatusNote status={speechStatus} className="mt-3" />
       </header>
 
       <Section emoji="📋" title={t('vocabulary.manifest')}>

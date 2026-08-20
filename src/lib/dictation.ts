@@ -47,19 +47,6 @@ export function acceptedAnswers(entry: Pick<Entry, 'headword' | 'reading'>): str
 }
 
 /**
- * What the speech engine is asked to say.
- *
- * The kana reading wins over the written form when there is one. A TTS voice
- * guesses the reading of a kanji compound from context it does not have here —
- * a single word with no sentence around it — and 「辛い」 read as からい when
- * the note says つらい makes the answer unmarkable. Handing it kana removes the
- * guess.
- */
-export function spokenForm(entry: Pick<Entry, 'headword' | 'reading'>): string {
-  return entry.reading || entry.headword;
-}
-
-/**
  * An empty submission is handled by `acceptedAnswers` alone, and deliberately
  * not guarded again here. A second `answer !== ''` check reads as prudence and
  * is unreachable — it was written, and no test could be made to fail on it,

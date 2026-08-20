@@ -2,10 +2,12 @@ import { Link } from 'react-router-dom';
 import { Modal } from '@/components/Modal';
 import { PitchAccent } from '@/components/PitchAccent';
 import { Ruby } from '@/components/Ruby';
+import { SpeakButton, SpeechStatusNote } from '@/components/SpeakButton';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { useEntries } from '@/lib/entries';
 import { accentKana } from '@/lib/mora';
+import { spokenForm, useJapaneseSpeech } from '@/lib/speech';
 import { useVocabDialog } from '@/lib/vocabDialog';
 
 /**
@@ -26,6 +28,9 @@ export function VocabDialog() {
   const entryLabel = useEntryLabel();
   const { openId, close } = useVocabDialog();
   const { entries } = useEntries();
+  // Above the early return, because hooks are: this component is mounted for
+  // the whole session and renders nothing until a word is asked for.
+  const { status: speechStatus, speak } = useJapaneseSpeech();
 
   if (openId === null) return null;
   const entry = entries.find((item) => item.id === openId);
@@ -65,11 +70,15 @@ export function VocabDialog() {
     >
       <div className="space-y-4">
         <div>
-          <Ruby
-            headword={entry.headword}
-            reading={entry.reading}
-            className="has-ruby block font-display text-3xl font-bold"
-          />
+          <div className="flex items-center gap-3">
+            <Ruby
+              headword={entry.headword}
+              reading={entry.reading}
+              className="has-ruby block font-display text-3xl font-bold"
+            />
+            <SpeakButton status={speechStatus} onSpeak={() => speak(spokenForm(entry))} />
+          </div>
+          <SpeechStatusNote status={speechStatus} className="mt-2" />
           {entry.pitchAccent !== null && (
             <PitchAccent
               kana={accentKana(entry.headword, entry.reading)}
