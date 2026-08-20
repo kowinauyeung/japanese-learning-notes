@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { seed, seedSignedIn } from './fixtures';
+import { OVERSIZE_WORDS, seed, seedSignedIn, WORDS } from './fixtures';
 
 /**
  * Visual regression — a small set of baselines, deliberately.
@@ -151,6 +151,54 @@ test.describe('visual', () => {
 
     await expect(page).toHaveScreenshot('dashboard.png', { fullPage: true });
   });
+
+  /**
+   * A note long enough to break the layout, shot where it broke it.
+   *
+   * The defect: an unbroken run of Latin characters has no break opportunity,
+   * so before `overflow-wrap: anywhere` it set the width of its card, the card
+   * set the width of the grid, and the grid set the scroll width of the
+   * document. On a phone the browser answers a document wider than the viewport
+   * by zooming out to fit it — so the symptom was the *whole page* rendering as
+   * a narrow column against a field of white, with nothing at all wrong at the
+   * place the diff would point to.
+   *
+   * The measurement in the describe below is what proves the overflow is gone,
+   * and it is the assertion that would catch a regression. This shot is here for
+   * what a measurement cannot see: whether the ellipsis lands, whether the JLPT
+   * pill is still inside the card, and — the reason a Japanese app cannot use a
+   * plain `truncate` here without checking — whether clipping the headword to
+   * one line clips the furigana off the top of it, since the annotation is drawn
+   * above the base text inside the same line box.
+   */
+  test('a headword too long for its card is clipped, not spilled', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
+    await page.goto('/vocabulary');
+
+    const cards = page.locator('a[href^="/vocabulary/"]');
+    await expect(cards.first()).toBeVisible();
+    await expect(page.locator('main')).toHaveScreenshot('long-entry-cards.png');
+  });
+
+  /**
+   * The same note on the dashboard list, which fails differently: the row is
+   * flex, and a flex item will not shrink below its content unless it is told
+   * to, so the headword pushed the definition and the date out of the row
+   * rather than wrapping inside it.
+   *
+   * At 375 because that is the width the screenshots in the bug report were
+   * taken at, and the width where a row that will not shrink has least room to
+   * hide.
+   */
+  test('a long headword keeps the dashboard row on one line at 375', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
+    await page.goto('/');
+
+    const recent = page.locator('section').filter({ hasText: '最近追加した語' }).first();
+    await expect(recent).toBeVisible();
+    await expect(recent).toHaveScreenshot('long-entry-rows.png');
+  });
 });
 
 test.describe('visual — the empty notebook', () => {
@@ -166,5 +214,83 @@ test.describe('visual — the empty notebook', () => {
 
     await expect(page.getByText('今日の単語')).toBeHidden();
     await expect(page.getByText('JLPTレベル（全 0 語）')).toBeVisible();
+  });
+});
+
+/**
+ * The overflow itself, measured rather than photographed.
+ *
+ * This is the assertion that actually states the property — "no long value makes
+ * the document wider than the viewport" — and unlike the screenshots above it
+ * runs on every platform, needs no committed baseline, and cannot be made to
+ * pass by regenerating anything. The images say the clipping *looks* right; this
+ * says the page does not scroll sideways.
+ *
+ * `scrollWidth` on the documentElement and not on the card, because the bug is
+ * not local to the element holding the long word: the visible symptom was a
+ * dashboard zoomed out to a narrow column, and the cause was one row several
+ * sections away. Anything that widens the document is caught here wherever it
+ * lives.
+ *
+ * One pixel of tolerance because a scrollbar or a sub-pixel layout rounding can
+ * put `scrollWidth` a fraction above `clientWidth` on a page that does not
+ * scroll; the defect being guarded against was hundreds of pixels wide.
+ */
+test.describe('long values must not widen the page', () => {
+  const overflow = (page: import('@playwright/test').Page) =>
+    page.evaluate(() => {
+      const root = document.documentElement;
+      return root.scrollWidth - root.clientWidth;
+    });
+
+  for (const { name, path } of [
+    { name: 'the dashboard', path: '/' },
+    { name: 'the vocabulary grid', path: '/vocabulary' },
+  ]) {
+    for (const width of [375, 1280]) {
+      test(`${name} does not scroll sideways at ${width}`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 800 });
+        await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
+        await page.goto(path);
+        await expect(page.locator('main')).toBeVisible();
+
+        expect(await overflow(page)).toBeLessThanOrEqual(1);
+      });
+    }
+  }
+
+  /**
+   * The word-set description, which overflows downward rather than sideways.
+   *
+   * An essay in that field pushed the member list off the screen with nothing
+   * on the page to say it was still down there, so the set read as empty. Ten
+   * lines, then a control to open the rest.
+   */
+  test('a very long word set description collapses behind a control', async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS,
+      wordSets: [
+        {
+          id: 'set-wordy',
+          name: '長い説明のセット',
+          description: 'この単語集の説明はとても長い。'.repeat(80),
+          entryIds: ['w-kiriwake'],
+        },
+      ],
+    });
+    await page.goto('/wordsets/set-wordy');
+
+    const description = page.getByText('この単語集の説明はとても長い。').first();
+    await expect(description).toBeVisible();
+
+    // Collapsed: the member list is what has to stay reachable, and the whole
+    // point of the clamp is that it is on screen without scrolling past an essay.
+    const collapsed = await description.evaluate((el) => el.clientHeight);
+    await page.getByRole('button', { name: 'もっと見る' }).click();
+    const expanded = await description.evaluate((el) => el.clientHeight);
+
+    expect(expanded).toBeGreaterThan(collapsed);
+    await expect(page.getByRole('button', { name: '折りたたむ' })).toBeVisible();
   });
 });

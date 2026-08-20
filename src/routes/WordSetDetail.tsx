@@ -4,6 +4,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { MemberList } from '@/components/wordsets/MemberList';
 import { MemberPicker } from '@/components/wordsets/MemberPicker';
 import { PickerToolbar } from '@/components/wordsets/PickerToolbar';
+import { SetDescription } from '@/components/wordsets/SetDescription';
 import { WordSetEditModal } from '@/components/wordsets/WordSetEditModal';
 import { WORD_SET_LIMITS } from '@/domain/limits';
 import type { WordSetDraft } from '@/domain/wordSet';
@@ -230,9 +231,7 @@ export function Component() {
                 {t('wordSets.count', { count: members.length })}
               </span>
             </h1>
-            {set.description && (
-              <p className="prose-cjk mt-2 text-sm text-muted">{set.description}</p>
-            )}
+            {set.description && <SetDescription description={set.description} />}
           </div>
           <button
             type="button"
