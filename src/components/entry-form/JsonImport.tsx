@@ -49,11 +49,14 @@ export function JsonImport({
     The clipboard is not something a phone reliably has. `navigator.clipboard`
     is undefined outside a secure context and in the in-app webviews a phone
     opens links in, and calling `writeText` on it throws synchronously — which
-    React does not route to an error boundary. `writeText` itself rejects when
-    the permission or the focus is missing, which is what iOS does to a copy it
-    does not consider part of a tap. Neither ends anywhere the user can see: an
-    error thrown in an event handler and a rejection nobody catches are both
-    console warnings, and what is left on screen is a button that does nothing.
+    React does not route to an error boundary. A clipboard that is present can
+    throw there too, before it has returned a promise, which is why the call is
+    wrapped rather than guarded by the optional chain alone. `writeText` itself
+    rejects when the permission or the focus is missing, which is what iOS does
+    to a copy it does not consider part of a tap. Neither ends anywhere the user
+    can see: an error thrown in an event handler and a rejection nobody catches
+    are both console warnings, and what is left on screen is a button that does
+    nothing.
 
     The call is split rather than chained off `?.` because optional chaining
     short-circuits the whole rest of the chain, so the missing-clipboard case
@@ -65,7 +68,17 @@ export function JsonImport({
     button is the only route to it, so a failure without the text is a dead end.
   */
   const copyPrompt = () => {
-    const written = navigator.clipboard?.writeText(prompt);
+    let written: Promise<void> | undefined;
+    try {
+      written = navigator.clipboard?.writeText(prompt);
+    } catch {
+      // A clipboard that exists and still throws before it returns a promise:
+      // a webview stub, or a browser raising NotAllowedError for a document it
+      // does not consider focused. Nothing downstream ever runs, so the state
+      // has to be set here or the button stays inert.
+      setState('failed');
+      return;
+    }
     // Compared against undefined rather than tested for truthiness: a promise
     // is always truthy, and reading one as a boolean is a question nobody means
     // to ask.

@@ -90,7 +90,28 @@ describe('JsonImport — copying the prompt when the clipboard is unavailable', 
     expect(screen.getByRole('textbox', { name: 'プロンプト' })).toHaveValue(
       buildPrompt('兆候', '日本語', { original: '', source: '' }),
     );
+    // Absence, because the two messages contradict each other: a button still
+    // reading コピーしました tells the user the prompt is on their clipboard while
+    // the fallback below tells them to copy it by hand, and the one they believe
+    // is the one that leaves them with nothing pasted.
     expect(screen.queryByRole('button', { name: 'コピーしました' })).not.toBeInTheDocument();
+  });
+
+  it('offers the prompt for manual copying when writeText throws synchronously, which an in-app webview stub does', () => {
+    withClipboard({
+      writeText: () => {
+        throw new DOMException('Document is not focused', 'NotAllowedError');
+      },
+    });
+    render(<Harness initial={emptyJsonImport('ja')} />);
+
+    typeWord();
+    clickCopy();
+
+    expect(screen.getByText(FAILED)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'プロンプト' })).toHaveValue(
+      buildPrompt('兆候', '日本語', { original: '', source: '' }),
+    );
   });
 
   it('offers the prompt for manual copying when writeText rejects, which a denied permission does', async () => {
