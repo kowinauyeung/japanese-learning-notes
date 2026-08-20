@@ -256,7 +256,7 @@ export function Component() {
         viewport rather than a fixed height: two of them still fit.
       */}
       <div className="grid gap-4 nav:grid-cols-2">
-        <div className="flex max-h-[46vh] min-h-64 nav:max-h-[62vh]">
+        <div className="flex max-h-[46vh] min-h-64 min-w-0 nav:max-h-[62vh]">
           <MemberPicker
             shown={candidates.shown}
             total={candidates.total}
@@ -269,7 +269,7 @@ export function Component() {
             }
           />
         </div>
-        <div className="flex max-h-[46vh] min-h-64 nav:max-h-[62vh]">
+        <div className="flex max-h-[46vh] min-h-64 min-w-0 nav:max-h-[62vh]">
           <MemberList
             members={members}
             list={MEMBERS}

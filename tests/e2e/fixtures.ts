@@ -141,6 +141,23 @@ export const OVERSIZE_WORDS: Record<string, unknown>[] = [
 ];
 
 /**
+ * A 単語集 whose name is far past its limit, holding the oversize entries.
+ *
+ * Stored data, not typed data: `maxLength` and `wordSetError` between them make
+ * this unreachable through the form now, and every screen that renders a set
+ * still has to survive one — a set written before the limit existed, or by
+ * anything that is not this client.
+ */
+export const OVERSIZE_SET: Record<string, unknown>[] = [
+  {
+    id: 'set-oversize',
+    name: 'W'.repeat(400),
+    description: 'この単語集の説明。'.repeat(40),
+    entryIds: ['w-latin', 'w-longja', 'w-kiriwake'],
+  },
+];
+
+/**
  * Must be called before the first navigation: `addInitScript` runs ahead of the
  * app's own scripts, which is the only point at which the in-memory adapters
  * can still read their seed.

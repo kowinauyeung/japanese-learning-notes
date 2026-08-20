@@ -4,6 +4,8 @@ import { Modal } from '@/components/Modal';
 import { WORD_SET_LIMITS } from '@/domain/limits';
 import type { WordSet } from '@/domain/wordSet';
 import { useI18n } from '@/i18n/context';
+import { localizeFormError } from '@/i18n/localizeFormError';
+import { wordSetError } from '@/lib/wordSetDraft';
 
 /**
  * Renaming a 単語集 and giving it a description.
@@ -30,7 +32,11 @@ export function WordSetEditModal({
 }) {
   const [name, setName] = useState(set.name);
   const [description, setDescription] = useState(set.description);
-  const [invalid, setInvalid] = useState(false);
+  /**
+   * The refusal message, or null. It was a boolean and could only ever say
+   * "the name is empty", which is no longer the only way a set can be invalid.
+   */
+  const [invalid, setInvalid] = useState<string | null>(null);
   const { t } = useI18n();
 
   /**
@@ -46,11 +52,12 @@ export function WordSetEditModal({
     if (!open) return;
     setName(set.name);
     setDescription(set.description);
-    setInvalid(false);
+    setInvalid(null);
   }, [open, set.id, set.name, set.description]);
 
   const save = () => {
-    if (!name.trim()) return setInvalid(true);
+    const problem = wordSetError({ name, description });
+    if (problem) return setInvalid(localizeFormError(problem, t));
     onSave({ name: name.trim(), description: description.trim() });
   };
 
@@ -61,11 +68,7 @@ export function WordSetEditModal({
       onClose={onClose}
       footer={
         <div className="flex items-center gap-3">
-          {(invalid || error) && (
-            <p className="flex-1 text-xs text-danger">
-              {invalid ? t('wordSets.nameRequired') : error}
-            </p>
-          )}
+          {(invalid || error) && <p className="flex-1 text-xs text-danger">{invalid ?? error}</p>}
           <button
             type="button"
             onClick={onClose}
@@ -91,7 +94,7 @@ export function WordSetEditModal({
             maxLength={WORD_SET_LIMITS.name}
             onChange={(value) => {
               setName(value);
-              setInvalid(false);
+              setInvalid(null);
             }}
           />
         </Field>

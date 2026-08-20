@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { OVERSIZE_WORDS, seed, seedSignedIn, WORDS } from './fixtures';
+import { OVERSIZE_SET, OVERSIZE_WORDS, seed, seedSignedIn, WORDS } from './fixtures';
 
 /**
  * Visual regression — a small set of baselines, deliberately.
@@ -243,14 +243,31 @@ test.describe('long values must not widen the page', () => {
       return root.scrollWidth - root.clientWidth;
     });
 
+  /*
+    Every screen a long value can reach, because the first pass fixed the two
+    that were reported and left four that were not. The word set detail page in
+    particular was 6,115 pixels wide at a 1,280 viewport: `min-width: auto` is
+    the default for a grid item *and* for a flex item, so the picker and member
+    panels each refused to go below their content, and the one row holding a long
+    headword carried the whole page with it. A per-screen loop is what stops the
+    next one being found in a screenshot instead.
+  */
   for (const { name, path } of [
     { name: 'the dashboard', path: '/' },
     { name: 'the vocabulary grid', path: '/vocabulary' },
+    { name: 'the word set list', path: '/wordsets' },
+    { name: 'the word set detail page', path: '/wordsets/set-oversize' },
+    { name: 'the flashcard setup', path: '/practice/flashcards' },
+    { name: 'the dictation setup', path: '/practice/dictation' },
   ]) {
     for (const width of [375, 1280]) {
       test(`${name} does not scroll sideways at ${width}`, async ({ page }) => {
         await page.setViewportSize({ width, height: 800 });
-        await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
+        await seed(page, {
+          signedIn: true,
+          entries: [...WORDS, ...OVERSIZE_WORDS],
+          wordSets: OVERSIZE_SET,
+        });
         await page.goto(path);
         await expect(page.locator('main')).toBeVisible();
 
@@ -258,6 +275,45 @@ test.describe('long values must not widen the page', () => {
       });
     }
   }
+
+  /*
+    Height, which the overflow measurement above is blind to and which is how
+    three of the four missed cases actually presented.
+
+    Nothing here overflowed once `overflow-wrap: anywhere` landed — the long
+    value wrapped instead, and then grew its container downwards: a word set
+    card eight lines tall setting the height of every card in its row, and a
+    filter chip six lines tall that stopped reading as a control.
+
+    One assertion per test rather than both in one, because the first failure
+    ends the test: with the two together a card at 872px hid whether the chip
+    was still 152px, and a red proof that cannot see its second case is not a
+    proof of it.
+
+    The bounds are generous on purpose. This guards against a clamp being
+    removed, not against a particular pixel — a card is ~112px and fails at 200.
+  */
+  test('a long word set name does not decide the height of its whole row', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: OVERSIZE_SET });
+    await page.goto('/wordsets');
+
+    const card = page.locator('a[href="/wordsets/set-oversize"]');
+    await expect(card).toBeVisible();
+    expect((await card.boundingBox())?.height ?? 0).toBeLessThan(200);
+  });
+
+  test('a long word set name keeps its filter chip the shape of a control', async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: [...WORDS, ...OVERSIZE_WORDS],
+      wordSets: OVERSIZE_SET,
+    });
+    await page.goto('/practice/dictation');
+
+    const chip = page.getByRole('button', { name: /W{20,}/ }).first();
+    await expect(chip).toBeVisible();
+    expect((await chip.boundingBox())?.height ?? 0).toBeLessThan(48);
+  });
 
   /**
    * The word-set description, which overflows downward rather than sideways.

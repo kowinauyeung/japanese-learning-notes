@@ -14,6 +14,7 @@ export function localizeFormError(error: string, t: Translate): string {
     'JSON オブジェクトではありません。': 'import.notObject',
     '"headword" が空です。': 'import.emptyHeadword',
     '"definition" が空です。': 'import.emptyDefinition',
+    '単語集の名前は必須です。': 'wordSets.nameRequired',
   };
   const key = exact[error];
   if (key) return t(key);

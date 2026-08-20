@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { WordSetCard } from '@/components/wordsets/WordSetCard';
 import { WORD_SET_LIMITS } from '@/domain/limits';
 import { useI18n } from '@/i18n/context';
+import { localizeFormError } from '@/i18n/localizeFormError';
 import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
+import { wordSetError } from '@/lib/wordSetDraft';
 import { membersOf } from '@/lib/wordSetMembers';
 import { useWordSets } from '@/lib/wordSets';
 
@@ -37,6 +39,11 @@ export function Component() {
   const create = async () => {
     const trimmed = name.trim();
     if (!trimmed || creating) return;
+
+    // maxLength stops the box growing; this is what refuses the write. See
+    // `wordSetError` for why the two are not the same guard.
+    const invalid = wordSetError({ name: trimmed, description: '' });
+    if (invalid) return setCreateError(localizeFormError(invalid, t));
 
     setCreating(true);
     setCreateError(null);

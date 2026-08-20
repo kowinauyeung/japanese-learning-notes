@@ -308,7 +308,7 @@ service cloud.firestore {
       return ownedBy(uid)
         && d.keys().hasOnly(wordSetFields())
         && str(d.name, 200) && d.name.size() > 0
-        && str(d.get('description', ''), 2000)
+        && str(d.get('description', ''), 1000)
         // The one unbounded list in the schema, and the one a set is made of.
         && list(d.get('entryIds', []), 1000)
         && list(d.get('topics', []), 20)

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { seed, seedSignedIn, WORD_SETS, WORDS } from './fixtures';
+import { OVERSIZE_WORDS, seed, seedSignedIn, WORD_SETS, WORDS } from './fixtures';
 
 /**
  * A practice session from the setup screen to the recorded result.
@@ -264,5 +264,57 @@ test.describe('the practice setup screen', () => {
     await seedSignedIn(page);
     await page.goto('/practice/nonsense');
     await expect(page).toHaveURL('/');
+  });
+});
+
+/**
+ * The session summary, which is the one screen a long headword reaches only by
+ * being answered wrong — and so the one no other spec here walks into.
+ *
+ * The missed list is a flex row of headword and definition, the same shape as
+ * the dashboard's recent list and with the same defect in it: a flex item does
+ * not shrink below its content unless told to, so one long headword turned a
+ * 48px row into a 552px one and pushed もう一度 and 間違えた語だけ — the two controls
+ * the summary exists to offer — several screens down.
+ *
+ * **The row is measured rather than the buttons, and that is a correction.**
+ * The first version of this asserted the button's `boundingBox().y` against the
+ * viewport height, which reads as the more direct statement of the harm and is
+ * not a sound measurement: Playwright scrolls an element into view before
+ * clicking it, so whatever scroll position the last card left behind carries
+ * into the summary and shifts a viewport-relative y by however far the page had
+ * moved. It failed at 1169 on one run and passed on the next with the defect
+ * still in place. Row height is the thing that actually regresses and it does
+ * not depend on where the page happens to be scrolled.
+ */
+test.describe('the summary of a session that went badly', () => {
+  test('keeps a missed row one line high when the word is very long', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await seed(page, { signedIn: true, entries: [...WORDS, ...OVERSIZE_WORDS] });
+    await page.goto('/practice/flashcards');
+    await page.getByRole('button', { name: '開始する' }).click();
+
+    // Every card wrong, so all five words land in the missed list.
+    for (let i = 0; i < WORDS.length + OVERSIZE_WORDS.length; i += 1) {
+      await page.getByRole('button', { name: '裏を見る' }).click();
+      await page.getByRole('button', { name: 'もう一度' }).click();
+    }
+    await expect(page.getByRole('button', { name: '間違えた語だけ' })).toBeVisible();
+
+    const rows = page.getByRole('list').getByRole('link');
+    await expect(rows).toHaveCount(WORDS.length + OVERSIZE_WORDS.length);
+
+    const heights = await rows.evaluateAll((els) =>
+      els.map((el) => el.getBoundingClientRect().height),
+    );
+    // ~48px clamped; the two long entries measured 244 and 552 without it.
+    expect(Math.max(...heights)).toBeLessThan(100);
+
+    expect(
+      await page.evaluate(() => {
+        const root = document.documentElement;
+        return root.scrollWidth - root.clientWidth;
+      }),
+    ).toBeLessThanOrEqual(1);
   });
 });

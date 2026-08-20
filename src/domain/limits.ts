@@ -68,8 +68,8 @@ export const ENTRY_LIMITS = {
 export const TAG_INPUT_MAX = ENTRY_LIMITS.tags * (TAG_MAX_LENGTH + 1);
 
 export const WORD_SET_LIMITS = {
-  name: 60,
-  description: 500,
+  name: 30,
+  description: 200,
   entryIds: 500,
   topics: 10,
 } as const;

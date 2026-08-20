@@ -10,6 +10,7 @@ import {
   parseTags,
   toDraft,
 } from '@/lib/draft';
+import { wordSetError } from '@/lib/wordSetDraft';
 import { makeEntry } from '../fixtures/entry';
 
 describe('parseTags', () => {
@@ -322,5 +323,46 @@ describe('draftSizeProblems', () => {
     expect(describeSizeProblem({ path: 'senses', unit: 'items', actual: 14, max: 10 })).toBe(
       'senses が多すぎます: 14件（上限 10件）。',
     );
+  });
+});
+
+/**
+ * The 単語集 side, which had no validator at all until it needed one.
+ *
+ * `WordSets` checked `name.trim()` and `WordSetEditModal` checked the same
+ * thing, so a name's length was enforced only by the `maxLength` attribute —
+ * a property of an input element, and therefore absent from every path that
+ * does not go through one. The security rules allow 200 characters against the
+ * product's 60, and that gap is what this closes.
+ */
+describe('wordSetError', () => {
+  const ok = { name: '仕事', description: '' };
+
+  it('passes an ordinary set', () => {
+    expect(wordSetError(ok)).toBeNull();
+  });
+
+  it('still refuses a set with no name, which was the only rule before', () => {
+    expect(wordSetError({ ...ok, name: '   ' })).toContain('名前');
+  });
+
+  /** The gap: maxLength stops typing, and nothing stopped the write. */
+  it('refuses a name past the limit, which only the attribute stopped before', () => {
+    expect(wordSetError({ ...ok, name: 'あ'.repeat(31) })).toContain('name');
+    expect(wordSetError({ ...ok, name: 'あ'.repeat(30) })).toBeNull();
+  });
+
+  it('refuses an over-long description', () => {
+    expect(wordSetError({ ...ok, description: 'あ'.repeat(201) })).toContain('description');
+    expect(wordSetError({ ...ok, description: 'あ'.repeat(200) })).toBeNull();
+  });
+
+  /**
+   * Measured after trimming, matching what `onSave` actually sends. Counting
+   * the untrimmed value would refuse a 60-character name with a trailing space
+   * that the write path was about to remove anyway.
+   */
+  it('measures the trimmed value, which is what the write path sends', () => {
+    expect(wordSetError({ ...ok, name: `${'あ'.repeat(30)}   ` })).toBeNull();
   });
 });
