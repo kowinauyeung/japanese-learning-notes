@@ -56,6 +56,12 @@ export function SpeakButton({
  * Silent on `ready` and on `loading`: neither is something to explain, and a
  * message during the few hundred milliseconds the voice list takes to arrive
  * would accuse a browser that is about to work.
+ *
+ * Silent, but present. `failed` is the one status that arrives *after* a press,
+ * and a live region inserted into the document already carrying its text is not
+ * reliably announced — so the paragraph is rendered on every status and the
+ * sentence lands in an element the reader's screen reader has been watching
+ * since the page loaded.
  */
 export function SpeechStatusNote({
   status,
@@ -75,6 +81,12 @@ export function SpeechStatusNote({
           ? t('speech.error')
           : null;
 
-  if (message === null) return null;
-  return <p className={`text-xs text-danger ${className}`}>{message}</p>;
+  // The caller's spacing goes on only when there is something to space: an
+  // empty paragraph carrying `mt-2` would open a gap under every headword the
+  // synthesiser has no complaint about.
+  return (
+    <p role="status" className={message === null ? undefined : `text-xs text-danger ${className}`}>
+      {message}
+    </p>
+  );
 }

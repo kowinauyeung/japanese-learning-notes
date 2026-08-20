@@ -50,13 +50,41 @@ describe('SpeechStatusNote', () => {
   });
 
   /**
+   * `failed` is the only status that arrives after a press rather than on
+   * arrival, so it is the only one a screen reader has to be *told* about. A
+   * live region that enters the document already carrying its text is not
+   * reliably announced: the element has to be there first, empty, for the
+   * sentence to land in.
+   *
+   * Node identity is the assertion because nothing else can see the
+   * difference — a region created in the same commit as its message renders
+   * byte-for-byte identically and stays silent out loud, so the reader presses
+   * the button, hears nothing, and is told nothing.
+   */
+  it('fills a live region that was already on the page, not one created with the message', () => {
+    const { container, rerender } = render(<SpeechStatusNote status="ready" />);
+    const before = container.querySelector('[role="status"]');
+    expect(before).not.toBeNull();
+
+    rerender(<SpeechStatusNote status="failed" />);
+    expect(container.querySelector('[role="status"]')).toBe(before);
+    expect(before).toHaveTextContent('音声を再生できませんでした。もう一度お試しください。');
+  });
+
+  /**
    * Chrome returns an empty voice list for the first few hundred milliseconds
    * of every visit, which is `loading` — and the word detail page is rendered
    * inside that window on every arrival. A note there accuses a browser that is
    * about to work, on a screen whose main content is not the audio.
+   *
+   * The region stays; the sentence must not appear. It also carries no styling
+   * class while empty, because the caller's `mt-2`/`mt-3` would otherwise open
+   * a gap under every headword that has nothing to say.
    */
-  it.each(['loading', 'ready'] as const)('stays silent on %s', (status) => {
-    const { container } = render(<SpeechStatusNote status={status} />);
-    expect(container).toBeEmptyDOMElement();
+  it.each(['loading', 'ready'] as const)('shows no sentence on %s', (status) => {
+    const { container } = render(<SpeechStatusNote status={status} className="mt-2" />);
+    const region = container.querySelector('[role="status"]');
+    expect(region).toBeEmptyDOMElement();
+    expect(region).not.toHaveClass('mt-2');
   });
 });
