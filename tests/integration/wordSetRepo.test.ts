@@ -132,7 +132,7 @@ describe('listing', () => {
    * assertion by chance — the query then orders the tied pair by document id,
    * which is random.
    */
-  it('returns sets newest first', async () => {
+  it('orders newest first, so a set made today is not on the last page', async () => {
     const { repo, uid } = freshRepo();
     const ids: string[] = [];
     for (const name of ['一', '二', '三']) ids.push(await repo.create(draft({ name })));

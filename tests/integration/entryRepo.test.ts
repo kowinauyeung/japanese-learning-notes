@@ -198,7 +198,7 @@ describe('list — pagination', () => {
    * `createdAt` descending, and that is exactly what is still exercised; the
    * resolution of somebody else's clock never was the claim.
    */
-  it('orders newest first', async () => {
+  it('orders newest first, so a word added today is not on the last page', async () => {
     const uid = `it-order-${randomUUID()}`;
     const repo = createEntryRepository(db, uid);
     const ids = await seed(repo, ['一番目', '二番目', '三番目']);

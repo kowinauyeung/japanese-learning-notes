@@ -182,7 +182,7 @@ describe('paging through 履歴', () => {
    * second key, `documentId() desc`, where an auto-id is random — so this
    * assertion failed on roughly one run in six with nothing wrong in the query.
    */
-  it('returns sessions newest first', async () => {
+  it('orders newest first, so the last practice run is the first row of 履歴', async () => {
     const { repo, uid } = freshRepo();
     const ids: string[] = [];
     for (const label of ['一', '二', '三']) {
