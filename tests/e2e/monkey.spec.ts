@@ -10,17 +10,25 @@ interface Scenario {
 
 interface Action {
   description: string;
-  run: () => Promise<void>;
+  run: () => Promise<string | void>;
 }
 
 interface AvailableElement {
   index: number;
-  label: string;
   type: string;
 }
 
 const ROTATING_SEED = process.env.MONKEY_SEED || 'local-rotating-seed';
 const STEPS = Math.min(100, Math.max(10, Number(process.env.MONKEY_STEPS) || 40));
+const ACTION_CATEGORIES = [
+  'navigate',
+  'button',
+  'link',
+  'field',
+  'select',
+  'escape',
+  'back',
+] as const;
 
 const SCENARIOS: Scenario[] = [
   { name: 'fixed desktop', viewport: { width: 1280, height: 720 }, seed: 'desktop-v1' },
@@ -105,12 +113,6 @@ function randomFor(seedValue: number): () => number {
   };
 }
 
-const pick = <T>(items: readonly T[], random: () => number): T => {
-  const item = items[Math.floor(random() * items.length)];
-  if (item === undefined) throw new Error('the monkey had no action to choose');
-  return item;
-};
-
 async function available(locator: Locator): Promise<AvailableElement[]> {
   return locator.evaluateAll((elements) =>
     elements.flatMap((element, index) => {
@@ -128,16 +130,9 @@ async function available(locator: Locator): Promise<AvailableElement[]> {
         return [];
       if ('disabled' in html && (html as HTMLButtonElement).disabled) return [];
 
-      const labelled =
-        html.getAttribute('aria-label') ||
-        ('labels' in html ? ((html as HTMLInputElement).labels?.[0]?.textContent ?? '') : '') ||
-        html.textContent ||
-        html.getAttribute('placeholder') ||
-        html.tagName.toLowerCase();
       return [
         {
           index,
-          label: labelled.trim().replace(/\s+/g, ' ').slice(0, 80),
           type: html.getAttribute('type') || html.tagName.toLowerCase(),
         },
       ];
@@ -145,94 +140,146 @@ async function available(locator: Locator): Promise<AvailableElement[]> {
   );
 }
 
+async function labelOf(locator: Locator): Promise<string> {
+  return locator.evaluate((element) => {
+    const html = element as HTMLElement;
+    const labelled =
+      html.getAttribute('aria-label') ||
+      ('labels' in html ? ((html as HTMLInputElement).labels?.[0]?.textContent ?? '') : '') ||
+      html.textContent ||
+      html.getAttribute('placeholder') ||
+      html.tagName.toLowerCase();
+    return labelled.trim().replace(/\s+/g, ' ').slice(0, 80);
+  });
+}
+
+async function safeButtonElements(buttons: Locator): Promise<AvailableElement[]> {
+  const elements = await available(buttons);
+  const resolved = await Promise.all(
+    elements.map(async (element) => {
+      const label = await labelOf(buttons.nth(element.index)).catch(() => '');
+      return { element, label };
+    }),
+  );
+  return resolved
+    .filter(
+      ({ label }) =>
+        !/ログアウト|アカウントを削除|データを削除|書き出す|単語を聞く|音声/.test(label),
+    )
+    .map(({ element }) => element);
+}
+
 async function chooseAction(page: Page, random: () => number): Promise<Action> {
-  const actions: Action[] = [];
-  const route = pick(ROUTES, random);
+  const category = ACTION_CATEGORIES[Math.floor(random() * ACTION_CATEGORIES.length)] ?? 'navigate';
+  const elementDraw = random();
+  const valueDraw = random();
+  const route = ROUTES[Math.floor(elementDraw * ROUTES.length)] ?? '/';
   const navigate = (): Action => ({
     description: `navigate ${route}`,
     run: async () => {
       await page.goto(route);
     },
   });
-  actions.push(navigate(), navigate());
+  if (category === 'navigate') return navigate();
 
   const buttons = page.locator('button');
-  const safeButtons = (await available(buttons)).filter(
-    ({ label }) => !/ログアウト|アカウントを削除|データを削除|書き出す|単語を聞く|音声/.test(label),
-  );
-  if (safeButtons.length > 0) {
-    const chosen = pick(safeButtons, random);
-    const clickButton = (): Action => ({
-      description: `click button “${chosen.label}”`,
-      run: () => buttons.nth(chosen.index).click({ timeout: 4000 }),
-    });
-    actions.push(clickButton(), clickButton(), clickButton(), clickButton());
+  const safeButtons = await safeButtonElements(buttons);
+  if (category === 'button') {
+    const chosen = safeButtons[Math.floor(elementDraw * safeButtons.length)];
+    if (!chosen) return navigate();
+    return {
+      description: `click button index ${chosen.index}`,
+      run: async () => {
+        const button = buttons.nth(chosen.index);
+        const label = await labelOf(button);
+        await test.step(`resolved button “${label}”`, () => button.click({ timeout: 4000 }));
+        return `click button “${label}”`;
+      },
+    };
   }
 
   const links = page.locator('a[href^="/"]');
   const internalLinks = await available(links);
-  if (internalLinks.length > 0) {
-    const chosen = pick(internalLinks, random);
-    const clickLink = (): Action => ({
-      description: `click link “${chosen.label}”`,
-      run: () => links.nth(chosen.index).click({ timeout: 4000 }),
-    });
-    actions.push(clickLink(), clickLink());
+  if (category === 'link') {
+    const chosen = internalLinks[Math.floor(elementDraw * internalLinks.length)];
+    if (!chosen) return navigate();
+    return {
+      description: `click link index ${chosen.index}`,
+      run: async () => {
+        const link = links.nth(chosen.index);
+        const label = await labelOf(link);
+        await test.step(`resolved link “${label}”`, () => link.click({ timeout: 4000 }));
+        return `click link “${label}”`;
+      },
+    };
   }
 
   const fields = page.locator('input:not([type="file"]), textarea');
   const availableFields = await available(fields);
-  if (availableFields.length > 0) {
-    const chosen = pick(availableFields, random);
+  if (category === 'field') {
+    const chosen = availableFields[Math.floor(elementDraw * availableFields.length)];
+    if (!chosen) return navigate();
     const field = fields.nth(chosen.index);
-    const fillField = (): Action => ({
-      description: `change ${chosen.type} “${chosen.label}”`,
+    return {
+      description: `change ${chosen.type} index ${chosen.index}`,
       run: async () => {
-        if (chosen.type === 'checkbox' || chosen.type === 'radio') return field.click();
-        if (chosen.type === 'date')
-          return field.fill(pick(['', '2026-02-28', '2026-06-24'], random));
-        if (chosen.type === 'number') return field.fill(pick(['-1', '0', '2.7', '999999'], random));
-        if (chosen.type === 'range') {
-          const bounds = await field.evaluate((element) => {
-            const input = element as HTMLInputElement;
-            return { min: input.min || '0', max: input.max || '100' };
-          });
-          return field.fill(pick([bounds.min, bounds.max], random));
-        }
-        return field.fill(pick(TEXT_CORPUS, random));
+        const label = await labelOf(field);
+        await test.step(`resolved ${chosen.type} “${label}”`, async () => {
+          if (chosen.type === 'checkbox' || chosen.type === 'radio') return field.click();
+          if (chosen.type === 'date')
+            return field.fill(['', '2026-02-28', '2026-06-24'][Math.floor(valueDraw * 3)] ?? '');
+          if (chosen.type === 'number')
+            return field.fill(['-1', '0', '2.7', '999999'][Math.floor(valueDraw * 4)] ?? '0');
+          if (chosen.type === 'range') {
+            const bounds = await field.evaluate((element) => {
+              const input = element as HTMLInputElement;
+              return { min: input.min || '0', max: input.max || '100' };
+            });
+            return field.fill(valueDraw < 0.5 ? bounds.min : bounds.max);
+          }
+          return field.fill(TEXT_CORPUS[Math.floor(valueDraw * TEXT_CORPUS.length)] ?? '');
+        });
+        return `change ${chosen.type} “${label}”`;
       },
-    });
-    actions.push(fillField(), fillField(), fillField());
+    };
   }
 
   const selects = page.locator('select');
   const availableSelects = await available(selects);
-  if (availableSelects.length > 0) {
-    const chosen = pick(availableSelects, random);
+  if (category === 'select') {
+    const chosen = availableSelects[Math.floor(elementDraw * availableSelects.length)];
+    if (!chosen) return navigate();
     const select = selects.nth(chosen.index);
-    actions.push({
-      description: `choose option in “${chosen.label}”`,
+    return {
+      description: `choose option in select index ${chosen.index}`,
       run: async () => {
-        const count = await select.locator('option').count();
-        if (count > 0) await select.selectOption({ index: Math.floor(random() * count) });
+        const label = await labelOf(select);
+        await test.step(`resolved select “${label}”`, async () => {
+          const count = await select.locator('option').count();
+          if (count > 0) await select.selectOption({ index: Math.floor(valueDraw * count) });
+        });
+        return `choose option in “${label}”`;
       },
-    });
+    };
   }
 
-  actions.push({
-    description: 'press Escape',
-    run: () => page.keyboard.press('Escape'),
-  });
+  if (category === 'escape') {
+    return {
+      description: 'press Escape',
+      run: () => page.keyboard.press('Escape'),
+    };
+  }
+
   if (await page.evaluate(() => history.length > 1)) {
-    actions.push({
+    return {
       description: 'browser Back',
       run: async () => {
         await page.goBack();
       },
-    });
+    };
   }
 
-  return pick(actions, random);
+  return navigate();
 }
 
 async function assertHealthy(
@@ -330,7 +377,7 @@ for (const scenario of SCENARIOS) {
   test(`${scenario.name} survives random extreme input and navigation`, async ({
     page,
   }, testInfo) => {
-    test.setTimeout(120_000);
+    test.setTimeout(30_000 + STEPS * 8_000);
     await page.setViewportSize(scenario.viewport);
     await seed(page, {
       signedIn: true,
@@ -373,8 +420,13 @@ for (const scenario of SCENARIOS) {
         const action = await chooseAction(page, random);
         const line = `${String(step).padStart(3, '0')}: ${action.description}`;
         history.push(line);
+        await attachHistory(testInfo, scenario.seed, history);
         await test.step(line, async () => {
-          await action.run();
+          const resolved = await action.run();
+          if (resolved) {
+            history[history.length - 1] = `${String(step).padStart(3, '0')}: ${resolved}`;
+            await attachHistory(testInfo, scenario.seed, history);
+          }
           await assertHealthy(page, pageErrors, firebaseRequests);
         });
       }

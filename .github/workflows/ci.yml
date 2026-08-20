@@ -13,6 +13,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   # Everything that needs neither a JDK nor a browser. Kept first and fastest so
   # a typo is reported in about a minute rather than behind an emulator boot.
@@ -20,6 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
@@ -135,9 +140,11 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
       options: --ipc=host
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: yarn
@@ -149,7 +156,7 @@ jobs:
         env:
           MONKEY_SEED: ${{ github.run_id }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: '!cancelled()'
         with:
           name: monkey-report

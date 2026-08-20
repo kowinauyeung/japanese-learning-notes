@@ -49,6 +49,20 @@ describe('Modal — focus stays in the active dialog', () => {
     fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
     expect(last).toHaveFocus();
   });
+
+  it('skips hidden and fieldset-disabled controls for initial focus', () => {
+    render(
+      <Modal open title="単語" onClose={vi.fn()}>
+        <input type="hidden" aria-label="hidden token" />
+        <fieldset disabled>
+          <input aria-label="disabled field" />
+        </fieldset>
+        <button type="button">最初の操作</button>
+      </Modal>,
+    );
+
+    expect(screen.getByRole('button', { name: '最初の操作' })).toHaveFocus();
+  });
 });
 
 describe('Modal — dismissing by backdrop', () => {

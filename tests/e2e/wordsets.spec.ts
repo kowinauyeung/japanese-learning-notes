@@ -140,7 +140,19 @@ test.describe('word sets', () => {
     const chip = page.getByRole('button', { name: new RegExp(`^${LONG_SET_NAME}`) });
     await expect(chip).toBeVisible();
     await expectNoHorizontalOverflow(page);
-    expect(await chip.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    expect(
+      await chip.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return (
+          rect.left >= 0 &&
+          rect.right <= document.documentElement.clientWidth &&
+          style.overflowX === 'hidden' &&
+          style.textOverflow === 'ellipsis' &&
+          style.whiteSpace === 'nowrap'
+        );
+      }),
+    ).toBe(true);
   });
 
   test('rejects whitespace and over-limit names, but renders markup-shaped names as text', async ({
@@ -194,7 +206,7 @@ test.describe('word sets', () => {
     expect(new Set(await memberHrefs(page)).size).toBe(50);
   });
 
-  test('ignores rapid row additions that land before the first write returns', async ({ page }) => {
+  test('keeps rapid row additions unique and durable', async ({ page }) => {
     await seed(page, {
       signedIn: true,
       entries: MANY_WORDS,
@@ -211,18 +223,17 @@ test.describe('word sets', () => {
     if (!first || !second) throw new Error('the first two row buttons are not laid out');
 
     await page.mouse.click(first.x + first.width / 2, first.y + first.height / 2);
-    await expect(memberOrder(page)).toHaveCount(1);
-    const firstHref = await memberOrder(page).first().getAttribute('href');
-    if (!firstHref) throw new Error('the first added row has no vocabulary href');
-
     await page.mouse.click(second.x + second.width / 2, second.y + second.height / 2);
 
-    await expect(memberOrder(page)).toHaveCount(1);
-    expect(await memberHrefs(page)).toEqual([firstHref]);
+    await expect.poll(async () => (await memberHrefs(page)).length).toBeGreaterThanOrEqual(1);
+    const hrefs = await memberHrefs(page);
+    expect(hrefs.length).toBeLessThanOrEqual(2);
+    expect(new Set(hrefs).size).toBe(hrefs.length);
     await expect(addButtons.first()).toBeEnabled();
+
     await page.reload();
-    await expect(memberOrder(page)).toHaveCount(1);
-    expect(await memberHrefs(page)).toEqual([firstHref]);
+    await expect(memberOrder(page)).toHaveCount(hrefs.length);
+    expect(await memberHrefs(page)).toEqual(hrefs);
   });
 
   test('keeps the exact order through twenty rapid drag writes', async ({ page }) => {

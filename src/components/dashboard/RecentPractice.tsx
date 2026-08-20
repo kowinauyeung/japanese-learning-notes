@@ -53,7 +53,10 @@ export function RecentPractice({
                   <p className="mt-1 font-display text-lg font-bold tabular-nums">
                     {session.correct} / {session.total}
                   </p>
-                  <p className="truncate text-xs text-muted" title={session.filterLabel}>
+                  <p
+                    className="min-w-0 truncate overflow-hidden text-xs text-muted"
+                    title={session.filterLabel}
+                  >
                     {sessionTime(session.finishedAt, locale)} · {session.filterLabel}
                   </p>
                 </>

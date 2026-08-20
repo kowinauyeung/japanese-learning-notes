@@ -151,12 +151,16 @@ export function FlashcardSession({
                 </li>
               ))}
             </ul>
-            {entry.definitionSub && <p className="text-sm text-muted">{entry.definitionSub}</p>}
+            {entry.definitionSub && (
+              <p className="text-sm [overflow-wrap:anywhere] text-muted">{entry.definitionSub}</p>
+            )}
             {example && (
               <div className="rounded-panel bg-bg-alt p-3">
                 <p className="prose-cjk text-sm">{example}</p>
                 {exampleTranslation && (
-                  <p className="mt-1 text-xs text-muted">{exampleTranslation}</p>
+                  <p className="mt-1 text-xs [overflow-wrap:anywhere] text-muted">
+                    {exampleTranslation}
+                  </p>
                 )}
               </div>
             )}

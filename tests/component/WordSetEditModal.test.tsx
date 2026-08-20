@@ -1,6 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { WordSetEditModal } from '@/components/wordsets/WordSetEditModal';
+import { WORD_SET_LIMITS } from '@/domain/limits';
 import { makeWordSet } from '../fixtures/wordSet';
 import { renderWithI18n as render } from '../helpers/renderWithI18n';
 
@@ -68,28 +69,37 @@ describe('WordSetEditModal', () => {
   });
 
   /**
-   * Firestore accepts 200 characters and rejects 201. Leaving the browser with
-   * no matching limit means the form appears to accept the value, then reports
-   * only a generic write failure after the network round trip.
+   * The DOM maxLength catches real typing; this direct change simulates a
+   * bypass and proves the save path still refuses the value before Firestore.
    */
-  it('refuses the 201st name character before it reaches Firestore', () => {
+  it('refuses an over-limit name before it reaches Firestore', () => {
     const { onSave, name } = setup();
-    fireEvent.change(name, { target: { value: 'W'.repeat(201) } });
+    fireEvent.change(name, { target: { value: 'W'.repeat(WORD_SET_LIMITS.name + 1) } });
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     expect(onSave).not.toHaveBeenCalled();
-    expect(screen.getByText('名前は200文字以内で入力してください。')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        `「name」が長すぎます。${WORD_SET_LIMITS.name + 1}字ありますが、上限は${WORD_SET_LIMITS.name}字です。`,
+      ),
+    ).toBeInTheDocument();
   });
 
-  it('refuses the 5001st description character before it reaches Firestore', () => {
+  it('refuses an over-limit description before it reaches Firestore', () => {
     const { onSave, description } = setup();
-    fireEvent.change(description, { target: { value: 'W'.repeat(5001) } });
+    fireEvent.change(description, {
+      target: { value: 'W'.repeat(WORD_SET_LIMITS.description + 1) },
+    });
 
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     expect(onSave).not.toHaveBeenCalled();
-    expect(screen.getByText('説明は5000文字以内で入力してください。')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        `「description」が長すぎます。${WORD_SET_LIMITS.description + 1}字ありますが、上限は${WORD_SET_LIMITS.description}字です。`,
+      ),
+    ).toBeInTheDocument();
   });
 
   /** These are content, not markup or SQL — preserving them is the safe path. */
@@ -104,6 +114,7 @@ describe('WordSetEditModal', () => {
       name: '<script>🚀</script>',
       description: "' OR '1'='1",
     });
+    // If this fails, user content can render as markup or execute script in the product.
     expect(document.querySelector('script')).toBeNull();
   });
 });
