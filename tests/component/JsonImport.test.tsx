@@ -6,6 +6,7 @@ import {
   JsonImport,
   type JsonImportState,
 } from '@/components/entry-form/JsonImport';
+import { buildPrompt } from '@/lib/jsonImport';
 import { renderWithI18n as render } from '../helpers/renderWithI18n';
 
 const withClipboard = (clipboard: unknown) => {
@@ -19,6 +20,8 @@ const withClipboard = (clipboard: unknown) => {
 afterEach(() => {
   withClipboard(undefined);
 });
+
+const FAILED = 'コピーできませんでした。下のプロンプトを選択してコピーしてください。';
 
 function Harness({ initial }: { initial: JsonImportState }) {
   const [value, setValue] = useState(initial);
@@ -50,5 +53,77 @@ describe('JsonImport — translation language preference', () => {
     expect(await screen.findByRole('button', { name: 'コピーしました' })).toBeInTheDocument();
     expect(copied).toContain('廣東話');
     expect(copied).not.toContain('Englishで書いてください');
+    expect(screen.queryByText(FAILED)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The prompt exists nowhere else on the screen, so a copy that fails silently
+ * leaves the user with no way to reach the text at all — the button is the only
+ * route to it.
+ *
+ * `navigator.clipboard` is undefined outside a secure context and in the in-app
+ * webviews a phone opens links in, and calling `writeText` on it throws
+ * synchronously. React does not route a throw in an event handler to an error
+ * boundary, and the rejection of a promise nobody awaits is a console warning,
+ * so either way what the user sees is a button that does nothing.
+ */
+describe('JsonImport — copying the prompt when the clipboard is unavailable', () => {
+  const typeWord = () =>
+    fireEvent.change(screen.getByRole('textbox', { name: '単語' }), {
+      target: { value: '兆候' },
+    });
+
+  const clickCopy = () =>
+    fireEvent.click(screen.getByRole('button', { name: 'プロンプトをコピー' }));
+
+  it('offers the prompt for manual copying when there is no clipboard, as in a phone in-app webview', () => {
+    withClipboard(undefined);
+    render(<Harness initial={emptyJsonImport('ja')} />);
+
+    typeWord();
+    clickCopy();
+
+    expect(screen.getByText(FAILED)).toBeInTheDocument();
+    // The whole prompt, not a truncated preview: what is on screen has to be
+    // the thing the clipboard would have been given.
+    expect(screen.getByRole('textbox', { name: 'プロンプト' })).toHaveValue(
+      buildPrompt('兆候', '日本語', { original: '', source: '' }),
+    );
+    // Absence, because the two messages contradict each other: a button still
+    // reading コピーしました tells the user the prompt is on their clipboard while
+    // the fallback below tells them to copy it by hand, and the one they believe
+    // is the one that leaves them with nothing pasted.
+    expect(screen.queryByRole('button', { name: 'コピーしました' })).not.toBeInTheDocument();
+  });
+
+  it('offers the prompt for manual copying when writeText throws synchronously, which an in-app webview stub does', () => {
+    withClipboard({
+      writeText: () => {
+        throw new DOMException('Document is not focused', 'NotAllowedError');
+      },
+    });
+    render(<Harness initial={emptyJsonImport('ja')} />);
+
+    typeWord();
+    clickCopy();
+
+    expect(screen.getByText(FAILED)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'プロンプト' })).toHaveValue(
+      buildPrompt('兆候', '日本語', { original: '', source: '' }),
+    );
+  });
+
+  it('offers the prompt for manual copying when writeText rejects, which a denied permission does', async () => {
+    withClipboard({ writeText: () => Promise.reject(new Error('NotAllowedError')) });
+    render(<Harness initial={emptyJsonImport('ja')} />);
+
+    typeWord();
+    clickCopy();
+
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'プロンプト' })).toHaveValue(
+      buildPrompt('兆候', '日本語', { original: '', source: '' }),
+    );
   });
 });
