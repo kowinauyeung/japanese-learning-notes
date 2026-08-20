@@ -3,9 +3,9 @@ import { buildPrompt, jsonToDraft, promptLanguageName, SCHEMA } from '@/lib/json
 
 /**
  * The import box takes JSON an assistant wrote somewhere else and a human
- * pasted in. Neither step is reliable: assistants wrap output in a code fence
- * they were told not to add, invent enum values, and paraphrase the sentence
- * they were handed. All of that has to become either a saveable draft or a
+ * pasted in. Neither step is reliable: assistants fence or unfence the output
+ * whatever the prompt asks, invent enum values, paraphrase the sentence they
+ * were handed, and reach the box through a clipboard that rewrites its quotes. All of that has to become either a saveable draft or a
  * message the user can act on — never a thrown error inside the form.
  */
 
@@ -25,7 +25,7 @@ describe('jsonToDraft — parsing', () => {
       'fence with surrounding blank lines',
       '\n\n```json\n{"headword":"兆候","definition":"前ぶれ"}\n```\n\n',
     ],
-  ])('strips a %s that the assistant added anyway', (_case, raw) => {
+  ])('strips a %s, which the prompt asks for and an assistant may omit', (_case, raw) => {
     expect(jsonToDraft(raw).draft?.headword).toBe('兆候');
   });
 
@@ -52,6 +52,68 @@ describe('jsonToDraft — parsing', () => {
  * Coercion happens in `sanitizeDraft`; what this checks is that the import path
  * reaches it at all, rather than dropping a field the prompt now asks for.
  */
+/**
+ * Copying an assistant's answer out of a phone app is not a byte-for-byte
+ * transfer. The same reply copied from a browser arrives with U+0022, and
+ * copied from an iOS app arrives with U+201C and U+201D, because the app hands
+ * over the typographically substituted prose rather than the source. `JSON.parse`
+ * accepts only U+0022, so the paste is refused for a reason that has nothing to
+ * do with whether the note is any good — and the user has no way to see why.
+ */
+describe('jsonToDraft — quotes an iOS app substituted on the way to the clipboard', () => {
+  it('parses a note whose delimiters are curly quotes, which is what an iOS copy produces', () => {
+    const raw = `{
+“headword”: “最終日”,
+“reading”: “さいしゅうび”,
+“pos”: [“名詞”],
+“definition”: “ある期間・行事・予定などの最後にあたる日。”
+}`;
+
+    const { draft, error } = jsonToDraft(raw);
+
+    expect(error).toBeUndefined();
+    expect(draft?.headword).toBe('最終日');
+    expect(draft?.reading).toBe('さいしゅうび');
+    expect(draft?.pos).toEqual(['名詞']);
+  });
+
+  /**
+   * Only the quotes acting as delimiters are rewritten. A curly quote inside a
+   * value is already legal JSON, and rewriting it would end the string early —
+   * turning a note that merely failed to parse into one that parses as
+   * something else, or splits a definition in half.
+   */
+  it('leaves curly quotes inside a value alone while repairing the delimiters', () => {
+    const raw = '{“headword”:“兆候”,“definition”:“いわゆる“前ぶれ”のこと。”}';
+
+    const { draft, error } = jsonToDraft(raw);
+
+    expect(error).toBeUndefined();
+    expect(draft?.definition).toBe('いわゆる“前ぶれ”のこと。');
+  });
+
+  it('parses a curly-quoted note still wrapped in the code fence the prompt asks for', () => {
+    const raw = '```json\n{“headword”:“兆候”,“definition”:“前ぶれ”}\n```';
+
+    expect(jsonToDraft(raw).draft?.headword).toBe('兆候');
+  });
+
+  /**
+   * The repair runs only after an ordinary parse has already failed, so input
+   * that was valid to begin with never reaches it. A definition quoting
+   * dialogue keeps the punctuation the assistant chose.
+   */
+  it('does not touch a well-formed note whose value contains curly quotes', () => {
+    const raw = JSON.stringify({ ...minimal, definition: '“やばい”という語の説明。' });
+
+    expect(jsonToDraft(raw).draft?.definition).toBe('“やばい”という語の説明。');
+  });
+
+  it('still reports input that curly quotes were not the problem with', () => {
+    expect(jsonToDraft('{“headword”: }').error).toBe('JSON として解析できませんでした。');
+  });
+});
+
 describe('jsonToDraft — the pitch accent', () => {
   const note = (pitchAccent: string) =>
     jsonToDraft(`{"headword":"卵","definition":"たまご","reading":"たまご",${pitchAccent}}`).draft;
@@ -191,6 +253,19 @@ describe('buildPrompt', () => {
     const without = buildPrompt('兆候', '廣東話');
     expect(without).toContain('出会った文がないため');
     expect(without).not.toContain('"context.original"');
+  });
+
+  /**
+   * The prompt used to end with 「コードフェンスは不要です」. A fenced reply is the one
+   * an iOS app will copy verbatim — plain prose comes back with its quotes
+   * typographically substituted, which `JSON.parse` then refuses. Asking for
+   * the fence costs nothing, because the parser has always stripped one.
+   */
+  it('asks for a code fence rather than forbidding it, so an iOS copy stays verbatim', () => {
+    const prompt = buildPrompt('兆候', '廣東話');
+
+    expect(prompt).not.toContain('コードフェンスは不要です');
+    expect(prompt).toContain('```json');
   });
 
   it('passes a source through, and asks for it to be left blank otherwise', () => {

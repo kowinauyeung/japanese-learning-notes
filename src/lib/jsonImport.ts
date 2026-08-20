@@ -72,7 +72,7 @@ export function buildPrompt(word: string, language: string, context: PromptConte
     ? `- "source" には「${source}」をそのまま入れてください。`
     : `- "source" は空のままにしてください。`;
 
-  return `「${word}」という日本語の単語について、次のJSONスキーマだけを出力してください。説明文やコードフェンスは不要です。
+  return `「${word}」という日本語の単語について、次のJSONスキーマだけを出力してください。説明文は不要で、JSON全体を \`\`\`json のコードブロックに入れてください。
 ${contextLines}
 
 - "definitionSub" と各 "translation" は${language}で書いてください。
@@ -91,6 +91,53 @@ ${SCHEMA}`;
 }
 
 /**
+ * Copying an assistant's reply out of a phone app is not a byte-for-byte
+ * transfer. The same answer copied from a browser arrives with U+0022 and
+ * copied from an iOS app arrives with U+201C and U+201D, because what the app
+ * puts on the clipboard is the typographically substituted prose rather than
+ * the source it rendered. `JSON.parse` accepts only U+0022, so the note is
+ * refused for a reason that has nothing to do with the note.
+ *
+ * Asking for a code fence — which `buildPrompt` now does — is the better half
+ * of the fix, because a fenced reply is copied verbatim. This is the other
+ * half, for the paste that arrives substituted anyway.
+ */
+function parseTolerantly(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Falls through to the repair. Anything that parsed as written is returned
+    // above untouched, so the rewrite below only ever sees input that is
+    // already broken and cannot make a good note worse.
+  }
+
+  try {
+    return JSON.parse(straightenDelimiters(text));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Rewrite only the curly quotes standing where JSON expects a delimiter: an
+ * opening one after `{`, `[`, `,` or `:`, and a closing one before `:`, `,`,
+ * `}` or `]`.
+ *
+ * A curly quote inside a value is left as it is, because it is already legal
+ * there. Rewriting every one of them instead would end a string early — a
+ * definition that quotes a word would parse as something other than what was
+ * written, or stop parsing at all, which is worse than the refusal this is
+ * trying to avoid.
+ *
+ * A closing quote inside a value that happens to sit before an ASCII comma is
+ * the case this reads wrongly. That paste fails today too, so it is left
+ * failing rather than guessed at.
+ */
+function straightenDelimiters(text: string): string {
+  return text.replace(/(?<=[{[,:]\s*)\u201C/g, '"').replace(/\u201D(?=\s*[:,}\]])/g, '"');
+}
+
+/**
  * Import a note written by an assistant elsewhere. Only headword and
  * definition are required; every other field falls back to the blank draft,
  * so a partial answer still saves.
@@ -103,19 +150,16 @@ export function jsonToDraft(
   raw: string,
   context: PromptContext = {},
 ): { draft?: EntryDraft; error?: string } {
-  let parsed: Record<string, unknown>;
-  try {
-    // Tolerate a ```json fence, which assistants add even when told not to.
-    // The shape is validated by the guards below; JSON.parse's `any` stops here.
-    parsed = JSON.parse(
-      raw
-        .replace(/^\s*```(?:json)?/, '')
-        .replace(/```\s*$/, '')
-        .trim(),
-    ) as Record<string, unknown>;
-  } catch {
-    return { error: 'JSON として解析できませんでした。' };
-  }
+  // Tolerate a ```json fence. The prompt now asks for one, and assistants used
+  // to add it even when told not to, so both eras of pasted note arrive here.
+  const unfenced = raw
+    .replace(/^\s*```(?:json)?/, '')
+    .replace(/```\s*$/, '')
+    .trim();
+
+  // The shape is validated by the guards below; JSON.parse's `any` stops here.
+  const parsed = parseTolerantly(unfenced) as Record<string, unknown> | undefined;
+  if (parsed === undefined) return { error: 'JSON として解析できませんでした。' };
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     return { error: 'JSON オブジェクトではありません。' };
   }
