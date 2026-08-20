@@ -153,6 +153,20 @@ blob, because the sanitiser is itself under test.
 the day it was written is worse than no test. The Playwright specs freeze time
 in `tests/e2e/fixtures.ts`; a dashboard baseline would otherwise change nightly.
 
+The same applies to the server's clock, which a test cannot pass as an argument
+and must therefore not depend on the resolution of. Three integration tests
+asserted an order that `serverTimestamp()` was trusted to establish, and all
+three flaked: measured against the emulator, it resolves to the **millisecond**
+— every value it returned across 180 documents was a whole number of them —
+while two awaited creates are about one millisecond apart. Three sequential
+writes tied in 3 seedings out of 60, and once they tie the query falls through
+to `orderBy(documentId(), 'desc')`, where an auto-id is random. Under a forced
+tie the assertion held 6 times in 30.
+
+So a test about ordering writes the timestamps itself: create through the
+adapter, so the document shape is real, then set `createdAt` directly. The
+claim is that the query orders by the field, and that is what stays under test.
+
 ### Do not generate tests in bulk
 
 No boilerplate test per component. A new test corresponds to a real behaviour,

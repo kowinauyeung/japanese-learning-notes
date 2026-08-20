@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { deleteApp, initializeApp } from 'firebase/app';
 import type { FirebaseApp } from 'firebase/app';
-import { connectFirestoreEmulator, doc, getDoc, getFirestore, Timestamp } from 'firebase/firestore';
+import {
+  connectFirestoreEmulator,
+  doc,
+  getDoc,
+  getFirestore,
+  setDoc,
+  Timestamp,
+} from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ProgressRepository } from '@/domain/ports';
@@ -167,10 +174,28 @@ describe('recording a session', () => {
 });
 
 describe('paging through 履歴', () => {
-  it('returns sessions newest first', async () => {
-    const { repo } = freshRepo();
+  /**
+   * `finishedAt` is written here rather than left to the clock, for the reason
+   * recorded at length on `entryRepo`'s ordering test: the emulator resolves
+   * `serverTimestamp()` to the millisecond and three sequential writes land
+   * inside one often enough to tie. `listSessions` then falls through to its
+   * second key, `documentId() desc`, where an auto-id is random — so this
+   * assertion failed on roughly one run in six with nothing wrong in the query.
+   */
+  it('orders newest first, so the last practice run is the first row of 履歴', async () => {
+    const { repo, uid } = freshRepo();
+    const ids: string[] = [];
     for (const label of ['一', '二', '三']) {
-      await repo.recordSession(session({ filterLabel: label }), []);
+      ids.push(await repo.recordSession(session({ filterLabel: label }), []));
+    }
+
+    // A minute apart, which no clock resolution can tie.
+    for (const [minute, id] of ids.entries()) {
+      await setDoc(
+        doc(db, 'users', uid, 'practiceSessions', id),
+        { finishedAt: Timestamp.fromDate(new Date(Date.UTC(2026, 5, 24, 9, minute))) },
+        { merge: true },
+      );
     }
 
     const page = await repo.listSessions({ limit: 5, cursor: null });
