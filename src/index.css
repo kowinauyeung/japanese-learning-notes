@@ -118,11 +118,17 @@ body {
  * are deliberately sized down for density with text-sm and text-xs, which is
  * right on a pointer device and is exactly what trips the zoom on a phone, so
  * on a coarse pointer the threshold wins instead.
+ *
+ * Matching those two utilities by name, rather than every control, is what
+ * keeps this a floor instead of a fixed size: they are the only sizes in use
+ * below the threshold, so a control that asks for more — the dictation answer
+ * field at text-lg — is never selected and keeps what it asked for. Naming
+ * them couples this rule to Tailwind's scale, which is the trade: a control
+ * added with some other small size would go uncovered and zoom, where the
+ * unscoped rule would instead have silently shrunk the next large one.
  */
 @media (pointer: coarse) {
-  input,
-  textarea,
-  select {
+  :is(input, textarea, select):is(.text-xs, .text-sm) {
     font-size: 16px;
   }
 }
