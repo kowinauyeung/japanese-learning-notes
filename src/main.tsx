@@ -6,6 +6,7 @@ import { RouterProvider } from 'react-router-dom';
 // module and quietly takes Firebase and the service worker into a build that is
 // supposed to have neither.
 import { appUpdatePort } from '@/lib/backend';
+import { OfflineNotice } from './components/OfflineNotice';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { I18nProvider } from './i18n/I18nProvider';
 import { AppUpdateProvider } from './lib/appUpdate';
@@ -31,6 +32,12 @@ createRoot(document.getElementById('root')!).render(
             is the worse half of the trade for four short strings.
           */}
           <UpdatePrompt />
+          {/*
+            Beside the update prompt and for the same reasons: being offline is
+            a fact about the device, not about the route, and the locale
+            trade-off above applies unchanged.
+          */}
+          <OfflineNotice />
           <RouterProvider router={router} />
         </I18nProvider>
       </AppUpdateProvider>

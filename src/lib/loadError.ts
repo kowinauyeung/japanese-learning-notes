@@ -57,28 +57,68 @@ const DENIED_CODES = new Set(['permission-denied', 'unauthenticated']);
  * inside the app, which a signed-in-but-denied account can still open — the gate
  * that failed is Firestore's, not Firebase Auth's.
  */
+/**
+ * Deliberately says what still works before what does not. A reader who has
+ * just been told 「読み込めませんでした」 has no way of knowing that the words
+ * they already have are still there, and the difference between "the app is
+ * broken" and "this one screen is waiting for a connection" is the whole
+ * reason this message exists separately from the fallback.
+ */
+export const OFFLINE_MESSAGE = 'オフラインのため読み込めませんでした。接続が戻ると表示されます。';
+
 export const ACCESS_DENIED_MESSAGE =
   'アクセスが許可されていません。一度サインアウトして、サインインし直してください。' +
   '解決しない場合は、サポートページからお問い合わせください。';
 
-export function isAccessDenied(cause: unknown): boolean {
-  if (typeof cause !== 'object' || cause === null) return false;
+function codeOf(cause: unknown): string | null {
+  if (typeof cause !== 'object' || cause === null) return null;
   const code: unknown = (cause as { code?: unknown }).code;
-  return typeof code === 'string' && DENIED_CODES.has(code);
+  return typeof code === 'string' ? code : null;
+}
+
+export function isAccessDenied(cause: unknown): boolean {
+  const code = codeOf(cause);
+  return code !== null && DENIED_CODES.has(code);
+}
+
+/**
+ * `unavailable` is what a read that cannot reach the backend throws, and it is
+ * the only code that means it. Measured against the emulator rather than taken
+ * from the documentation: with the network disabled, `getDoc` throws
+ * `unavailable` while `getDocs` and `onSnapshot` succeed with
+ * `metadata.fromCache` set. So this branch is narrower than it looks — most
+ * offline reads never arrive here at all, because the cache answers them.
+ *
+ * The ones that do are reads the cache cannot answer: a word opened for the
+ * first time, a screen never visited. Those are exactly the cases where
+ * 単語を読み込めませんでした is the wrong sentence — nothing is wrong with the
+ * word, and nothing is wrong with the read.
+ */
+const OFFLINE_CODES = new Set(['unavailable']);
+
+export function isOffline(cause: unknown): boolean {
+  const code = codeOf(cause);
+  return code !== null && OFFLINE_CODES.has(code);
 }
 
 /**
  * `fallback` stays subject-specific — 単語, 単語集, 練習の記録, 練習履歴 — because
- * a transient failure really is about the thing being read. Denial is not: it is
- * a fact about the account, identical on every screen, and saying it four
- * different ways would suggest four different problems.
+ * a failure that is genuinely about the thing being read should say which thing.
+ *
+ * Neither of the two branches above is. Denial is a fact about the account,
+ * identical on every screen; being offline is a fact about the device, likewise.
+ * Saying either of them four different ways would suggest four different
+ * problems, which is the mistake this module was written to stop.
  */
 export function loadErrorMessage(
   cause: unknown,
   fallback: string,
   accessDenied = ACCESS_DENIED_MESSAGE,
+  offline = OFFLINE_MESSAGE,
 ): string {
-  return isAccessDenied(cause) ? accessDenied : fallback;
+  if (isAccessDenied(cause)) return accessDenied;
+  if (isOffline(cause)) return offline;
+  return fallback;
 }
 
 /**
