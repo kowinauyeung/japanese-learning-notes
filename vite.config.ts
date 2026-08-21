@@ -10,11 +10,10 @@ import { pwaOptions } from './pwa-config.ts';
 const src = (path: string) => fileURLToPath(new URL(`./src/${path}`, import.meta.url));
 
 export default defineConfig(({ mode }) => {
-  // '' rather than the default 'VITE_' prefix filter: VITE_FIREBASE_PROJECT_ID
-  // already carries that prefix, but loadEnv's third argument filters which
-  // vars it returns, not which it reads — passing the default here would drop
-  // nothing today and silently drop anything unprefixed added later.
-  const env = loadEnv(mode, process.cwd(), '');
+  // The default 'VITE_' prefix filter is enough: VITE_FIREBASE_PROJECT_ID
+  // already carries it, and there is no reason for this config to see every
+  // other environment variable on the machine or CI runner building it.
+  const env = loadEnv(mode, process.cwd());
 
   return {
     // The worker's settings live in pwa-config.ts, where a test can read them

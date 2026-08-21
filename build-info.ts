@@ -15,12 +15,15 @@ import pkg from './package.json' with { type: 'json' };
  * `dev`, which is the honest answer for a bundle built from a working tree that
  * may not be committed at all.
  *
- * **The end-to-end build is pinned, and it has to be.** The build line is
- * rendered in the footer, so it is inside two screenshot baselines — and a
- * commit changes on every commit. A baseline containing it would be stale the
- * moment it was written, and would differ between a laptop regenerating it and
- * CI checking it. Which is exactly why `.env.e2e` is committed with a fixed
- * project id: the login screen prints that too.
+ * **The end-to-end build is pinned, and it has to be** — even though nothing
+ * currently screenshots it. It used to: the build line rendered in the
+ * footer, so the commit sat inside two baselines, and unpinned it changes on
+ * every commit — measured once at exactly the width of a seven-character SHA,
+ * 314 pixels, identically on both images. The build line has since moved to
+ * the account page, which no baseline captures, but the pin stays so the next
+ * baseline anywhere near build info does not rediscover the same flake.
+ * `.env.e2e`'s fixed project id is the same reasoning, and it is still live:
+ * the login screen prints it into `login.png` today.
  */
 const E2E_COMMIT = 'e2e0000';
 
@@ -30,9 +33,9 @@ const E2E_COMMIT = 'e2e0000';
  * On a `workflow_dispatch` run `GITHUB_SHA` is the commit the *workflow* ran
  * on — the default branch's head — not the one being released. The production
  * workflow takes a SHA as input and builds that, so the two differ in exactly
- * the case that matters: a rollback deploys an older commit while the footer
- * claims the newer one, sending whoever reads a bug report to source that was
- * never running.
+ * the case that matters: a rollback deploys an older commit while the account
+ * page claims the newer one, sending whoever reads a bug report to source
+ * that was never running.
  */
 const deployedSha = () => process.env.DEPLOY_SHA || process.env.GITHUB_SHA;
 

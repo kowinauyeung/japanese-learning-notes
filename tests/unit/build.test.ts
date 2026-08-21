@@ -53,14 +53,9 @@ describe('siteTitle', () => {
 });
 
 /**
- * The build line renders in the footer, which puts it inside two screenshot
- * baselines — and a commit changes on every commit. Before it was pinned, the
- * baselines differed between the machine that regenerated them and the CI run
- * that checked them, by exactly the width of a seven-character SHA: 314 pixels,
- * identically, on both images.
- *
- * The same reasoning `.env.e2e` is committed for. A baseline cannot contain a
- * value that varies per build.
+ * The commit no longer renders in the footer — see the account page instead
+ * — but it is still pinned for e2e, and build-info.ts is where that decision
+ * and its history live.
  */
 describe('the end-to-end build identity', () => {
   it('pins the commit, so a screenshot baseline can contain it', () => {
