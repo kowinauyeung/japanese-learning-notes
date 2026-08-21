@@ -23,11 +23,13 @@ export interface E2ESeed {
   sessions?: Record<string, unknown>[];
   profile?: Record<string, unknown>;
   /**
-   * `offline` rejects with Firestore's `unavailable`, which is what an offline
-   * settings save actually produces — the save is a transaction, and a
-   * transaction cannot be queued.
+   * `unreachable` rejects with Firestore's `unavailable`, which is what a
+   * settings save produces when the backend cannot be reached — the save is a
+   * transaction, and a transaction cannot be queued. Named for what the client
+   * saw, not for a cause: the same code arrives whether the device dropped off
+   * the network or the service did.
    */
-  settingsSave?: 'fail' | 'defer' | 'offline';
+  settingsSave?: 'fail' | 'defer' | 'unreachable';
   /** Fail the profile re-read that follows a committed save, and only that one. */
   settingsRefresh?: 'fail';
   /** Put a waiting build on screen, so `UpdatePrompt` can be laid out against. */

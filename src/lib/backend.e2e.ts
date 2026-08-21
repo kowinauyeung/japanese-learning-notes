@@ -47,7 +47,7 @@ interface Seed {
   /** Raw persisted profile; absent means first sign-in. */
   profile?: unknown;
   /** Force the next settings write to fail so the localized error path is reachable. */
-  settingsSave?: 'fail' | 'defer' | 'offline';
+  settingsSave?: 'fail' | 'defer' | 'unreachable';
   settingsRefresh?: 'fail';
   updateWaiting?: boolean;
 }
@@ -225,10 +225,16 @@ export const userRepository: UserRepository = {
     if (seed().settingsSave === 'fail') return Promise.reject(new Error('settings save failed'));
     // Carries Firestore's own code, because that string is the entire input to
     // the branch under test. The real save is a `runTransaction`, and a
-    // transaction is the one write that does not survive being offline:
+    // transaction is the one write that does not survive losing the backend:
     // measured against the emulator with the socket cut, it rejects with
     // `unavailable` after six to ten seconds of retries.
-    if (seed().settingsSave === 'offline') {
+    //
+    // Named for what the client observed rather than for a cause. This seed
+    // sets no browser connectivity state, and it should not: `unavailable`
+    // reaches the application identically whether the device dropped off the
+    // network or the backend did, which is the whole point of the branch it
+    // exercises.
+    if (seed().settingsSave === 'unreachable') {
       return Promise.reject(
         Object.assign(new Error('Failed to get document because the client is offline.'), {
           code: 'unavailable',

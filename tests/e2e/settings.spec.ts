@@ -137,19 +137,19 @@ test('shows save failures in the previewed display language', async ({ page }) =
 });
 
 /**
- * Offline is not one message. #63 gave `unavailable` its own sentence so a
- * dropped connection stops reading as a fault in the thing being opened — and
- * that sentence describes a *read*. Routed to a save, it tells the reader their
- * settings will appear once they are back, when nothing was written and nothing
- * is queued: the save is a `runTransaction`, and a transaction is the one
- * Firestore write that cannot be deferred. Measured with the socket cut, it
+ * Not reaching the backend is not one message. #63 gave `unavailable` its own
+ * sentence so a lost connection stops reading as a fault in the thing being
+ * opened — and that sentence describes a *read*. Routed to a save it told the
+ * reader their settings could not be loaded, when what failed was a write that
+ * left nothing behind: the save is a `runTransaction`, and a transaction is the
+ * one Firestore write that cannot be deferred. Measured with the socket cut, it
  * rejects with `unavailable` after six to ten seconds of retries.
  *
  * End-to-end because the layer under test is the wiring, not the branch: the
  * provider chooses the key, the hook resolves it, and the route renders it.
  * `tests/unit/loadError.test.ts` covers the branch itself.
  */
-test('tells an offline reader their settings were not saved, not that they could not be loaded', async ({
+test('says the settings were not saved, rather than that something could not be loaded', async ({
   page,
 }) => {
   const pageErrors: string[] = [];
@@ -162,7 +162,7 @@ test('tells an offline reader their settings were not saved, not that they could
       translationLanguage: 'en',
       theme: 'light',
     },
-    settingsSave: 'offline',
+    settingsSave: 'unreachable',
   });
   await page.goto('/settings');
 
