@@ -59,6 +59,10 @@ const en = {
   'settings.saved': 'Saved.',
   'settings.unsaved': 'You have unsaved changes.',
   'settings.unsavedLeave': 'Leave without saving your settings?',
+  'update.available': 'A new version is available',
+  'update.hint': 'Updating reloads the app, so finish anything you are typing first.',
+  'update.action': 'Update now',
+  'update.later': 'Later',
 } as const;
 
 type BaseMessageKey = keyof typeof en;
@@ -118,6 +122,10 @@ const ja: Messages = {
   'settings.saved': '保存しました。',
   'settings.unsaved': '保存していない変更があります。',
   'settings.unsavedLeave': '設定を保存せずに移動しますか？',
+  'update.available': '新しいバージョンがあります',
+  'update.hint': '更新するとアプリを読み込み直します。入力中の内容は先に保存してください。',
+  'update.action': '今すぐ更新',
+  'update.later': 'あとで',
 };
 
 const zhHant: Messages = {
@@ -173,6 +181,10 @@ const zhHant: Messages = {
   'settings.saved': '已儲存。',
   'settings.unsaved': '有尚未儲存的變更。',
   'settings.unsavedLeave': '設定尚未儲存，確定要離開嗎？',
+  'update.available': '有新版本可以使用',
+  'update.hint': '更新會重新載入應用程式，請先完成正在輸入的內容。',
+  'update.action': '立即更新',
+  'update.later': '稍後',
 };
 
 const ko: Messages = {
@@ -229,6 +241,10 @@ const ko: Messages = {
   'settings.saved': '저장했습니다.',
   'settings.unsaved': '저장하지 않은 변경 사항이 있습니다.',
   'settings.unsavedLeave': '설정을 저장하지 않고 나갈까요?',
+  'update.available': '새 버전이 있습니다',
+  'update.hint': '업데이트하면 앱을 다시 불러옵니다. 입력 중인 내용을 먼저 저장하세요.',
+  'update.action': '지금 업데이트',
+  'update.later': '나중에',
 };
 
 const es: Messages = {
@@ -285,6 +301,10 @@ const es: Messages = {
   'settings.saved': 'Guardado.',
   'settings.unsaved': 'Tienes cambios sin guardar.',
   'settings.unsavedLeave': '¿Salir sin guardar la configuración?',
+  'update.available': 'Hay una versión nueva disponible',
+  'update.hint': 'Al actualizar se recarga la aplicación. Termina antes lo que estés escribiendo.',
+  'update.action': 'Actualizar ahora',
+  'update.later': 'Más tarde',
 };
 
 const allMessages = {

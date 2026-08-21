@@ -199,3 +199,31 @@ export interface SearchPort {
   /** False means the UI hides that tab rather than showing an empty state. */
   supports(scope: SearchQuery['scope']): boolean;
 }
+
+/**
+ * A new build is waiting to replace the one that is running.
+ *
+ * A port rather than a direct call into Workbox, for the same reason the
+ * repositories above are: the mechanism is a service worker on the web and the
+ * decision it drives — "offer the reader the new version" — is not about
+ * service workers at all. The `e2e` build supplies an implementation that never
+ * reports one, because that build has no worker to report it.
+ */
+export interface AppUpdatePort {
+  /**
+   * Calls `onWaiting` when a build has installed and is waiting for the running
+   * one to step aside. Returns an unsubscribe function, like `AuthPort.onChange`.
+   *
+   * It may never fire. That is the ordinary case, not an error: most sessions
+   * start and end on the same build.
+   */
+  onWaiting(fn: () => void): () => void;
+  /**
+   * Hand the session over to the waiting build.
+   *
+   * Resolves only in the sense that the request was made — the page is expected
+   * to be replaced out from under the caller, so nothing should be sequenced
+   * after this.
+   */
+  activate(): Promise<void>;
+}

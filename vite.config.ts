@@ -2,12 +2,16 @@ import { fileURLToPath, URL } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
-import { buildInfo } from './build-info';
+import { VitePWA } from 'vite-plugin-pwa';
+import { buildInfo } from './build-info.ts';
+import { pwaOptions } from './pwa-config.ts';
 
 const src = (path: string) => fileURLToPath(new URL(`./src/${path}`, import.meta.url));
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss()],
+  // The worker's settings live in pwa-config.ts, where a test can read them
+  // back — see the comment at the top of that file.
+  plugins: [react(), tailwindcss(), VitePWA(pwaOptions(mode))],
   define: buildInfo(mode),
   resolve: {
     // Array form, because the e2e override has to be matched before the bare

@@ -1,4 +1,5 @@
 import type {
+  AppUpdatePort,
   AuthPort,
   EntryRepository,
   ProgressRepository,
@@ -11,6 +12,7 @@ import { createEntryRepository } from '@/infra/firebase/entryRepo';
 import { createProgressRepository } from '@/infra/firebase/progressRepo';
 import { createUserRepository } from '@/infra/firebase/userRepo';
 import { createWordSetRepository } from '@/infra/firebase/wordSetRepo';
+import { swUpdatePort } from '@/infra/pwa/updatePort';
 
 /**
  * The single point where the app names its adapters.
@@ -25,6 +27,8 @@ import { createWordSetRepository } from '@/infra/firebase/wordSetRepo';
  */
 
 export const authPort: AuthPort = firebaseAuth;
+
+export const appUpdatePort: AppUpdatePort = swUpdatePort;
 
 export const entryRepositoryFor = (uid: string): EntryRepository => createEntryRepository(db, uid);
 

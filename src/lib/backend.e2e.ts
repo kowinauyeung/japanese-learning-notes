@@ -1,5 +1,6 @@
 import type { Entry, EntryDraft } from '@/domain/entry';
 import type {
+  AppUpdatePort,
   AuthPort,
   AuthUser,
   EntryRepository,
@@ -113,6 +114,17 @@ const listeners = new Set<(user: AuthUser | null) => void>();
 const notify = () => {
   save('user', currentUser);
   for (const listener of listeners) listener(currentUser);
+};
+
+/**
+ * There is no worker in this build — `VitePWA` is disabled under `mode === 'e2e'`
+ * — so there is nothing that could ever be waiting. This is the honest
+ * implementation of that, not a stub standing in for one: a build with no
+ * service worker genuinely never has a new build installed behind it.
+ */
+export const appUpdatePort: AppUpdatePort = {
+  onWaiting: () => () => {},
+  activate: () => Promise.resolve(),
 };
 
 export const authPort: AuthPort = {
