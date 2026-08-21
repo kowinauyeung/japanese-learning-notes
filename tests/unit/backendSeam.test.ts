@@ -28,6 +28,21 @@ import { describe, expect, it } from 'vitest';
 
 const srcDir = fileURLToPath(new URL('../../src', import.meta.url));
 
+/**
+ * Every specifier in `source` that resolves to the backend module.
+ *
+ * Both spellings that reach a module have to be covered, and a first version of
+ * this missed one. `import('…')` carries no `from`, so a detector written
+ * around `from '…'` sees nothing — and a dynamic import is not hypothetical
+ * here: every route in `src/router.tsx` is written as one, so it is the form a
+ * lazily loaded consumer would most naturally reach for. Quote style is
+ * normalised by Prettier and checked in CI, but costs nothing to accept.
+ */
+export const backendSpecifiers = (source: string): string[] =>
+  [...source.matchAll(/(?:from\s+|import\s*\(\s*)['"]([^'"]*\bbackend)['"]/g)].map(
+    (match) => match[1]!,
+  );
+
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
@@ -36,29 +51,57 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-/** Any import whose specifier ends at the backend module, however it is spelled. */
-const BACKEND_IMPORT = /from\s+'([^']*\bbackend)'/g;
-
 const offenders = sourceFiles(srcDir)
   .filter((path) => !path.endsWith('backend.e2e.ts'))
-  .flatMap((path) => {
-    const source = readFileSync(path, 'utf8');
-    return [...source.matchAll(BACKEND_IMPORT)]
-      .map((match) => match[1])
+  .flatMap((path) =>
+    backendSpecifiers(readFileSync(path, 'utf8'))
       .filter((specifier) => specifier !== '@/lib/backend')
-      .map((specifier) => `${path.slice(srcDir.length + 1)} imports '${specifier}'`);
+      .map((specifier) => `${path.slice(srcDir.length + 1)} imports '${specifier}'`),
+  );
+
+/**
+ * The detector, before anything is concluded from it. A scan that silently
+ * matches nothing reports a clean tree and a broken seam identically, and that
+ * is the failure this whole file is about — so the regular expression is held
+ * to the same standard as the code it polices.
+ */
+describe('the detector sees every way a module is named', () => {
+  it.each([
+    ['a static import', "import { authPort } from './lib/backend';", './lib/backend'],
+    ['a double-quoted import', 'import { authPort } from "./lib/backend";', './lib/backend'],
+    // A sibling inside src/lib reaches it as './backend', which is the shortest
+    // spelling and the one least likely to look wrong to a reader.
+    ['a re-export', "export { authPort } from './backend';", './backend'],
+    ['a dynamic import', "const m = await import('./lib/backend');", './lib/backend'],
+    ['a double-quoted dynamic import', 'const m = await import("./lib/backend");', './lib/backend'],
+    ['a lazy route-style import', "lazy: () => import('./backend')", './backend'],
+  ])('finds the specifier in %s', (_form, source, expected) => {
+    expect(backendSpecifiers(source)).toEqual([expected]);
   });
 
+  it('reads the aliased spelling as itself, so the allowed form is not reported', () => {
+    expect(backendSpecifiers("import { authPort } from '@/lib/backend';")).toEqual([
+      '@/lib/backend',
+    ]);
+  });
+
+  it.each([
+    ['an unrelated module', "import { thing } from './backendish-helper';"],
+    ['a word inside an identifier', 'const backendCount = 1;'],
+  ])('does not invent a specifier from %s', (_form, source) => {
+    expect(backendSpecifiers(source)).toEqual([]);
+  });
+});
+
 describe('the end-to-end backend seam', () => {
-  // Passing by iterating over nothing is the exact shape of the bug below, so
-  // the fixture is asserted before anything is concluded from it.
+  // Passing by iterating over nothing is the exact shape of the bug below.
   it('can see the source tree it is scanning', () => {
     expect(sourceFiles(srcDir).length).toBeGreaterThan(20);
   });
 
   it('finds the real backend module, so a rename cannot make this pass by matching nothing', () => {
-    const importers = sourceFiles(srcDir).filter((path) =>
-      /from\s+'[^']*\bbackend'/.test(readFileSync(path, 'utf8')),
+    const importers = sourceFiles(srcDir).filter(
+      (path) => backendSpecifiers(readFileSync(path, 'utf8')).length > 0,
     );
     expect(importers.length).toBeGreaterThan(0);
   });

@@ -76,6 +76,10 @@ describe('UpdatePrompt', () => {
     act(() => screen.getByRole('button', { name: 'あとで' }).click());
 
     expect(screen.queryByText('新しいバージョンがあります')).not.toBeInTheDocument();
+    // Zero, and counted rather than inferred from the banner going away. A
+    // "Later" that dismissed *and* handed over would look identical on screen
+    // for the moment before the page reloaded underneath the reader — which is
+    // the swap they just declined, arriving anyway.
     expect(worker.activations()).toBe(0);
   });
 

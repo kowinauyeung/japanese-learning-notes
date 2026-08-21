@@ -34,6 +34,15 @@ describe('the service worker is absent from the end-to-end build', () => {
     expect(pwaOptions('e2e').disable).toBe(true);
   });
 
+  /**
+   * `development` is not decoration in this list. `disable` governs the build;
+   * `devOptions.enabled` governs `yarn dev`, and it is off — so nothing runs a
+   * worker while editing either way. What this holds up is the by-hand dev
+   * deploy the README documents, `yarn vite build --mode development` followed
+   * by a Hosting deploy. Disabling on this mode would ship `goitei-dev` an app
+   * that silently has no worker, which is a thing nobody would notice until
+   * they were offline and expecting one.
+   */
   it.each(['production', 'development'])(
     'is enabled under %s, since disabling it everywhere would silently drop the feature',
     (mode) => {
