@@ -28,6 +28,8 @@ export interface E2ESeed {
    * transaction cannot be queued.
    */
   settingsSave?: 'fail' | 'defer' | 'offline';
+  /** Fail the profile re-read that follows a committed save, and only that one. */
+  settingsRefresh?: 'fail';
   /** Put a waiting build on screen, so `UpdatePrompt` can be laid out against. */
   updateWaiting?: boolean;
 }

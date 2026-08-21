@@ -61,10 +61,21 @@ const DENIED_CODES = new Set(['permission-denied', 'unauthenticated']);
  * Deliberately says what still works before what does not. A reader who has
  * just been told 「読み込めませんでした」 has no way of knowing that the words
  * they already have are still there, and the difference between "the app is
- * broken" and "this one screen is waiting for a connection" is the whole
- * reason this message exists separately from the fallback.
+ * broken" and "this one screen is missing" is the whole reason this message
+ * exists separately from the fallback.
+ *
+ * **It names no cause and makes no promise**, and both omissions were paid
+ * for. It used to open with 「オフラインのため」, which is a claim about the
+ * reader's device that this module cannot support — see `UNREACHABLE_CODES`.
+ * It used to close with 「接続が戻ると表示されます」, which nothing in the
+ * application delivers: there is not one `onSnapshot` in `src/infra`, every
+ * provider loads once from an effect keyed on the repository, and no error
+ * screen offers a retry. The words arrive when the reader reloads, and until
+ * then a sentence saying they will appear on their own is asking someone to
+ * wait for something that is not coming.
  */
-export const OFFLINE_MESSAGE = 'オフラインのため読み込めませんでした。接続が戻ると表示されます。';
+export const UNREACHABLE_MESSAGE =
+  '接続できないため読み込めませんでした。保存済みの単語はそのまま読めます。';
 
 export const ACCESS_DENIED_MESSAGE =
   'アクセスが許可されていません。一度サインアウトして、サインインし直してください。' +
@@ -82,23 +93,36 @@ export function isAccessDenied(cause: unknown): boolean {
 }
 
 /**
- * `unavailable` is what a read that cannot reach the backend throws, and it is
- * the only code that means it. Measured against the emulator rather than taken
- * from the documentation: with the network disabled, `getDoc` throws
- * `unavailable` while `getDocs` and `onSnapshot` succeed with
- * `metadata.fromCache` set. So this branch is narrower than it looks — most
- * offline reads never arrive here at all, because the cache answers them.
+ * `unavailable` is what a read that cannot reach the backend throws. Measured
+ * against the emulator rather than taken from the documentation: with the
+ * network disabled, `getDoc` throws `unavailable` while `getDocs` and
+ * `onSnapshot` succeed with `metadata.fromCache` set. So this branch is
+ * narrower than it looks — most reads with no connection never arrive here at
+ * all, because the cache answers them.
  *
  * The ones that do are reads the cache cannot answer: a word opened for the
  * first time, a screen never visited. Those are exactly the cases where
  * 単語を読み込めませんでした is the wrong sentence — nothing is wrong with the
  * word, and nothing is wrong with the read.
+ *
+ * **Unreachable, not offline.** This was called `isOffline` and its message
+ * opened with 「オフラインのため」, which reads `unavailable` as a fact about
+ * the reader's device. It is not one: Firestore documents the code as "the
+ * service is currently unavailable ... most likely a transient condition", so a
+ * backend outage produces it with the network working perfectly. The two then
+ * disagreed on screen — `OfflineNotice` watches `navigator.onLine` and stays
+ * hidden through an outage, while the page under it said the reader was
+ * offline. Naming what is observed, rather than guessing the cause behind it,
+ * is what keeps the two consistent.
+ *
+ * `offline.state` and `offline.detail` keep their name deliberately: those come
+ * from `navigator.onLine`, which really is about the device.
  */
-const OFFLINE_CODES = new Set(['unavailable']);
+const UNREACHABLE_CODES = new Set(['unavailable']);
 
-export function isOffline(cause: unknown): boolean {
+export function isUnreachable(cause: unknown): boolean {
   const code = codeOf(cause);
-  return code !== null && OFFLINE_CODES.has(code);
+  return code !== null && UNREACHABLE_CODES.has(code);
 }
 
 /**
@@ -114,10 +138,10 @@ export function loadErrorMessage(
   cause: unknown,
   fallback: string,
   accessDenied = ACCESS_DENIED_MESSAGE,
-  offline = OFFLINE_MESSAGE,
+  unreachable = UNREACHABLE_MESSAGE,
 ): string {
   if (isAccessDenied(cause)) return accessDenied;
-  if (isOffline(cause)) return offline;
+  if (isUnreachable(cause)) return unreachable;
   return fallback;
 }
 
@@ -136,11 +160,11 @@ export interface LoadFailure {
    * the caller that has to think about it is the only one that does, and so
    * there is no `??` further down the chain deciding it unwitnessed.
    */
-  offline: MessageKey;
+  unreachable: MessageKey;
 }
 
 /**
- * `offline` defaults to the reading wording because all but one caller is a
+ * `unreachable` defaults to the reading wording because all but one caller is a
  * read. The exception is `userSettings`, whose save is a `runTransaction`, and
  * a transaction is the one Firestore write that does not survive being offline
  * at all — measured against the emulator with the socket actually cut, it
@@ -152,7 +176,7 @@ export interface LoadFailure {
 export function captureLoadFailure(
   cause: unknown,
   fallback: MessageKey,
-  offline: MessageKey = 'load.offline',
+  unreachable: MessageKey = 'load.unreachable',
 ): LoadFailure {
-  return { cause, fallback, offline };
+  return { cause, fallback, unreachable };
 }

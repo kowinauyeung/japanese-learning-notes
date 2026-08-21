@@ -48,6 +48,7 @@ interface Seed {
   profile?: unknown;
   /** Force the next settings write to fail so the localized error path is reachable. */
   settingsSave?: 'fail' | 'defer' | 'offline';
+  settingsRefresh?: 'fail';
   updateWaiting?: boolean;
 }
 
@@ -203,8 +204,21 @@ function persistedProfile(uid: string): UserProfile | null {
   return profile;
 }
 
+/** Set once a save has committed, so the refresh that follows it can be failed. */
+let settingsSaved = false;
+
 export const userRepository: UserRepository = {
   get(uid): Promise<UserProfile | null> {
+    // Fails only the read that follows a committed save, which is the whole
+    // point: the transaction succeeded and the profile is durable, and the
+    // question is what the interface says about it.
+    if (seed().settingsRefresh === 'fail' && settingsSaved) {
+      return Promise.reject(
+        Object.assign(new Error('Failed to get document because the client is offline.'), {
+          code: 'unavailable',
+        }),
+      );
+    }
     return Promise.resolve(persistedProfile(uid));
   },
   save(uid, draft: UserProfileDraft): Promise<void> {
@@ -231,6 +245,7 @@ export const userRepository: UserRepository = {
       });
     }
     persistProfile(uid, draft);
+    settingsSaved = true;
     return Promise.resolve();
   },
   remove(uid): Promise<void> {

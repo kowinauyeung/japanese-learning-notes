@@ -5,11 +5,13 @@ import {
   captureLoadFailure,
   isAccessDenied,
   loadErrorMessage,
-  OFFLINE_MESSAGE,
+  UNREACHABLE_MESSAGE,
 } from '@/lib/loadError';
 
 /** What Firestore throws when a read cannot reach the backend. */
-const offline = () =>
+const LOCALES = Object.keys(authenticatedMessages) as (keyof typeof authenticatedMessages)[];
+
+const unreachable = () =>
   Object.assign(new Error('Failed to get document because the client is offline'), {
     code: 'unavailable',
   });
@@ -66,14 +68,16 @@ describe('loadErrorMessage', () => {
    * lumping the two together that the old wording ruled out.
    */
   it('names a dropped connection instead of blaming the thing being read', () => {
-    expect(loadErrorMessage(offline(), '練習履歴を読み込めませんでした。')).toBe(OFFLINE_MESSAGE);
+    expect(loadErrorMessage(unreachable(), '練習履歴を読み込めませんでした。')).toBe(
+      UNREACHABLE_MESSAGE,
+    );
   });
 
   it('still never sends a disconnected reader to sign in again, which fixes nothing', () => {
-    expect(loadErrorMessage(offline(), '練習履歴を読み込めませんでした。')).not.toBe(
+    expect(loadErrorMessage(unreachable(), '練習履歴を読み込めませんでした。')).not.toBe(
       ACCESS_DENIED_MESSAGE,
     );
-    expect(isAccessDenied(offline())).toBe(false);
+    expect(isAccessDenied(unreachable())).toBe(false);
   });
 
   /**
@@ -127,13 +131,13 @@ describe('loadErrorMessage', () => {
  */
 describe('an offline save is not an offline read', () => {
   it('leaves a read on the reading wording, which is what all but one caller is', () => {
-    expect(captureLoadFailure(offline(), 'load.entries').offline).toBe('load.offline');
+    expect(captureLoadFailure(unreachable(), 'load.entries').unreachable).toBe('load.unreachable');
   });
 
   it('lets the settings save say it was a save, since waiting will not complete it', () => {
-    expect(captureLoadFailure(offline(), 'load.settingsSave', 'load.offlineSave').offline).toBe(
-      'load.offlineSave',
-    );
+    expect(
+      captureLoadFailure(unreachable(), 'load.settingsSave', 'load.unreachableSave').unreachable,
+    ).toBe('load.unreachableSave');
   });
 
   /**
@@ -143,7 +147,7 @@ describe('an offline save is not an offline read', () => {
    */
   it('renders whichever offline sentence it was handed, rather than one of its own', () => {
     expect(
-      loadErrorMessage(offline(), '設定を保存できませんでした。', 'denied', 'save wording'),
+      loadErrorMessage(unreachable(), '設定を保存できませんでした。', 'denied', 'save wording'),
     ).toBe('save wording');
   });
 
@@ -153,11 +157,57 @@ describe('an offline save is not an offline read', () => {
    * copy-paste that duplicated the reading sentence would restore the defect in
    * exactly one locale — the one nobody testing in Japanese would open.
    */
-  it.each(Object.keys(authenticatedMessages) as (keyof typeof authenticatedMessages)[])(
+  it.each(LOCALES)(
     'gives %s readers a distinct sentence for a save that did not happen',
     (locale) => {
       const messages = authenticatedMessages[locale];
-      expect(messages['load.offlineSave']).not.toBe(messages['load.offline']);
+      expect(messages['load.unreachableSave']).not.toBe(messages['load.unreachable']);
     },
   );
+});
+
+/**
+ * `unavailable` says the backend was not reached. It does not say why.
+ *
+ * Firestore documents the code as "the service is currently unavailable ...
+ * most likely a transient condition", so an outage produces it with the
+ * reader's network working perfectly. Both sentences here used to open by
+ * telling that reader they were offline, and `OfflineNotice` — which watches
+ * `navigator.onLine` and is right — stayed hidden throughout, so the app
+ * contradicted itself on one screen.
+ */
+describe('the unreachable sentences name what was observed, not a cause', () => {
+  /**
+   * Language-independent, and that is the point of doing it this way. Each
+   * catalogue already contains its own word for the state, as `offline.state`
+   * — オフライン, 離線, 오프라인, Sin conexión — because that is the pill's
+   * label. Asserting against it needs no list of translated words here, and it
+   * goes red against every one of the five strings this replaced.
+   */
+  it.each(LOCALES)('does not tell %s readers the device is offline', (locale) => {
+    const messages = authenticatedMessages[locale];
+    const deviceState = messages['offline.state'].toLowerCase();
+    expect(messages['load.unreachable'].toLowerCase()).not.toContain(deviceState);
+    expect(messages['load.unreachableSave'].toLowerCase()).not.toContain(deviceState);
+  });
+
+  /**
+   * A tripwire on the sentence rather than a proof about the application, and
+   * worth having as one.
+   *
+   * The sentence used to end 「接続が戻ると表示されます」 — it will appear once
+   * you are back. Nothing delivers that. There is not one `onSnapshot` in
+   * `src/infra`; every provider loads once from an effect keyed on its
+   * repository, and no error screen offers a retry, so the data arrives when
+   * the reader reloads and not before. Promising otherwise leaves someone
+   * waiting for something that is not coming.
+   *
+   * If a provider ever does re-read on reconnect, this test is the thing that
+   * has to be deleted deliberately — which is the point of writing it down.
+   */
+  it('does not promise the words will come back on their own, because nothing brings them', () => {
+    expect(UNREACHABLE_MESSAGE).not.toContain('接続が戻る');
+    // Says what is true instead: the words already on the device are readable.
+    expect(UNREACHABLE_MESSAGE).toContain('保存済みの単語');
+  });
 });

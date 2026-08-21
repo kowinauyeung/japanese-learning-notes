@@ -10,7 +10,7 @@ export function useLoadErrorMessage(failure: LoadFailure | null): string | null 
         t('load.accessDenied'),
         // Not a constant: a failed save says so, and only the caller knows
         // which operation it was. See `captureLoadFailure`.
-        t(failure.offline),
+        t(failure.unreachable),
       )
     : null;
 }

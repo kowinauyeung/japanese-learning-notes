@@ -169,13 +169,56 @@ test('tells an offline reader their settings were not saved, not that they could
   await page.getByLabel('ニックネーム').fill('After');
   await page.getByRole('button', { name: '設定を保存' }).click();
 
-  await expect(page.getByText('オフラインのため保存できませんでした。')).toBeVisible();
+  await expect(page.getByText('接続できないため保存できませんでした。')).toBeVisible();
   // The half that fails without the fix. Both sentences begin the same way, so
   // asserting only the one above passes on a substring of the wrong message.
-  await expect(page.getByText('オフラインのため読み込めませんでした。')).toBeHidden();
+  await expect(page.getByText('接続できないため読み込めませんでした。')).toBeHidden();
   // Nor is it the generic wording, which would mean the offline branch was
   // skipped entirely rather than routed to the wrong operation.
   await expect(page.getByText('設定を保存できませんでした。')).toBeHidden();
+  expect(pageErrors).toEqual([]);
+});
+
+/**
+ * The save and the re-read that follows it are two Firestore operations, and
+ * only the first decides whether anything was saved.
+ *
+ * They used to share a `try`. A `get` that failed after the transaction had
+ * committed told the reader their settings could not be saved and to try
+ * again — for a change the server already had — and the rejection propagated,
+ * so the form never advanced its baseline and went on offering to save
+ * settings that were saved. Redoing the save would have worked, which is
+ * precisely why this would never have been reported: the lie corrects itself
+ * the moment the reader believes it.
+ */
+test('keeps a committed save committed when the re-read after it fails', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await seed(page, {
+    signedIn: true,
+    profile: {
+      nickname: 'Before',
+      language: 'ja',
+      translationLanguage: 'en',
+      theme: 'light',
+    },
+    settingsRefresh: 'fail',
+  });
+  await page.goto('/settings');
+
+  await page.getByLabel('ニックネーム').fill('After');
+  await page.getByRole('button', { name: '設定を保存' }).click();
+
+  // Read wording, because a read is what failed.
+  await expect(page.getByText('接続できないため読み込めませんでした。')).toBeVisible();
+  // Never the save wording: the transaction committed, and telling this reader
+  // to try again asks them to redo durable work.
+  await expect(page.getByText('接続できないため保存できませんでした。')).toBeHidden();
+  await expect(page.getByText('設定を保存できませんでした。')).toBeHidden();
+  // And the form has to agree. A banner about a failed read is survivable; a
+  // form that still claims unsaved changes sends the reader round again.
+  await expect(page.getByText('保存していない変更があります。')).toBeHidden();
+  await expect(page.getByLabel('ニックネーム')).toHaveValue('After');
   expect(pageErrors).toEqual([]);
 });
 

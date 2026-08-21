@@ -17,8 +17,9 @@ const en = {
   'load.settings': 'Could not load settings.',
   'load.settingsSave': 'Could not save settings.',
   'load.exportWalk': 'The export did not finish. Wait a moment and try again.',
-  'load.offline': 'You are offline, so this could not be loaded. It will appear once you are back.',
-  'load.offlineSave': 'You are offline, so this could not be saved. Try again once you are back.',
+  'load.unreachable': 'Could not reach the server. Your saved words can still be read.',
+  'load.unreachableSave':
+    'Could not reach the server, so this was not saved. Try again in a moment.',
   'offline.state': 'Offline',
   'offline.detail': 'Saved words stay readable. Changes may not save until you are back.',
   'diagnostics.summary': 'View and copy diagnostics',
@@ -100,9 +101,9 @@ const ja: AuthenticatedMessages = {
   'load.settings': '設定を読み込めませんでした。',
   'load.settingsSave': '設定を保存できませんでした。',
   'load.exportWalk': 'エクスポートが終わりませんでした。時間をおいて再度お試しください。',
-  'load.offline': 'オフラインのため読み込めませんでした。接続が戻ると表示されます。',
-  'load.offlineSave':
-    'オフラインのため保存できませんでした。接続が戻ってからもう一度お試しください。',
+  'load.unreachable': '接続できないため読み込めませんでした。保存済みの単語はそのまま読めます。',
+  'load.unreachableSave':
+    '接続できないため保存できませんでした。しばらくしてからもう一度お試しください。',
   'offline.state': 'オフライン',
   'offline.detail': '保存済みの単語は読めます。変更は接続が戻るまで保存されないことがあります。',
   'diagnostics.summary': '診断情報を見る・コピーする',
@@ -179,8 +180,8 @@ const zhHant: AuthenticatedMessages = {
   'load.settings': '無法載入設定。',
   'load.settingsSave': '無法儲存設定。',
   'load.exportWalk': '匯出未能完成，請稍後再試。',
-  'load.offline': '目前離線，因此無法載入。連線恢復後就會顯示。',
-  'load.offlineSave': '目前離線，因此無法儲存。請在連線恢復後再試一次。',
+  'load.unreachable': '無法連線，因此未能載入。已儲存的單字仍可閱讀。',
+  'load.unreachableSave': '無法連線，因此未能儲存。請稍後再試一次。',
   'offline.state': '離線',
   'offline.detail': '已儲存的單字仍可閱讀。變更可能要等連線恢復後才會儲存。',
   'diagnostics.summary': '查看及複製診斷資料',
@@ -254,8 +255,8 @@ const ko: AuthenticatedMessages = {
   'load.settings': '설정을 불러올 수 없습니다.',
   'load.settingsSave': '설정을 저장할 수 없습니다.',
   'load.exportWalk': '내보내기가 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.',
-  'load.offline': '오프라인이라 불러오지 못했습니다. 연결이 돌아오면 표시됩니다.',
-  'load.offlineSave': '오프라인이라 저장하지 못했습니다. 연결이 돌아온 뒤 다시 시도해 주세요.',
+  'load.unreachable': '연결할 수 없어 불러오지 못했습니다. 저장된 단어는 그대로 볼 수 있습니다.',
+  'load.unreachableSave': '연결할 수 없어 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.',
   'offline.state': '오프라인',
   'offline.detail':
     '저장된 단어는 계속 볼 수 있습니다. 변경 사항은 연결이 돌아올 때까지 저장되지 않을 수 있습니다.',
@@ -335,9 +336,10 @@ const es: AuthenticatedMessages = {
   'load.settings': 'No se pudo cargar la configuración.',
   'load.settingsSave': 'No se pudo guardar la configuración.',
   'load.exportWalk': 'La exportación no terminó. Espera un momento e inténtalo de nuevo.',
-  'load.offline': 'Estás sin conexión, así que no se pudo cargar. Aparecerá cuando vuelvas.',
-  'load.offlineSave':
-    'Estás sin conexión, así que no se pudo guardar. Inténtalo de nuevo cuando vuelvas.',
+  'load.unreachable':
+    'No se pudo conectar, así que no se pudo cargar. Las palabras guardadas siguen disponibles.',
+  'load.unreachableSave':
+    'No se pudo conectar, así que no se pudo guardar. Inténtalo de nuevo en un momento.',
   'offline.state': 'Sin conexión',
   'offline.detail':
     'Las palabras guardadas siguen disponibles. Puede que los cambios no se guarden hasta que vuelvas.',
