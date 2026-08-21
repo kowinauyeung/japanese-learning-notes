@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ACCESS_DENIED_MESSAGE, isAccessDenied, loadErrorMessage } from '@/lib/loadError';
+import {
+  ACCESS_DENIED_MESSAGE,
+  isAccessDenied,
+  loadErrorMessage,
+  OFFLINE_MESSAGE,
+} from '@/lib/loadError';
 
 /**
  * Deploying rules that gate on the `allowed` custom claim to a project where no
@@ -38,19 +43,49 @@ describe('loadErrorMessage', () => {
   });
 
   /**
-   * The fallback has to survive, or this change trades one indiscriminate
-   * message for another: a network failure is genuinely about the thing being
-   * read, and telling that reader to sign in again sends them nowhere.
+   * **This expectation was reversed deliberately, and the reasoning it replaces
+   * is worth keeping in view.** It used to assert that `unavailable` kept the
+   * subject-specific wording, on the grounds that "a network failure is
+   * genuinely about the thing being read". #63 makes the opposite case, and it
+   * is the better one: nothing is wrong with the word and nothing is wrong with
+   * the read — the device is offline, which is a fact about the device and
+   * identical on every screen.
+   *
+   * What the original test was actually protecting is untouched and asserted
+   * immediately below: a dropped connection must never be routed to the
+   * access-denied message, because telling that reader to sign out and back in
+   * sends them nowhere. Adding a third branch satisfies that; it was only
+   * lumping the two together that the old wording ruled out.
    */
-  it('keeps the subject-specific wording for a failure that is not about access', () => {
-    const offline = Object.assign(
-      new Error('Failed to get document because the client is offline'),
-      {
-        code: 'unavailable',
-      },
+  const offline = () =>
+    Object.assign(new Error('Failed to get document because the client is offline'), {
+      code: 'unavailable',
+    });
+
+  it('names a dropped connection instead of blaming the thing being read', () => {
+    expect(loadErrorMessage(offline(), '練習履歴を読み込めませんでした。')).toBe(OFFLINE_MESSAGE);
+  });
+
+  it('still never sends a disconnected reader to sign in again, which fixes nothing', () => {
+    expect(loadErrorMessage(offline(), '練習履歴を読み込めませんでした。')).not.toBe(
+      ACCESS_DENIED_MESSAGE,
     );
-    expect(loadErrorMessage(offline, '練習履歴を読み込めませんでした。')).toBe(
-      '練習履歴を読み込めませんでした。',
+    expect(isAccessDenied(offline())).toBe(false);
+  });
+
+  /**
+   * The narrow part of the branch, and the reason it is not simply "any
+   * failure while offline". Measured against the emulator with the network
+   * disabled: `getDoc` throws `unavailable`, while `getDocs` and `onSnapshot`
+   * succeed from the cache with `metadata.fromCache` set. A read the cache can
+   * answer never reaches this function at all.
+   */
+  it('claims only the code that means the backend was unreachable', () => {
+    const corrupt = Object.assign(new Error('Document parse failure'), {
+      code: 'data-loss',
+    });
+    expect(loadErrorMessage(corrupt, '単語を読み込めませんでした。')).toBe(
+      '単語を読み込めませんでした。',
     );
   });
 
