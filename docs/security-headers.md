@@ -1,6 +1,15 @@
 # Security headers
 
-Set in `firebase.json` under `hosting.headers`, applied to every response.
+Set in `firebase.json` under `hosting.headers`.
+
+The array now holds three entries: the security headers below on `**`, then a
+default `Cache-Control` rule — also on `**`, which is the point of it — and a
+narrower `/assets/**` override. Both are described in
+[README → Response headers](../README.md#response-headers). That matters here
+for one reason — **Hosting applies every matching entry, and only a repeated
+key is decided by the last one to match**. The security headers are therefore
+still on every response, including `/assets/**`, and a narrower entry added
+later will not shadow them unless it names the same header.
 
 ## Enforced
 
@@ -29,3 +38,11 @@ it enforces nothing**, so this is one of the things promotion turns on.
 The `connect-src` list is the minimum Firebase Auth and Firestore need.
 `https://lh3.googleusercontent.com` in `img-src` is the Google profile picture;
 drop it if the avatar is ever rendered from initials only.
+
+`worker-src 'self'` and `manifest-src 'self'` are stated even though
+`default-src 'self'` already implies both. They buy nothing today, and while the
+policy is Report-Only they would buy nothing if they were missing either: a
+`default-src` narrowed past them blocks no worker and no manifest, it only
+reports. The cost lands at promotion, along with everything else on this page —
+which is precisely when nobody wants to be discovering that one directive was
+doing two jobs.

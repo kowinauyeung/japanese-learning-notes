@@ -210,6 +210,61 @@ password on the HTML protects the page, not the data.
 Rules deploy before anything that writes through them. A client briefly older
 than its rules fails closed; the other way round fails open.
 
+### Response headers
+
+`firebase.json` sets two things on every response: the security headers, and a
+caching rule. Two of Hosting's matching semantics decide how they have to be
+written, and both were measured against the Hosting emulator rather than read
+off the documentation.
+
+**Every matching entry applies, and for a repeated key the last one wins.** So
+the `**` block holding the security headers is not shadowed by the narrower
+entries after it — an asset still carries the full set — and `/assets/**` gets
+its `Cache-Control` only because it appears _after_ the `**` rule that sets
+`no-cache`. Move it above and the assets silently fall back to revalidating on
+every load.
+
+**A header rule matches the request path, not the rewritten one.** `**` →
+`/index.html` means `/` and `/browse` are served the index document, but a rule
+whose `source` is `/index.html` reaches neither of them; nobody navigates to
+`/index.html` by name. That is why the `no-cache` default is written against
+`**` rather than against the three files that actually need it.
+
+The result:
+
+| Path            | `Cache-Control`                       | Why                                                                                                                                                                                                            |
+| --------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/assets/**`    | `public, max-age=31536000, immutable` | Vite puts a content hash in the name, so a changed file is a changed URL and the old one is never requested again.                                                                                             |
+| everything else | `no-cache`                            | `index.html`, the manifest, the icons and a future `sw.js` keep their names across deploys, so the only safe answer is to revalidate. `no-cache` stores the response and revalidates it; it is not `no-store`. |
+
+`no-cache` as the default rather than a list of filenames is what makes this
+survive the service worker: `/sw.js` is covered before it exists. Hosting's
+default is `max-age=3600` on everything, which would otherwise pin a controlled
+client to an hour-old app shell — and the scripts a worker `importScripts` come
+from the HTTP cache even though the worker script itself does not.
+
+**A pull request cannot verify this on its own preview.** The deploy job checks
+out the pull request's base, so a preview channel runs the base branch's
+`firebase.json`. Check header changes against the Hosting emulator locally, and
+confirm them on `goitei-dev` after the merge:
+
+```bash
+yarn build:e2e
+yarn firebase emulators:exec --only hosting --project demo-goitei \
+  'curl -sI http://127.0.0.1:5010/ | grep -i cache-control &&
+   curl -sI "http://127.0.0.1:5010/$(cd dist && ls assets/*.js | head -1)" | grep -i cache-control'
+```
+
+`emulators:exec` and not `emulators:start`: the latter runs in the foreground
+until it is interrupted, so anything written after it never runs. Check a file
+under `/assets/**` as well as `/` — that is the pair the ordering rule above
+decides, and checking only one of them would pass with the rules reversed.
+
+The port is pinned in `firebase.json` rather than left to default to 5000, which
+macOS hands to AirPlay Receiver; the emulator then shifts to another port and a
+hardcoded URL in a script fails for a reason that has nothing to do with what it
+is testing.
+
 ### Operator runbook
 
 Everything below assumes `GOOGLE_APPLICATION_CREDENTIALS`, or `gcloud auth
