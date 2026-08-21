@@ -35,19 +35,19 @@ describe('buildLine', () => {
 
 /**
  * The substitute for spelling the environment out: a `[DEV]` prefix on the
- * name shown everywhere the app already displays its brand, rather than a
- * separate "Production"/"Development" line only the account page carried.
+ * `<title>` and the installed-app name, rather than a separate
+ * "Production"/"Development" line only the account page carried.
  */
 describe('siteTitle', () => {
-  it('leaves the production title alone', () => {
+  it('does not mislabel the production tab title as a dev build', () => {
     expect(siteTitle('語彙庭', 'goitei', 'production')).toBe('語彙庭');
   });
 
-  it('prefixes the dev project, even though its build mode reads production', () => {
+  it('flags the dev site’s tab title, even though its build mode reads "production" like a real release', () => {
     expect(siteTitle('語彙庭', 'goitei-dev', 'production')).toBe('[DEV]語彙庭');
   });
 
-  it('prefixes a local dev server too, which is even less "production" than the deployed dev site', () => {
+  it('flags a local dev server’s tab title too, not only the deployed dev site', () => {
     expect(siteTitle('語彙庭', 'goitei', 'development')).toBe('[DEV]語彙庭');
   });
 });

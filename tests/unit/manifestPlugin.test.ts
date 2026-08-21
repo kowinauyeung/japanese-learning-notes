@@ -9,11 +9,11 @@ import { withDevTitle } from '../../manifest-plugin';
 describe('withDevTitle', () => {
   const manifest = { id: '/', name: '語彙庭', short_name: '語彙庭' };
 
-  it('leaves the production manifest untouched', () => {
+  it('does not mislabel the production home-screen icon as a dev build', () => {
     expect(withDevTitle(manifest, 'goitei', 'production')).toEqual(manifest);
   });
 
-  it('prefixes name and short_name for the dev project, whose build mode still reads production', () => {
+  it('flags the dev site’s home-screen icon, even though its build mode reads "production" like a real release', () => {
     expect(withDevTitle(manifest, 'goitei-dev', 'production')).toEqual({
       id: '/',
       name: '[DEV]語彙庭',
@@ -21,7 +21,7 @@ describe('withDevTitle', () => {
     });
   });
 
-  it('prefixes anything not built for release, whatever project it points at', () => {
+  it('flags a local/non-release build’s home-screen icon too, not only the deployed dev site', () => {
     expect(withDevTitle(manifest, 'goitei', 'development')).toEqual({
       id: '/',
       name: '[DEV]語彙庭',

@@ -52,6 +52,7 @@ export function Distribution({
       {rows.length > COLLAPSED_ROWS && (
         <button
           type="button"
+          aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
           className="mt-3 text-xs font-medium text-accent sm:hidden"
         >

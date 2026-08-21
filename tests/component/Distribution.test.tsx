@@ -23,11 +23,22 @@ describe('Distribution — the mobile row cap', () => {
     render(<Distribution title="JLPT" rows={rows(7)} />);
 
     const sixthRow = screen.getByText('label-5').closest('li')!;
+    // `hidden` is what actually removes the row from a phone's screen below
+    // `sm`; without it a JLPT level or part-of-speech list past the fifth row
+    // just runs on, uncapped, instead of collapsing behind "もっと見る".
     expect(sixthRow.className).toContain('hidden');
 
     fireEvent.click(screen.getByRole('button', { name: 'もっと見る' }));
 
+    // Clearing `hidden` is the only effect the click has — without it the
+    // button would flip its own label with nothing underneath reappearing.
     expect(sixthRow.className).not.toContain('hidden');
     expect(screen.getByRole('button', { name: '折りたたむ' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '折りたたむ' }));
+
+    // And the reverse: without this, expanding is one-way and a long list
+    // never collapses back down on the screen it was capped for.
+    expect(sixthRow.className).toContain('hidden');
   });
 });
