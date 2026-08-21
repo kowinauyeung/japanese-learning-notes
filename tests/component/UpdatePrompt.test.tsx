@@ -69,6 +69,9 @@ describe('UpdatePrompt', () => {
 
     act(() => updateButton().click());
 
+    // Counted at the port, because the screen cannot tell the difference: a
+    // button that dismissed instead of handing over looks identical, and the
+    // reader only finds out when the build they asked for is still not there.
     expect(worker.activations()).toBe(1);
   });
 
@@ -101,6 +104,11 @@ describe('UpdatePrompt', () => {
     mount(worker.port);
     worker.announceWaitingBuild();
 
+    // Queried by role rather than by text, and that is the assertion. `status`
+    // is a polite live region: a screen reader announces it at the next pause.
+    // Lose the role and the banner is either silent to a screen reader, or —
+    // if someone reaches for `alert` — cuts into the dictation answer being
+    // typed, which is the one moment this can arrive.
     expect(screen.getByRole('status')).toHaveTextContent('新しいバージョンがあります');
   });
 });

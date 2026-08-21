@@ -6,7 +6,9 @@ import { pwaOptions } from '../../pwa-config';
  *
  * Every failure guarded here is silent. Nothing throws, nothing goes red on its
  * own, and the build succeeds either way — which is the whole reason these are
- * assertions rather than a comment asking the next person to be careful.
+ * assertions rather than a comment asking the next person to be careful. Each
+ * one carries its consequence immediately above it, because a reason written
+ * above `it(...)` cannot say which of several assertions it belongs to.
  *
  * What this deliberately does **not** cover is whether the app actually loads
  * with the network off. That needs a production-mode build in a real browser,
@@ -23,42 +25,29 @@ const workboxOf = (mode: string) => {
 };
 
 describe('the service worker is absent from the end-to-end build', () => {
-  /**
-   * The one that matters most, and the one that fails quietest. A worker in the
-   * `e2e` build precaches a bundle and then serves it to the next Playwright
-   * run, so the suite passes against a build that is not the one under test.
-   * Every other test in this repository would still be green while proving
-   * nothing.
-   */
   it('is disabled under e2e, so Playwright cannot be served a previous build', () => {
+    // The one that matters most, and the one that fails quietest. A worker here
+    // precaches a bundle and serves it to the next Playwright run, so the suite
+    // passes against a build that is not the one under test — every other test
+    // in this repository still green while proving nothing.
     expect(pwaOptions('e2e').disable).toBe(true);
   });
 
-  /**
-   * `development` is not decoration in this list. `disable` governs the build;
-   * `devOptions.enabled` governs `yarn dev`, and it is off — so nothing runs a
-   * worker while editing either way. What this holds up is the by-hand dev
-   * deploy the README documents, `yarn vite build --mode development` followed
-   * by a Hosting deploy. Disabling on this mode would ship `goitei-dev` an app
-   * that silently has no worker, which is a thing nobody would notice until
-   * they were offline and expecting one.
-   */
   it.each(['production', 'development'])(
     'is enabled under %s, since disabling it everywhere would silently drop the feature',
     (mode) => {
+      // `development` is not padding beside `production`. `disable` governs the
+      // build while `devOptions.enabled` governs `yarn dev`, and that is off —
+      // so nothing runs a worker while editing either way. What this holds up
+      // is the by-hand dev deploy the README documents, `yarn vite build --mode
+      // development`, which would otherwise ship `goitei-dev` an app with no
+      // worker at all, unnoticed until someone went offline expecting one.
       expect(pwaOptions(mode).disable).toBe(false);
     },
   );
 });
 
 describe('the update handover', () => {
-  /**
-   * `autoUpdate` would swap the precached assets under a running session, so
-   * the next lazily imported route arrives from a bundle the loaded code was
-   * not compiled against. `prompt` is what makes the reader the one who
-   * chooses, and `src/components/UpdatePrompt.tsx` only has anything to do
-   * while this holds.
-   */
   it('waits to be asked rather than updating underneath a running session', () => {
     // `autoUpdate` reloads the reader without asking, mid-sentence in a
     // dictation answer if that is where they are.
@@ -72,46 +61,45 @@ describe('the update handover', () => {
     expect(workboxOf('production').clientsClaim).toBe(false);
   });
 
-  /**
-   * Two registrations means two updaters, and the second one's `onNeedRefresh`
-   * fires into nothing. The prompt would then never appear, while everything
-   * about the worker still looked correct.
-   */
   it('leaves registration to the adapter, so the prompt is wired to the live updater', () => {
+    // An injected registration is a second updater, and the second one's
+    // `onNeedRefresh` fires into nothing. The prompt then never appears while
+    // everything about the worker still looks correct — a stale build with no
+    // way left to report itself.
     expect(pwaOptions('production').injectRegister).toBe(false);
   });
 });
 
 describe('what an offline navigation can reach', () => {
-  /**
-   * Every route in `src/router.tsx` is a lazy import. A pattern list that
-   * stopped matching `.js` would precache the shell and none of the screens —
-   * the exact state #67 describes, and one that looks fine until the network
-   * goes away.
-   */
   it('precaches the route chunks, which are the app rather than an optimisation', () => {
     const patterns = workboxOf('production').globPatterns ?? [];
+    // Every route in `src/router.tsx` is a lazy import, so dropping `js` here
+    // precaches the shell and none of the screens: the app opens offline and
+    // reaches nothing, which is the exact state #67 describes.
     expect(patterns.some((pattern) => pattern.includes('js'))).toBe(true);
+    // Without the manifest an installed window cannot read its own identity
+    // offline, which is the case this whole change exists for.
     expect(patterns.some((pattern) => pattern.includes('webmanifest'))).toBe(true);
   });
 
   it('answers a deep navigation with the index document, matching the hosting rewrite', () => {
+    // Without it, an offline visit to `/vocabulary` asks the cache for a
+    // document that was never a file, and the reader gets the browser's
+    // offline error instead of the app they installed.
     expect(workboxOf('production').navigateFallback).toBe('/index.html');
   });
 
-  /**
-   * `signInWithPopup` opens `/__/auth/handler`. If the auth domain is ever
-   * pointed at the hosting domain, that becomes same-origin and in scope — and
-   * a navigation fallback would answer it with `index.html`, breaking sign-in
-   * with nothing naming the cause.
-   *
-   * Asserted as behaviour over paths rather than by comparing the pattern to
-   * itself, which would pass for any regular expression at all.
-   */
   it.each(['/__/auth/handler', '/__/auth/iframe', '/__/firebase/init.json'])(
     'keeps %s away from the navigation fallback, since Firebase serves sign-in from there',
     (path) => {
       const denied = workboxOf('production').navigateFallbackDenylist ?? [];
+      // `signInWithPopup` opens `/__/auth/handler`. Should the auth domain ever
+      // point at the hosting domain, that path becomes same-origin and in
+      // scope — and a fallback would answer it with `index.html`, breaking
+      // sign-in with no error naming the cause.
+      //
+      // Asserted over paths rather than by comparing the pattern to itself,
+      // which would pass for any regular expression at all.
       expect(denied.some((pattern) => pattern.test(path))).toBe(true);
     },
   );
@@ -120,6 +108,9 @@ describe('what an offline navigation can reach', () => {
     'still lets %s fall back, which is what makes it reachable offline',
     (path) => {
       const denied = workboxOf('production').navigateFallbackDenylist ?? [];
+      // The other half of the denylist, and the half a too-broad pattern
+      // breaks: deny these and every route stops resolving offline, which is
+      // the feature rather than a corner of it.
       expect(denied.some((pattern) => pattern.test(path))).toBe(false);
     },
   );
