@@ -1,8 +1,8 @@
 {
-  // Every script outside src and tests — the operator scripts in admin — in one
-  // pass. Standalone for the same reason tsconfig.test.json is: these files
-  // reach into src, and a composite project may only do that through a
-  // reference tsconfig.app.json cannot provide.
+  // Every script outside src and tests — the operator scripts in admin, and the
+  // icon generator in scripts — in one pass. Standalone for the same reason
+  // tsconfig.test.json is: these files reach into src, and a composite project
+  // may only do that through a reference tsconfig.app.json cannot provide.
   //
   // This pass exists because a folder once sat outside every checker without
   // anything saying so. Measured at the time: importing a symbol that does not
@@ -33,5 +33,5 @@
     "skipLibCheck": true,
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["admin"]
+  "include": ["admin", "scripts"]
 }

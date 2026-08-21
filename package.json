@@ -28,6 +28,7 @@
     "auth:login": "CLOUDSDK_CONFIG=.gcloud gcloud auth application-default login",
     "auth:revoke": "CLOUDSDK_CONFIG=.gcloud gcloud auth application-default revoke",
     "allow": "vite-node admin/allow-user.ts --",
+    "icons": "vite-node scripts/icons.ts",
     "rules:dev": "firebase deploy --only firestore:rules --project dev",
     "rules:prod": "firebase deploy --only firestore:rules --project prod"
   },

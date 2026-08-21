@@ -6,10 +6,36 @@
     <title>語彙庭</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <!--
+      Safari takes this ahead of the manifest's icons when it adds the app to
+      the Home Screen, and it does not read the SVG favicon above at all.
+
+      Removing it is not the no-op that precedence makes it sound. Since iOS
+      15.4 the manifest is a real fallback, so the tile would land on icon-192
+      or icon-512 — the two `purpose: "any"` entries, both of which carry an
+      alpha channel, and iOS composites transparency onto black. The maskable
+      icon is rasterised opaque, but its `purpose` keeps it out of that slot —
+      so this tag is the only opaque icon iOS would reach for. (With no icon at
+      all, iOS 16.4 and up draw a monogram from the first letter of the name;
+      older versions took a screenshot of the page.)
+    -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!--
+      Installability, and nothing else yet: there is no service worker, so an
+      installed window is the same app in its own frame rather than one that
+      works offline. Chromium withholds its install prompt until a service
+      worker exists; iOS's Add to Home Screen does not, and works from here.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!--
       One tag rather than a prefers-color-scheme pair: a saved theme overrides
       the OS preference, so the media query would leave the browser chrome on
       the opposite colour from the page. Both values live here so the script
       below and useTheme read one source instead of duplicating the hexes.
+
+      The manifest cannot follow the theme this way — it holds one theme_color,
+      read once at install time — so it carries the light value. Where the two
+      disagree this tag wins for browser chrome, and the manifest's is what the
+      launch splash screen uses.
     -->
     <meta name="theme-color" content="#f7fbf9" data-light="#f7fbf9" data-dark="#0d1a16" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
