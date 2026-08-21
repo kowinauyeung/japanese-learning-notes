@@ -1,6 +1,14 @@
 # Security headers
 
-Set in `firebase.json` under `hosting.headers`, applied to every response.
+Set in `firebase.json` under `hosting.headers`.
+
+The array now holds three entries: the security headers below on `**`, and two
+narrower `Cache-Control` rules described in
+[README → Response headers](../README.md#response-headers). That matters here
+for one reason — **Hosting applies every matching entry, and only a repeated
+key is decided by the last one to match**. The security headers are therefore
+still on every response, including `/assets/**`, and a narrower entry added
+later will not shadow them unless it names the same header.
 
 ## Enforced
 
@@ -29,3 +37,9 @@ it enforces nothing**, so this is one of the things promotion turns on.
 The `connect-src` list is the minimum Firebase Auth and Firestore need.
 `https://lh3.googleusercontent.com` in `img-src` is the Google profile picture;
 drop it if the avatar is ever rendered from initials only.
+
+`worker-src 'self'` and `manifest-src 'self'` are stated even though
+`default-src 'self'` already implies both. They buy nothing today; they exist so
+that narrowing `default-src` later cannot take the service worker or the web app
+manifest with it silently — and under Report-Only, silently is exactly how it
+would happen.
