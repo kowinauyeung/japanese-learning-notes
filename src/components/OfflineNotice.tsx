@@ -12,10 +12,12 @@ import { useOnline } from '@/lib/useOnline';
  * happens rather than after.
  *
  * **A quiet pill, not a banner.** Nothing is broken and nothing needs doing, so
- * this takes no action, blocks nothing, and does not move the page. Bottom left
- * keeps it clear of the add button at bottom right and of `UpdatePrompt`, which
- * is centred — the three can all be on screen at once and none of them is
- * allowed to cover another.
+ * this takes no action, blocks nothing, and does not move the page.
+ *
+ * It does not place itself. `BottomNotices` owns where this sits, because the
+ * one thing that matters about its position is a relationship to something
+ * else — and a comment here claiming to be clear of the add button was wrong at
+ * every width that was eventually measured.
  *
  * `role="status"` for the same reason it is on `UpdatePrompt`: a polite live
  * region announces the change at the next pause instead of interrupting
@@ -30,7 +32,9 @@ export function OfflineNotice() {
   return (
     <div
       role="status"
-      className="fixed bottom-5 left-5 z-40 max-w-[min(20rem,calc(100vw-2.5rem))] rounded-panel border border-line bg-card px-3 py-2 shadow-panel"
+      // `self-start`, so the pill stays the width of its sentence instead of
+      // stretching across the stack the way the prompt below it does.
+      className="pointer-events-auto max-w-[min(20rem,100%)] self-start rounded-panel border border-line bg-card px-3 py-2 shadow-panel"
     >
       <p className="flex items-center gap-2 text-sm font-semibold text-ink">
         {/* Decorative: the text beside it already names the state, and a screen

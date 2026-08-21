@@ -28,6 +28,8 @@ export interface E2ESeed {
    * transaction cannot be queued.
    */
   settingsSave?: 'fail' | 'defer' | 'offline';
+  /** Put a waiting build on screen, so `UpdatePrompt` can be laid out against. */
+  updateWaiting?: boolean;
 }
 
 /** Fixed instant every spec runs at. A Wednesday; its ISO week starts on the 22nd. */

@@ -48,6 +48,7 @@ interface Seed {
   profile?: unknown;
   /** Force the next settings write to fail so the localized error path is reachable. */
   settingsSave?: 'fail' | 'defer' | 'offline';
+  updateWaiting?: boolean;
 }
 
 declare global {
@@ -123,7 +124,18 @@ const notify = () => {
  * service worker genuinely never has a new build installed behind it.
  */
 export const appUpdatePort: AppUpdatePort = {
-  onWaiting: () => () => {},
+  onWaiting(fn) {
+    // A real port, not a stub: it reports a waiting build when the seed says
+    // one is waiting, and reports nothing otherwise. Without it `UpdatePrompt`
+    // can never be on screen in an end-to-end run, and a claim about how it
+    // shares the bottom of the viewport with `OfflineNotice` has nothing to
+    // measure.
+    if (!seed().updateWaiting) return () => {};
+    // Asynchronously, because the real port learns of a waiting build from the
+    // service worker registration and never from the render that subscribed.
+    const timer = setTimeout(fn, 0);
+    return () => clearTimeout(timer);
+  },
   activate: () => Promise.resolve(),
 };
 
