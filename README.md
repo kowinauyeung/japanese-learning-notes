@@ -249,9 +249,21 @@ out the pull request's base, so a preview channel runs the base branch's
 confirm them on `goitei-dev` after the merge:
 
 ```bash
-yarn build:e2e && yarn firebase emulators:start --only hosting --project demo-goitei
-curl -sI http://127.0.0.1:5000/ | grep -i cache-control
+yarn build:e2e
+yarn firebase emulators:exec --only hosting --project demo-goitei \
+  'curl -sI http://127.0.0.1:5010/ | grep -i cache-control &&
+   curl -sI "http://127.0.0.1:5010/$(cd dist && ls assets/*.js | head -1)" | grep -i cache-control'
 ```
+
+`emulators:exec` and not `emulators:start`: the latter runs in the foreground
+until it is interrupted, so anything written after it never runs. Check a file
+under `/assets/**` as well as `/` — that is the pair the ordering rule above
+decides, and checking only one of them would pass with the rules reversed.
+
+The port is pinned in `firebase.json` rather than left to default to 5000, which
+macOS hands to AirPlay Receiver; the emulator then shifts to another port and a
+hardcoded URL in a script fails for a reason that has nothing to do with what it
+is testing.
 
 ### Operator runbook
 
