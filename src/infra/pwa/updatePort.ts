@@ -7,7 +7,7 @@ import type { AppUpdatePort } from '@/domain/ports';
  * `registerSW` is called once, at module load, and its return value is the only
  * way to move the waiting worker along. Registering a second time elsewhere
  * would produce a second updater whose `onNeedRefresh` fires into nothing,
- * which is why `injectRegister` is `null` in `vite.config.ts`.
+ * which is why `injectRegister` is `false` in `pwa-config.ts`.
  */
 
 /**
@@ -36,10 +36,18 @@ export const swUpdatePort: AppUpdatePort = {
     return () => listeners.delete(fn);
   },
   /**
-   * `true` is `reloadPage`. The worker calls `skipWaiting()` and the page is
-   * reloaded once it has taken control, which is what makes the reload land on
-   * the new build rather than re-serving the old one and looking like the
-   * button did nothing.
+   * Called bare. The plugin's own signature names the parameter `_reloadPage`
+   * and its type says it "is not used anymore" from 0.13.2 on — all
+   * `updateServiceWorker` does is post `skipWaiting` to the waiting worker, so
+   * passing `true` would have been a decoration that read like a control.
+   *
+   * The reload is real but it is not this call's, and not ours. When
+   * `onNeedRefresh` fires, the plugin attaches a `controlling` listener; no
+   * `onNeedReload` is passed above, so its default branch runs
+   * `window.location.reload()` once the new worker takes control. Supplying
+   * `onNeedReload` here would replace that default and leave the page on the
+   * old build with a new worker underneath it — which is the stale state this
+   * whole file exists to end.
    */
-  activate: () => updateSW(true),
+  activate: () => updateSW(),
 };

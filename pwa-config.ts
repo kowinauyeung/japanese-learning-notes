@@ -49,8 +49,11 @@ export const pwaOptions = (mode: string): Partial<VitePWAOptions> => ({
    * has to be wired to the same `registerSW` call that learns a new build is
    * waiting. An injected script would register a second time and own the
    * callback this app needs.
+   *
+   * `false` and not `null`: both mean "inject nothing", and the plugin's own
+   * type marks `null` deprecated in favour of `false`.
    */
-  injectRegister: null,
+  injectRegister: false,
 
   workbox: {
     /**

@@ -22,6 +22,12 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
+    // Config files import each other by explicit `.ts` path. Vite's coming
+    // native config loader does not resolve an extensionless specifier, and
+    // says so as a warning on every build today. Safe here because this
+    // project only ever typechecks — `noEmit` above is the option's own
+    // precondition.
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true
   },
   "include": [

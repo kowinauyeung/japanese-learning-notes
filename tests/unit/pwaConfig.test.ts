@@ -62,7 +62,7 @@ describe('the update handover', () => {
    * about the worker still looked correct.
    */
   it('leaves registration to the adapter, so the prompt is wired to the live updater', () => {
-    expect(pwaOptions('production').injectRegister).toBeNull();
+    expect(pwaOptions('production').injectRegister).toBe(false);
   });
 });
 

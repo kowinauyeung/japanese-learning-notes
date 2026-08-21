@@ -3,8 +3,8 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
-import { buildInfo } from './build-info';
-import { pwaOptions } from './pwa-config';
+import { buildInfo } from './build-info.ts';
+import { pwaOptions } from './pwa-config.ts';
 
 const src = (path: string) => fileURLToPath(new URL(`./src/${path}`, import.meta.url));
 
