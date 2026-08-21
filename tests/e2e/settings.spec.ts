@@ -136,6 +136,49 @@ test('shows save failures in the previewed display language', async ({ page }) =
   expect(pageErrors).toEqual([]);
 });
 
+/**
+ * Offline is not one message. #63 gave `unavailable` its own sentence so a
+ * dropped connection stops reading as a fault in the thing being opened — and
+ * that sentence describes a *read*. Routed to a save, it tells the reader their
+ * settings will appear once they are back, when nothing was written and nothing
+ * is queued: the save is a `runTransaction`, and a transaction is the one
+ * Firestore write that cannot be deferred. Measured with the socket cut, it
+ * rejects with `unavailable` after six to ten seconds of retries.
+ *
+ * End-to-end because the layer under test is the wiring, not the branch: the
+ * provider chooses the key, the hook resolves it, and the route renders it.
+ * `tests/unit/loadError.test.ts` covers the branch itself.
+ */
+test('tells an offline reader their settings were not saved, not that they could not be loaded', async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await seed(page, {
+    signedIn: true,
+    profile: {
+      nickname: 'Before',
+      language: 'ja',
+      translationLanguage: 'en',
+      theme: 'light',
+    },
+    settingsSave: 'offline',
+  });
+  await page.goto('/settings');
+
+  await page.getByLabel('ニックネーム').fill('After');
+  await page.getByRole('button', { name: '設定を保存' }).click();
+
+  await expect(page.getByText('オフラインのため保存できませんでした。')).toBeVisible();
+  // The half that fails without the fix. Both sentences begin the same way, so
+  // asserting only the one above passes on a substring of the wrong message.
+  await expect(page.getByText('オフラインのため読み込めませんでした。')).toBeHidden();
+  // Nor is it the generic wording, which would mean the offline branch was
+  // skipped entirely rather than routed to the wrong operation.
+  await expect(page.getByText('設定を保存できませんでした。')).toBeHidden();
+  expect(pageErrors).toEqual([]);
+});
+
 test('locks the settings draft until a delayed save finishes', async ({ page }) => {
   await seed(page, {
     signedIn: true,

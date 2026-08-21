@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
+import { authenticatedMessages } from '@/i18n/authenticatedMessages';
 import {
   ACCESS_DENIED_MESSAGE,
+  captureLoadFailure,
   isAccessDenied,
   loadErrorMessage,
   OFFLINE_MESSAGE,
 } from '@/lib/loadError';
+
+/** What Firestore throws when a read cannot reach the backend. */
+const offline = () =>
+  Object.assign(new Error('Failed to get document because the client is offline'), {
+    code: 'unavailable',
+  });
 
 /**
  * Deploying rules that gate on the `allowed` custom claim to a project where no
@@ -57,11 +65,6 @@ describe('loadErrorMessage', () => {
    * sends them nowhere. Adding a third branch satisfies that; it was only
    * lumping the two together that the old wording ruled out.
    */
-  const offline = () =>
-    Object.assign(new Error('Failed to get document because the client is offline'), {
-      code: 'unavailable',
-    });
-
   it('names a dropped connection instead of blaming the thing being read', () => {
     expect(loadErrorMessage(offline(), '練習履歴を読み込めませんでした。')).toBe(OFFLINE_MESSAGE);
   });
@@ -101,6 +104,60 @@ describe('loadErrorMessage', () => {
       expect(loadErrorMessage(cause, '単語を読み込めませんでした。')).toBe(
         '単語を読み込めませんでした。',
       );
+    },
+  );
+});
+
+/**
+ * Being offline stops a read and a write for different reasons, and the reader
+ * has to do different things about them.
+ *
+ * A read that misses the cache resolves itself: the words arrive when the
+ * connection does. A save does not, and the settings save least of all — it is
+ * a `runTransaction`, the one Firestore write with no offline path. Measured
+ * against the emulator with the socket actually cut rather than with
+ * `disableNetwork` (which leaves the transaction's own RPCs reachable, so it
+ * commits in under 20ms and measures nothing): the transaction rejects with
+ * `unavailable` after six to ten seconds of retries, and nothing is queued.
+ * A plain `updateDoc` beside it never settles at all, but does reach the local
+ * cache and does sync on reconnect.
+ *
+ * So one `unavailable` sentence cannot serve both. Told "it will appear once
+ * you are back", the reader waits for a save that will never happen.
+ */
+describe('an offline save is not an offline read', () => {
+  it('leaves a read on the reading wording, which is what all but one caller is', () => {
+    expect(captureLoadFailure(offline(), 'load.entries').offline).toBe('load.offline');
+  });
+
+  it('lets the settings save say it was a save, since waiting will not complete it', () => {
+    expect(captureLoadFailure(offline(), 'load.settingsSave', 'load.offlineSave').offline).toBe(
+      'load.offlineSave',
+    );
+  });
+
+  /**
+   * The branch itself takes the sentence as an argument and always did — the
+   * defect was never in here, which is why this asserts the property that made
+   * the one-line fix possible rather than a new behaviour.
+   */
+  it('renders whichever offline sentence it was handed, rather than one of its own', () => {
+    expect(
+      loadErrorMessage(offline(), '設定を保存できませんでした。', 'denied', 'save wording'),
+    ).toBe('save wording');
+  });
+
+  /**
+   * Reads like a translation check and is not one. The two keys sit adjacent in
+   * every catalogue and start with the same clause in every language, so a
+   * copy-paste that duplicated the reading sentence would restore the defect in
+   * exactly one locale — the one nobody testing in Japanese would open.
+   */
+  it.each(Object.keys(authenticatedMessages) as (keyof typeof authenticatedMessages)[])(
+    'gives %s readers a distinct sentence for a save that did not happen',
+    (locale) => {
+      const messages = authenticatedMessages[locale];
+      expect(messages['load.offlineSave']).not.toBe(messages['load.offline']);
     },
   );
 });

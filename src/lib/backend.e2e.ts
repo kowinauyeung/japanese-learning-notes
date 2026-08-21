@@ -47,7 +47,7 @@ interface Seed {
   /** Raw persisted profile; absent means first sign-in. */
   profile?: unknown;
   /** Force the next settings write to fail so the localized error path is reachable. */
-  settingsSave?: 'fail' | 'defer';
+  settingsSave?: 'fail' | 'defer' | 'offline';
 }
 
 declare global {
@@ -197,6 +197,18 @@ export const userRepository: UserRepository = {
   },
   save(uid, draft: UserProfileDraft): Promise<void> {
     if (seed().settingsSave === 'fail') return Promise.reject(new Error('settings save failed'));
+    // Carries Firestore's own code, because that string is the entire input to
+    // the branch under test. The real save is a `runTransaction`, and a
+    // transaction is the one write that does not survive being offline:
+    // measured against the emulator with the socket cut, it rejects with
+    // `unavailable` after six to ten seconds of retries.
+    if (seed().settingsSave === 'offline') {
+      return Promise.reject(
+        Object.assign(new Error('Failed to get document because the client is offline.'), {
+          code: 'unavailable',
+        }),
+      );
+    }
     if (seed().settingsSave === 'defer') {
       return new Promise((resolve) => {
         window.__GOITEI_E2E_RELEASE_SETTINGS_SAVE__ = () => {

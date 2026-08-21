@@ -8,7 +8,9 @@ export function useLoadErrorMessage(failure: LoadFailure | null): string | null 
         failure.cause,
         t(failure.fallback),
         t('load.accessDenied'),
-        t('load.offline'),
+        // Not a constant: a failed save says so, and only the caller knows
+        // which operation it was. See `captureLoadFailure`.
+        t(failure.offline),
       )
     : null;
 }

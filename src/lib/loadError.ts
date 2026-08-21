@@ -131,8 +131,28 @@ export function loadErrorMessage(
 export interface LoadFailure {
   cause: unknown;
   fallback: MessageKey;
+  /**
+   * Which sentence `unavailable` earns here. Defaulted rather than optional so
+   * the caller that has to think about it is the only one that does, and so
+   * there is no `??` further down the chain deciding it unwitnessed.
+   */
+  offline: MessageKey;
 }
 
-export function captureLoadFailure(cause: unknown, fallback: MessageKey): LoadFailure {
-  return { cause, fallback };
+/**
+ * `offline` defaults to the reading wording because all but one caller is a
+ * read. The exception is `userSettings`, whose save is a `runTransaction`, and
+ * a transaction is the one Firestore write that does not survive being offline
+ * at all — measured against the emulator with the socket actually cut, it
+ * rejects with `unavailable` after retrying for six to ten seconds. The
+ * generic branch above would then answer a failed *save* with
+ * 「読み込めませんでした」, which describes the wrong operation and, worse,
+ * implies waiting is enough when the reader has to try again.
+ */
+export function captureLoadFailure(
+  cause: unknown,
+  fallback: MessageKey,
+  offline: MessageKey = 'load.offline',
+): LoadFailure {
+  return { cause, fallback, offline };
 }

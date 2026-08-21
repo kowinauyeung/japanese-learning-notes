@@ -106,7 +106,7 @@ function UserSettingsState({
         }
       } catch (cause) {
         console.error(cause);
-        setError(captureLoadFailure(cause, 'load.settingsSave'));
+        setError(captureLoadFailure(cause, 'load.settingsSave', 'load.offlineSave'));
         throw cause;
       } finally {
         setSaving(false);

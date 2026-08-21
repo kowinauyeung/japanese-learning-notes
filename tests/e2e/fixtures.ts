@@ -22,7 +22,12 @@ export interface E2ESeed {
   /** Finished sessions, so 履歴 can be reached without drilling first. */
   sessions?: Record<string, unknown>[];
   profile?: Record<string, unknown>;
-  settingsSave?: 'fail' | 'defer';
+  /**
+   * `offline` rejects with Firestore's `unavailable`, which is what an offline
+   * settings save actually produces — the save is a transaction, and a
+   * transaction cannot be queued.
+   */
+  settingsSave?: 'fail' | 'defer' | 'offline';
 }
 
 /** Fixed instant every spec runs at. A Wednesday; its ISO week starts on the 22nd. */
