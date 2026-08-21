@@ -6,10 +6,17 @@
     <title>語彙庭</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <!--
-      iOS reads neither the SVG favicon above nor the manifest's icons when it
-      adds the app to the Home Screen. This tag is the only one it takes, so
-      removing it does not fall back to a smaller icon — it falls back to a
-      screenshot of the page.
+      Safari takes this ahead of the manifest's icons when it adds the app to
+      the Home Screen, and it does not read the SVG favicon above at all.
+
+      Removing it is not the no-op that precedence makes it sound. Since iOS
+      15.4 the manifest is a real fallback, so the tile would land on icon-192
+      or icon-512 — the two `purpose: "any"` entries, both of which carry an
+      alpha channel, and iOS composites transparency onto black. The maskable
+      icon is rasterised opaque, but its `purpose` keeps it out of that slot —
+      so this tag is the only opaque icon iOS would reach for. (With no icon at
+      all, iOS 16.4 and up draw a monogram from the first letter of the name;
+      older versions took a screenshot of the page.)
     -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <!--
