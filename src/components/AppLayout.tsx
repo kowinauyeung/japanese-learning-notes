@@ -5,7 +5,6 @@ import type { TranslationLanguage } from '@/domain/user';
 import { useI18n } from '@/i18n/context';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/messages';
-import { useBrandName } from '@/i18n/useBrandName';
 import { useAuth } from '@/lib/auth';
 import { EntriesProvider } from '@/lib/entries';
 import { ProgressProvider } from '@/lib/progress';
@@ -96,7 +95,6 @@ function AuthenticatedLayout({
   translationLanguage: TranslationLanguage;
 }) {
   const { t } = useI18n();
-  const brandName = useBrandName();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -119,7 +117,7 @@ function AuthenticatedLayout({
                     className="mr-1 flex items-center gap-1.5 font-display text-lg font-bold text-accent"
                   >
                     <LogoMark className="h-7 w-7" />
-                    {brandName}
+                    {t('brand.name')}
                   </NavLink>
 
                   {/* Desktop: the full pill row. */}

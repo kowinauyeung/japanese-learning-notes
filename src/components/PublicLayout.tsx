@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { LogoMark } from '@/components/Logo';
 import { useI18n } from '@/i18n/context';
 import type { MessageKey } from '@/i18n/messages';
-import { useBrandName } from '@/i18n/useBrandName';
 import { appVersion } from '@/lib/build';
 
 const LINKS = [
@@ -23,14 +22,13 @@ const LINKS = [
  */
 export function PublicLayout({ children }: { children: ReactNode }) {
   const { t } = useI18n();
-  const brandName = useBrandName();
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-ink">
       <header className="border-b border-line bg-card">
         <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
           <Link to="/" className="flex items-center gap-2">
             <LogoMark className="h-8 w-8" />
-            <span className="font-display text-lg font-bold text-accent">{brandName}</span>
+            <span className="font-display text-lg font-bold text-accent">{t('brand.name')}</span>
           </Link>
           <Link
             to="/login"

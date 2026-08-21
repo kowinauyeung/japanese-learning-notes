@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { PublicLayout } from '@/components/PublicLayout';
 import { homeContent } from '@/content/home';
 import { useI18n } from '@/i18n/context';
-import { useBrandName } from '@/i18n/useBrandName';
 
 /**
  * What `/` shows to somebody who is not signed in.
@@ -19,12 +18,11 @@ import { useBrandName } from '@/i18n/useBrandName';
 export function Component() {
   const { locale, t } = useI18n();
   const content = homeContent[locale];
-  const brandName = useBrandName();
 
   return (
     <PublicLayout>
       <section className="py-6 text-center">
-        <h1 className="font-display text-4xl font-bold">{brandName}</h1>
+        <h1 className="font-display text-4xl font-bold">{t('brand.name')}</h1>
         <p className="mt-3 text-sm text-muted">{content.lead}</p>
         <Link
           to="/login"
