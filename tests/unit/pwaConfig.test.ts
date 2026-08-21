@@ -60,8 +60,15 @@ describe('the update handover', () => {
    * while this holds.
    */
   it('waits to be asked rather than updating underneath a running session', () => {
+    // `autoUpdate` reloads the reader without asking, mid-sentence in a
+    // dictation answer if that is where they are.
     expect(pwaOptions('production').registerType).toBe('prompt');
+    // Skipping the wait replaces the precached assets while the page is still
+    // running on the old ones, so the next lazily imported route arrives from
+    // a bundle the loaded code was never compiled against.
     expect(workboxOf('production').skipWaiting).toBe(false);
+    // Claiming does the same to any *other* open tab, which is worse: nobody
+    // there pressed anything.
     expect(workboxOf('production').clientsClaim).toBe(false);
   });
 

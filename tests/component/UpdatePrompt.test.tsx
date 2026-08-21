@@ -46,6 +46,10 @@ describe('UpdatePrompt', () => {
     const { port } = testPort();
     mount(port);
 
+    // Absence is the whole assertion. A banner with no waiting build offers the
+    // reader an update to the build they are already running — and the only
+    // thing the button could do is reload them onto the same code, which reads
+    // as the app being broken rather than as nothing having happened.
     expect(screen.queryByText('新しいバージョンがあります')).not.toBeInTheDocument();
   });
 
@@ -75,6 +79,9 @@ describe('UpdatePrompt', () => {
 
     act(() => screen.getByRole('button', { name: 'あとで' }).click());
 
+    // Absence again, and it is what makes "Later" mean anything. A banner that
+    // stayed up would leave the reader no way to defer: the only control that
+    // cleared it would be the one that reloads them mid-practice.
     expect(screen.queryByText('新しいバージョンがあります')).not.toBeInTheDocument();
     // Zero, and counted rather than inferred from the banner going away. A
     // "Later" that dismissed *and* handed over would look identical on screen
