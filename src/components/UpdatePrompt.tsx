@@ -27,15 +27,11 @@ export function UpdatePrompt() {
   return (
     <div
       role="status"
-      // Bottom centre, above the add button rather than beside it: on a phone
-      // the two would otherwise overlap, and the one that loses is the button
-      // the reader was reaching for.
-      //
-      // The bottom offset does not yet read `env(safe-area-inset-bottom)`, so
-      // on an installed iOS window this sits nearer the home indicator than it
-      // should. That is #64, which covers every fixed element here at once —
-      // this one and the add button already beside it.
-      className="fixed inset-x-4 bottom-24 z-40 mx-auto max-w-md rounded-panel border border-line bg-card p-4 shadow-panel nav:bottom-5"
+      // Centred, and placed by `BottomNotices` rather than here: clearing the
+      // add button and clearing the offline pill are the same problem, and
+      // solving half of it in this file is what produced an overlap at every
+      // width that was eventually measured.
+      className="pointer-events-auto w-full max-w-md self-center rounded-panel border border-line bg-card p-4 shadow-panel"
     >
       <p className="text-sm font-semibold text-ink">{t('update.available')}</p>
       <p className="prose-cjk mt-1 text-xs text-muted">{t('update.hint')}</p>

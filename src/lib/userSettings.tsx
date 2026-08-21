@@ -93,22 +93,48 @@ function UserSettingsState({
     return () => media.removeEventListener('change', followSystem);
   }, [storedProfile, previewDraft]);
 
+  /**
+   * Two operations, and only the first one decides whether the settings were
+   * saved.
+   *
+   * They used to share a `try`, so a `get` that failed after the transaction
+   * had committed told the reader 設定を保存できませんでした and asked them to
+   * try again — for a change that was already durable. Worse, the rejection
+   * propagated, so `Settings.tsx` never advanced its baseline and the form went
+   * on reporting unsaved changes for settings the server had. Redoing the save
+   * would have worked, which is exactly why nobody would have found this: the
+   * lie corrects itself the moment the reader believes it.
+   *
+   * `userRepository.save` resolving means the transaction committed. Past that
+   * point a failure is a read failure, the draft is what is stored, and this
+   * resolves.
+   */
   const save = useCallback(
     async (draft: UserProfileDraft) => {
       setSaving(true);
       setError(null);
       try {
         await userRepository.save(uid, draft);
-        const stored = await userRepository.get(uid);
-        if (stored) {
-          setStoredProfile(stored);
-          setPreviewDraft(null);
-        }
       } catch (cause) {
         console.error(cause);
-        setError(captureLoadFailure(cause, 'load.settingsSave'));
+        setError(captureLoadFailure(cause, 'load.settingsSave', 'load.unreachableSave'));
+        setSaving(false);
         throw cause;
+      }
+      try {
+        const stored = await userRepository.get(uid);
+        if (stored) setStoredProfile(stored);
+      } catch (cause) {
+        console.error(cause);
+        // Read wording, because a read is what failed. The server-written
+        // fields — `updatedAt` — are stale until the next load; every setting
+        // the reader actually chose is here in the draft.
+        setStoredProfile((current) => ({ ...current, ...draft }));
+        setError(captureLoadFailure(cause, 'load.settings'));
       } finally {
+        // Cleared either way: the settings are saved, so a form still offering
+        // to save them is describing a state that no longer exists.
+        setPreviewDraft(null);
         setSaving(false);
       }
     },

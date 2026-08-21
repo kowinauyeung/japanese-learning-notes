@@ -47,7 +47,9 @@ interface Seed {
   /** Raw persisted profile; absent means first sign-in. */
   profile?: unknown;
   /** Force the next settings write to fail so the localized error path is reachable. */
-  settingsSave?: 'fail' | 'defer';
+  settingsSave?: 'fail' | 'defer' | 'unreachable';
+  settingsRefresh?: 'fail';
+  updateWaiting?: boolean;
 }
 
 declare global {
@@ -123,7 +125,18 @@ const notify = () => {
  * service worker genuinely never has a new build installed behind it.
  */
 export const appUpdatePort: AppUpdatePort = {
-  onWaiting: () => () => {},
+  onWaiting(fn) {
+    // A real port, not a stub: it reports a waiting build when the seed says
+    // one is waiting, and reports nothing otherwise. Without it `UpdatePrompt`
+    // can never be on screen in an end-to-end run, and a claim about how it
+    // shares the bottom of the viewport with `OfflineNotice` has nothing to
+    // measure.
+    if (!seed().updateWaiting) return () => {};
+    // Asynchronously, because the real port learns of a waiting build from the
+    // service worker registration and never from the render that subscribed.
+    const timer = setTimeout(fn, 0);
+    return () => clearTimeout(timer);
+  },
   activate: () => Promise.resolve(),
 };
 
@@ -191,12 +204,43 @@ function persistedProfile(uid: string): UserProfile | null {
   return profile;
 }
 
+/** Set once a save has committed, so the refresh that follows it can be failed. */
+let settingsSaved = false;
+
 export const userRepository: UserRepository = {
   get(uid): Promise<UserProfile | null> {
+    // Fails only the read that follows a committed save, which is the whole
+    // point: the transaction succeeded and the profile is durable, and the
+    // question is what the interface says about it.
+    if (seed().settingsRefresh === 'fail' && settingsSaved) {
+      return Promise.reject(
+        Object.assign(new Error('Failed to get document because the client is offline.'), {
+          code: 'unavailable',
+        }),
+      );
+    }
     return Promise.resolve(persistedProfile(uid));
   },
   save(uid, draft: UserProfileDraft): Promise<void> {
     if (seed().settingsSave === 'fail') return Promise.reject(new Error('settings save failed'));
+    // Carries Firestore's own code, because that string is the entire input to
+    // the branch under test. The real save is a `runTransaction`, and a
+    // transaction is the one write that does not survive losing the backend:
+    // measured against the emulator with the socket cut, it rejects with
+    // `unavailable` after six to ten seconds of retries.
+    //
+    // Named for what the client observed rather than for a cause. This seed
+    // sets no browser connectivity state, and it should not: `unavailable`
+    // reaches the application identically whether the device dropped off the
+    // network or the backend did, which is the whole point of the branch it
+    // exercises.
+    if (seed().settingsSave === 'unreachable') {
+      return Promise.reject(
+        Object.assign(new Error('Failed to get document because the client is offline.'), {
+          code: 'unavailable',
+        }),
+      );
+    }
     if (seed().settingsSave === 'defer') {
       return new Promise((resolve) => {
         window.__GOITEI_E2E_RELEASE_SETTINGS_SAVE__ = () => {
@@ -207,6 +251,7 @@ export const userRepository: UserRepository = {
       });
     }
     persistProfile(uid, draft);
+    settingsSaved = true;
     return Promise.resolve();
   },
   remove(uid): Promise<void> {
