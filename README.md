@@ -265,6 +265,59 @@ macOS hands to AirPlay Receiver; the emulator then shifts to another port and a
 hardcoded URL in a script fails for a reason that has nothing to do with what it
 is testing.
 
+### The service worker
+
+`vite-plugin-pwa` precaches the built output — the shell, the CSS, the icons,
+the manifest and **every route chunk**. The chunks are not an optimisation here:
+every route in `src/router.tsx` is a `lazy: () => import(...)`, so a shell
+without them reaches no screen at all. `navigateFallback` is `/index.html`,
+matching the rewrite in `firebase.json`; `/__/*` is denied, because Firebase
+serves `signInWithPopup`'s handler from there and answering it with the index
+document would break sign-in with nothing naming the cause.
+
+Settings live in `pwa-config.ts` rather than inline in `vite.config.ts`, so
+`tests/unit/pwaConfig.test.ts` can read them back. Every failure they guard is
+silent — a build succeeds either way.
+
+**It is off under `mode === 'e2e'`.** A worker that precached the previous build
+serves it to Playwright, and the suite then passes against code that is not the
+code under test. That is the one failure here that would make every other test
+in this repository green and meaningless.
+
+#### What it changes about deploying
+
+Before the worker, a client running a stale build fixed itself: the next load
+fetched a new `index.html` and the new chunk names came with it. It does not any
+more. A controlled client keeps being served the precached build until it is
+told to take a new one — so **reloading is no longer the fix**, and a support
+reply that says "try reloading" is now advice that cannot work.
+
+What ends it is the prompt. `skipWaiting` and `clientsClaim` are both off, so a
+new build installs and waits rather than replacing the assets under a running
+session — which would hand a page mid-practice a chunk from a bundle its loaded
+code was never compiled against. `UpdatePrompt` offers the swap and the reader
+takes it, or does not. A reader who keeps choosing "Later" stays on the old
+build, deliberately: old and working beats new and halfway.
+
+The consequence for a release is that **the deployed commit and the running
+commit are now different questions**. The footer's build line answers the second
+one, which is the one a bug report is actually about.
+
+#### Checking it
+
+The end-to-end suite cannot: it builds `--mode e2e`, where there is no worker.
+Against a production-mode build served locally, in a real browser:
+
+- the worker must reach `activated`, and must **not** control the first page —
+  that is `clientsClaim: false` behaving correctly, not a failure;
+- it takes control from the second navigation onwards;
+- with the network off, `/` and a deep route such as `/vocabulary` must both
+  render, and no same-origin request may fail.
+
+Installability is Chrome DevTools → Application → Manifest on a deployed build.
+Headless Chromium does not fire `beforeinstallprompt`, so that half needs a real
+browser against the dev site or a preview channel.
+
 ### Operator runbook
 
 Everything below assumes `GOOGLE_APPLICATION_CREDENTIALS`, or `gcloud auth

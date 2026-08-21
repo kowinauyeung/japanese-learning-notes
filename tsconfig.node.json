@@ -24,5 +24,11 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "playwright.config.ts", "build-info.ts"]
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "build-info.ts",
+    "pwa-config.ts"
+  ]
 }
