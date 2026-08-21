@@ -10,8 +10,15 @@ import { BottomNotices } from './components/BottomNotices';
 import { I18nProvider } from './i18n/I18nProvider';
 import { AppUpdateProvider } from './lib/appUpdate';
 import { AuthProvider } from './lib/auth';
+import { siteTitle } from './lib/build';
+import { projectId } from './lib/env';
 import { router } from './router';
 import './index.css';
+
+// `brand.name` is the same '語彙庭' in every locale (see `messages.ts`), so the
+// browser tab does not need the i18n tree mounted to carry the `[DEV]` prefix
+// index.html cannot express on its own.
+document.title = siteTitle(document.title, projectId);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
