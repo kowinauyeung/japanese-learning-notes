@@ -3,12 +3,14 @@ import { Link, Navigate, useLocation } from 'react-router-dom';
 import { LogoMark } from '@/components/Logo';
 import { PublicFooter } from '@/components/PublicLayout';
 import { useI18n } from '@/i18n/context';
+import { useBrandName } from '@/i18n/useBrandName';
 import { useAuth } from '@/lib/auth';
 import { projectId } from '@/lib/env';
 import { safeRedirect } from '@/lib/redirect';
 
 export function Component() {
   const { t } = useI18n();
+  const brandName = useBrandName();
   const { user, loading, signIn } = useAuth();
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +49,7 @@ export function Component() {
         <div className="w-full max-w-[360px] rounded-card bg-card p-8 shadow-panel">
           <h1 className="flex flex-col items-center gap-3">
             <LogoMark className="h-16 w-16" />
-            <span className="font-display text-3xl font-bold text-accent">{t('brand.name')}</span>
+            <span className="font-display text-3xl font-bold text-accent">{brandName}</span>
           </h1>
           <p className="mt-2 text-center text-sm text-muted">{t('auth.continue')}</p>
 

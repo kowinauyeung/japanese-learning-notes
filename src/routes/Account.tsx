@@ -15,7 +15,6 @@ import { authPort, userRepository } from '@/lib/backend';
 import { appVersion, buildLine } from '@/lib/build';
 import { newErrorId } from '@/lib/diagnostics';
 import { useEntries } from '@/lib/entries';
-import { projectId } from '@/lib/env';
 import { useProgress } from '@/lib/progress';
 import { useUserSettings } from '@/lib/userSettingsContext';
 import { useWordSets } from '@/lib/wordSets';
@@ -151,7 +150,7 @@ export function Component() {
           </div>
           <div>
             <dt className="text-xs text-muted">{t('account.version')}</dt>
-            <dd className="mt-1 tabular-nums">{buildLine(projectId)}</dd>
+            <dd className="mt-1 tabular-nums">{buildLine()}</dd>
           </div>
         </dl>
 

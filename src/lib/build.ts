@@ -27,7 +27,22 @@ export function environmentOf(projectId: string, mode = __BUILD_MODE__): Environ
   return projectId.endsWith('-dev') || projectId.startsWith('demo-') ? 'Development' : 'Production';
 }
 
-/** `v0.1.0 · d406a07 · Production` — one line, the same everywhere it appears. */
-export function buildLine(projectId: string): string {
-  return `v${appVersion} · ${commitSha} · ${environmentOf(projectId)}`;
+/**
+ * `v0.1.0 · d406a07` — one line, the same everywhere it appears.
+ *
+ * No environment here: that read as "Production" stamped across a screen a
+ * signed-in user looks at daily, for a fact only support needs. `environmentOf`
+ * still feeds `collectDiagnostics` and the dev-only `[DEV]` title prefix.
+ */
+export function buildLine(): string {
+  return `v${appVersion} · ${commitSha}`;
+}
+
+/**
+ * `語彙庭` everywhere, `[DEV]語彙庭` on any build that is not the production
+ * site — the ambient "which environment am I in" cue that replaced spelling
+ * "Production"/"Development" out on the account page.
+ */
+export function siteTitle(brandName: string, projectId: string, mode = __BUILD_MODE__): string {
+  return environmentOf(projectId, mode) === 'Production' ? brandName : `[DEV]${brandName}`;
 }

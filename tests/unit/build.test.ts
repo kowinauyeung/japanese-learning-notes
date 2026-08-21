@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildLine, environmentOf } from '@/lib/build';
+import { buildLine, environmentOf, siteTitle } from '@/lib/build';
 import { buildInfo } from '../../build-info';
 
 /**
@@ -28,8 +28,27 @@ describe('environmentOf', () => {
 });
 
 describe('buildLine', () => {
-  it('reads as version, commit, environment', () => {
-    expect(buildLine('goitei')).toMatch(/^v\d+\.\d+\.\d+ · \w+ · (Production|Development|Local)$/);
+  it('reads as version, commit — no environment, which read as a status label on a screen a signed-in user sees daily', () => {
+    expect(buildLine()).toMatch(/^v\d+\.\d+\.\d+ · \w+$/);
+  });
+});
+
+/**
+ * The substitute for spelling the environment out: a `[DEV]` prefix on the
+ * name shown everywhere the app already displays its brand, rather than a
+ * separate "Production"/"Development" line only the account page carried.
+ */
+describe('siteTitle', () => {
+  it('leaves the production title alone', () => {
+    expect(siteTitle('語彙庭', 'goitei', 'production')).toBe('語彙庭');
+  });
+
+  it('prefixes the dev project, even though its build mode reads production', () => {
+    expect(siteTitle('語彙庭', 'goitei-dev', 'production')).toBe('[DEV]語彙庭');
+  });
+
+  it('prefixes a local dev server too, which is even less "production" than the deployed dev site', () => {
+    expect(siteTitle('語彙庭', 'goitei', 'development')).toBe('[DEV]語彙庭');
   });
 });
 

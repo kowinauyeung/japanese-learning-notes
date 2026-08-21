@@ -3,6 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      iOS Safari's data detectors turn a plain-text email address into a blue,
+      underlined `tel:`/`mailto:` link on its own, with no markup asking for
+      it. The account page shows the signed-in email for display only, so this
+      opts every page out rather than fighting the detector per element.
+    -->
+    <meta name="format-detection" content="telephone=no, email=no" />
     <title>語彙庭</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <!--
