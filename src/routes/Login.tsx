@@ -45,9 +45,23 @@ export function Component() {
     <div className="flex min-h-dvh flex-col bg-bg pt-safe">
       <main className="grid flex-1 place-items-center px-4 py-8">
         <div className="w-full max-w-[360px] rounded-card bg-card p-8 shadow-panel">
-          <h1 className="flex flex-col items-center gap-3">
-            <LogoMark className="h-16 w-16" />
-            <span className="font-display text-3xl font-bold text-accent">{t('brand.name')}</span>
+          {/*
+            A link, and the only way off this screen that does not require a
+            Google account.
+
+            The manifest asks for `display: standalone`, so an installed app has
+            no browser chrome and no back button. A visitor who opened `/`,
+            read the landing page and tapped through to here had nothing to
+            press: the card offered sign-in, the policies, and nothing else, and
+            the four footer links all lead further away rather than back. The
+            same brand mark is the way home from every other public shell, so
+            it is the one here too.
+          */}
+          <h1>
+            <Link to="/" className="flex flex-col items-center gap-3">
+              <LogoMark className="h-16 w-16" />
+              <span className="font-display text-3xl font-bold text-accent">{t('brand.name')}</span>
+            </Link>
           </h1>
           <p className="mt-2 text-center text-sm text-muted">{t('auth.continue')}</p>
 
