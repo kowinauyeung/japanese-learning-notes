@@ -15,13 +15,14 @@ went wrong here, not by general principle.
 
 ### Pick the cheapest layer that can see the defect
 
-| Layer               | Directory           | Runs on               | Use it when                                                                 |
-| ------------------- | ------------------- | --------------------- | --------------------------------------------------------------------------- |
-| Unit                | `tests/unit`        | node, no dependencies | The behaviour is a function of its inputs. **Default. Most tests go here.** |
-| Component           | `tests/component`   | jsdom                 | The claim is about rendered DOM structure, text or roles.                   |
-| Adapter integration | `tests/integration` | Firestore emulator    | The claim involves a query, an index, a cursor or a server timestamp.       |
-| Rules               | `tests/rules`       | Firestore emulator    | The claim is "who may read or write what".                                  |
-| End-to-end / visual | `tests/e2e`         | Chromium (+ WebKit)   | The claim spans routing, the URL and a provider — or is about layout.       |
+| Layer               | Directory                   | Runs on               | Use it when                                                                 |
+| ------------------- | --------------------------- | --------------------- | --------------------------------------------------------------------------- |
+| Unit                | `tests/unit`                | node, no dependencies | The behaviour is a function of its inputs. **Default. Most tests go here.** |
+| Component           | `tests/component`           | jsdom                 | The claim is about rendered DOM structure, text or roles.                   |
+| Adapter integration | `tests/integration`         | Firestore emulator    | The claim involves a query, an index, a cursor or a server timestamp.       |
+| Rules               | `tests/rules`               | Firestore emulator    | The claim is "who may read or write what".                                  |
+| End-to-end / visual | `tests/e2e`                 | Chromium (+ WebKit)   | The claim spans routing, the URL and a provider — or is about layout.       |
+| Offline             | `tests/e2e/offline.spec.ts` | Chromium + a worker   | The claim is about the service worker: what it precaches and serves.        |
 
 Two consequences worth stating outright, because getting either wrong produces a
 suite that looks thorough and proves nothing:
@@ -34,6 +35,12 @@ suite that looks thorough and proves nothing:
   stayed green through the entire life of the pagination bug, because the defect
   was in _which value the adapter passed_ to the cursor, not in the cursor.
   Anything touching a query goes in `tests/integration`, against the emulator.
+
+The last row is one spec, deliberately. It runs in its own Playwright project
+against `--mode e2e-pwa` — the ordinary end-to-end build ships no service worker
+on purpose — so anything that can be settled by reading `pwa-config.ts` back
+belongs in `tests/unit/pwaConfig.test.ts` instead, which is faster and says why.
+Add to `offline.spec.ts` only for a claim that needs the network switched off.
 
 State the layer you chose and why in the pull request description.
 

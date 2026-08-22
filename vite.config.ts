@@ -24,6 +24,10 @@ export default defineConfig(({ mode }) => {
       VitePWA(pwaOptions(mode)),
       devManifestPlugin(mode, env.VITE_FIREBASE_PROJECT_ID ?? ''),
     ],
+    // Its own directory, because Playwright starts the two end-to-end servers
+    // in parallel: sharing `dist/` would let whichever build finished second
+    // empty the other's output from under a server already serving it.
+    build: { outDir: mode === 'e2e-pwa' ? 'dist-e2e-pwa' : 'dist' },
     define: buildInfo(mode),
     resolve: {
       // Array form, because the e2e override has to be matched before the bare
@@ -34,8 +38,19 @@ export default defineConfig(({ mode }) => {
         // Swapping the module rather than reading a runtime flag is what keeps
         // the fakes out of every other build — in `dev`, `production` and any
         // other mode this entry does not exist, so nothing can resolve them.
-        ...(mode === 'e2e'
-          ? [{ find: /^@\/lib\/backend$/, replacement: src('lib/backend.e2e.ts') }]
+        //
+        // `e2e-pwa` is the same build with the live service worker left in, and
+        // it needs a third module rather than a flag: see `backend.e2e-pwa.ts`
+        // for why the fake update port is what keeps the worker unregistered.
+        ...(mode === 'e2e' || mode === 'e2e-pwa'
+          ? [
+              {
+                find: /^@\/lib\/backend$/,
+                replacement: src(
+                  mode === 'e2e-pwa' ? 'lib/backend.e2e-pwa.ts' : 'lib/backend.e2e.ts',
+                ),
+              },
+            ]
           : []),
         { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       ],
