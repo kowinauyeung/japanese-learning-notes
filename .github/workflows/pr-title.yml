@@ -1,0 +1,64 @@
+name: PR title
+
+# Every merge into `develop` is a squash merge, so the pull request title — not
+# anything on the branch — is the commit message that lands. Since the release
+# derives the version from those messages (see docs/releasing.md), a title with
+# the wrong prefix does not just read badly: it silently changes the next
+# version number, and nothing downstream can tell that it was a mistake.
+#
+# `edited` matters as much as `opened`: a title is most often fixed after the
+# pull request exists.
+#
+# `synchronize` is here so the check re-reports against each new head commit.
+# Status checks attach to a SHA, so without it a pushed commit would leave the
+# check missing rather than green.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+# A new push supersedes the run before it; there is nothing to preserve.
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      # The type list is deliberately spelled out rather than left to the
+      # action's default, because it has to agree with the changelog preset in
+      # .versionrc.json: `feat`, `fix`, `perf` and `revert` bump the version and
+      # appear in CHANGELOG.md; the rest do neither. A type accepted here but
+      # unknown there would land a commit that the release silently ignores.
+      #
+      # `chore` covers the release commit itself — `chore(release): v1.0.0` —
+      # so the release pull request passes this check without an exception.
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            perf
+            revert
+            docs
+            style
+            chore
+            refactor
+            test
+            build
+            ci
+          # Scopes are optional here. Most titles carry one, but a change that
+          # genuinely spans the app — "fix: minor UI cleanups on account,
+          # dashboard and footer" — should not have to invent a false one.
+          requireScope: false
+          # Imperative mood, lower case, no full stop: what CLAUDE.md already
+          # asks for and what every commit since v0.1.0 does.
+          subjectPattern: '^(?![A-Z])(?!.*\.$).+$'
+          subjectPatternError: |
+            The subject "{subject}" in "{title}" is not in the repository's form.
+            Start it with a lower-case letter and leave off the full stop.

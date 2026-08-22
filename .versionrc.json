@@ -1,0 +1,7 @@
+{
+  "packageFiles": ["package.json"],
+  "bumpFiles": ["package.json"],
+  "skip": {
+    "tag": true
+  }
+}

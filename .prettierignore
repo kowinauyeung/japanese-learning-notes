@@ -9,6 +9,11 @@ yarn.lock
 migration/output.json
 migration/review.json
 
+# Written by `yarn release` from the commit messages, never by hand. Prettier
+# reflows its long reference lines, so leaving it in would fail `format:check`
+# on every release branch and put a formatting commit in front of every tag.
+CHANGELOG.md
+
 # Generated test output.
 coverage/
 playwright-report/
