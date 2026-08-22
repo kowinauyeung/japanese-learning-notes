@@ -9,8 +9,12 @@ const validSeed: E2ESeed = {
 // @ts-expect-error checked-in E2E seed literals should reject excess entry fields
 const invalidSeed: E2ESeed = { entries: [{ typoField: 1 }] };
 
-test('shared E2E seed fixtures stay entry-shaped', () => {
+// @ts-expect-error checked-in E2E seed literals should require explicit entry ids
+const missingIdSeed: E2ESeed = { entries: [{ headword: '切り分け' }] };
+
+test('rejects excess fields in E2E entry seed literals', () => {
   void validSeed;
   void invalidSeed;
+  void missingIdSeed;
   expect(WORDS.length).toBeGreaterThan(0);
 });

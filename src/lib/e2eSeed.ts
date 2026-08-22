@@ -3,6 +3,10 @@ import type { PracticeSession } from '@/domain/practice';
 import type { UserProfile } from '@/domain/user';
 import type { WordSet } from '@/domain/wordSet';
 
+export type SeedEntry = Pick<Entry, 'id'> & Partial<Entry>;
+export type SeedWordSet = Pick<WordSet, 'id'> & Partial<WordSet>;
+export type SeedSession = Pick<PracticeSession, 'id'> & Partial<PracticeSession>;
+
 export interface E2ESeed {
   /** Start already signed in, skipping the login screen. */
   signedIn?: boolean;
@@ -10,15 +14,15 @@ export interface E2ESeed {
    * Checked-in seed literals should still be entry-shaped, even though the
    * runtime adapter sanitises them before use.
    */
-  entries?: Partial<Entry>[];
+  entries?: SeedEntry[];
   /** Entry ids to start marked wrong, so 苦手のみ has something to select. */
   weak?: string[];
   /** Checked-in 単語集 seed literals should stay word-set-shaped. */
-  wordSets?: Partial<WordSet>[];
+  wordSets?: SeedWordSet[];
   /** Keep a word-set write in flight long enough to exercise the busy gate. */
   wordSetWriteDelayMs?: number;
   /** Finished sessions, so 履歴 can be reached without drilling first. */
-  sessions?: Partial<PracticeSession>[];
+  sessions?: SeedSession[];
   /** Raw persisted profile; absent means first sign-in. */
   profile?: Partial<UserProfile>;
   /**

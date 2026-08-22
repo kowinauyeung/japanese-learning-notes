@@ -1,5 +1,4 @@
-import type { Entry } from '@/domain/entry';
-import type { E2ESeed } from '@/lib/e2eSeed';
+import type { E2ESeed, SeedEntry } from '@/lib/e2eSeed';
 
 export type ManifestSeed = Pick<E2ESeed, 'signedIn' | 'entries'>;
 
@@ -68,7 +67,7 @@ const WORDS = [
     createdAt: '2026-01-15T01:00:00.000Z',
     updatedAt: '2026-01-15T01:00:00.000Z',
   },
-] satisfies Partial<Entry>[];
+] satisfies SeedEntry[];
 
 export const manifestScreenshots: readonly ManifestScreenshotSpec[] = [
   {

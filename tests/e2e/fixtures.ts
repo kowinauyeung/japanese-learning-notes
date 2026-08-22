@@ -1,8 +1,5 @@
 import type { Page } from '@playwright/test';
-import type { Entry } from '@/domain/entry';
-import type { PracticeSession } from '@/domain/practice';
-import type { WordSet } from '@/domain/wordSet';
-import type { E2ESeed } from '@/lib/e2eSeed';
+import type { E2ESeed, SeedEntry, SeedSession, SeedWordSet } from '@/lib/e2eSeed';
 
 /**
  * Shared setup for every end-to-end spec.
@@ -79,7 +76,7 @@ export const WORDS = [
     createdAt: '2026-01-15T01:00:00.000Z',
     updatedAt: '2026-01-15T01:00:00.000Z',
   },
-] satisfies Partial<Entry>[];
+] satisfies SeedEntry[];
 
 /**
  * A note whose fields are long enough to break the layout, in the two ways that
@@ -129,7 +126,7 @@ export const OVERSIZE_WORDS = [
     createdAt: '2026-06-23T02:00:00.000Z',
     updatedAt: '2026-06-23T02:00:00.000Z',
   },
-] satisfies Partial<Entry>[];
+] satisfies SeedEntry[];
 
 /**
  * A 単語集 whose name is far past its limit, holding the oversize entries.
@@ -146,7 +143,7 @@ export const OVERSIZE_SET = [
     description: 'この単語集の説明。'.repeat(40),
     entryIds: ['w-latin', 'w-longja', 'w-kiriwake'],
   },
-] satisfies Partial<WordSet>[];
+] satisfies SeedWordSet[];
 
 /**
  * Must be called before the first navigation: `addInitScript` runs ahead of the
@@ -197,7 +194,7 @@ export async function watchForBlanking(page: Page): Promise<() => Promise<boolea
  */
 export const WORD_SETS = [
   { id: 'set-work', name: '仕事セット', entryIds: ['w-kiriwake', 'w-choukou'] },
-] satisfies Partial<WordSet>[];
+] satisfies SeedWordSet[];
 
 /**
  * One 単語集 holding all three words.
@@ -212,7 +209,7 @@ export const FULL_SET = [
     name: '全部セット',
     entryIds: ['w-kiriwake', 'w-choukou', 'w-chotto'],
   },
-] satisfies Partial<WordSet>[];
+] satisfies SeedWordSet[];
 
 /**
  * Two 単語集 that both claim 兆候.
@@ -224,7 +221,7 @@ export const FULL_SET = [
 export const OVERLAPPING_SETS = [
   { id: 'set-work', name: '仕事セット', entryIds: ['w-kiriwake', 'w-choukou'] },
   { id: 'set-news', name: 'ニュースセット', entryIds: ['w-choukou'] },
-] satisfies Partial<WordSet>[];
+] satisfies SeedWordSet[];
 
 /**
  * `count` finished sessions, newest last, an hour apart.
@@ -233,7 +230,7 @@ export const OVERLAPPING_SETS = [
  * than a couple of them is the cursor, and a page boundary needs more rows than
  * anybody wants to read in a fixture.
  */
-export function makeSessions(count: number): Partial<PracticeSession>[] {
+export function makeSessions(count: number): SeedSession[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `e2e-session-${index + 1}`,
     mode: index % 2 === 0 ? 'flashcard' : 'dictation',
@@ -243,5 +240,5 @@ export function makeSessions(count: number): Partial<PracticeSession>[] {
     missed: [],
     startedAt: new Date(Date.UTC(2026, 5, 1, index)).toISOString(),
     finishedAt: new Date(Date.UTC(2026, 5, 1, index, 5)).toISOString(),
-  })) satisfies Partial<PracticeSession>[];
+  })) satisfies SeedSession[];
 }

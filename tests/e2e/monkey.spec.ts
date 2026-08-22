@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Locator, Page, TestInfo } from '@playwright/test';
-import type { Entry, Frequency } from '@/domain/entry';
-import type { WordSet } from '@/domain/wordSet';
+import type { Frequency } from '@/domain/entry';
+import type { SeedEntry, SeedWordSet } from '@/lib/e2eSeed';
 import { seed } from './fixtures';
 
 interface Scenario {
@@ -66,8 +66,6 @@ const TEXT_CORPUS = [
   '長'.repeat(500),
 ];
 
-type SeedEntry = Pick<Entry, 'id'> & Partial<Entry>;
-
 function makeMonkeyEntry(index: number): SeedEntry {
   return {
     id: `monkey-word-${index + 1}`,
@@ -99,7 +97,7 @@ const MONKEY_SET = {
   name: 'W'.repeat(200),
   description: 'W'.repeat(5000),
   entryIds: MONKEY_ENTRIES.slice(0, 12).map((entry) => entry.id),
-} satisfies Partial<WordSet>;
+} satisfies SeedWordSet;
 
 function hashSeed(value: string): number {
   let hash = 2166136261;
