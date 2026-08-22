@@ -8,7 +8,9 @@ import { site } from '@/content/site';
 import { support } from '@/content/support';
 import { terms } from '@/content/terms';
 
-const DOCS: [string, Doc][] = [
+type DocName = 'about' | 'privacy' | 'terms' | 'support';
+
+const DOCS: [DocName, Doc][] = [
   ['about', about],
   ['privacy', privacy],
   ['terms', terms],
@@ -32,7 +34,7 @@ const PINNED_DOCS = {
     updated: '2026-08-13',
     hash: '74b4d29fdc83a88d2217f629ff629f25a49507094f23da250e8ecd2f31028747',
   },
-} satisfies Record<string, { updated: string; hash: string }>;
+} satisfies Record<DocName, { updated: string; hash: string }>;
 
 function fingerprintDoc(doc: Doc) {
   return createHash('sha256')
@@ -67,7 +69,7 @@ describe.each(DOCS)('%s', (name, doc) => {
     }
   });
 
-  it('moves its updated date when the prose changes', () => {
+  it('detects document changes without matching pinned metadata', () => {
     expect(doc.updated).toBe(PINNED_DOCS[name].updated);
     expect(fingerprintDoc(doc)).toBe(PINNED_DOCS[name].hash);
   });
