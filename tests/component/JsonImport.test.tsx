@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -23,9 +23,15 @@ afterEach(() => {
 
 const FAILED = 'コピーできませんでした。下のプロンプトを選択してコピーしてください。';
 
-function Harness({ initial }: { initial: JsonImportState }) {
+function Harness({
+  initial,
+  onDrafted = () => {},
+}: {
+  initial: JsonImportState;
+  onDrafted?: (raw: string) => void;
+}) {
   const [value, setValue] = useState(initial);
-  return <JsonImport value={value} onChange={setValue} />;
+  return <JsonImport value={value} onChange={setValue} onDrafted={onDrafted} />;
 }
 
 describe('JsonImport — translation language preference', () => {
@@ -157,5 +163,59 @@ describe('JsonImport — the paste box', () => {
     render(<Harness initial={emptyJsonImport('ja')} />);
 
     expect(screen.getByRole('textbox', { name: '訳の言語' })).toHaveAttribute('maxlength');
+  });
+});
+
+/*
+  The drafting port here is the one `backend.e2e.ts` supplies — vitest.config.ts
+  aliases `@/lib/backend` for this project exactly as `--mode e2e` does for the
+  browser build. It answers from the prompt rather than from a model, which is
+  what makes the first assertion below about *this* word instead of about a
+  fixture that would pass for any of them.
+*/
+describe('JsonImport — drafting with AI', () => {
+  it('hands the model reply to the importer verbatim instead of parsing it here', async () => {
+    // A second parser in the component is the defect this guards: it would let
+    // a malformed reply through the AI route while the paste box refused it.
+    let drafted = '';
+    render(
+      <Harness
+        initial={{ ...emptyJsonImport('yue-Hant'), word: '兆候' }}
+        onDrafted={(raw) => {
+          drafted = raw;
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'AIで作成' }));
+    await waitFor(() => expect(drafted).not.toBe(''));
+
+    // Still fenced, and still the word that was asked about: the component
+    // passes the reply on untouched, and `jsonToDraft` is the only thing that
+    // strips the fence.
+    expect(drafted).toContain('```json');
+    expect(drafted).toContain('兆候');
+  });
+
+  it('shows the inaccuracy warning without waiting for a result to exist', () => {
+    // The warning is a condition on shipping the feature at all, not a detail:
+    // a wrong reading or pitch accent from a model is learned as fact. Asserted
+    // before the button is pressed because that is when the reader decides.
+    render(<Harness initial={{ ...emptyJsonImport('yue-Hant'), word: '兆候' }} />);
+
+    expect(
+      screen.getByText(
+        'AIが書いた内容なので誤りが含まれることがあります。保存する前に読み・アクセント・レベルを確認してください。',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('refuses to ask about nothing, which would prompt for （単語）', () => {
+    // `buildPrompt` substitutes （単語） for an empty word so the prompt stays
+    // readable to copy. Sent to a model that placeholder is a real request for
+    // a word that does not exist, and it is billed like any other.
+    render(<Harness initial={emptyJsonImport('yue-Hant')} />);
+
+    expect(screen.getByRole('button', { name: 'AIで作成' })).toBeDisabled();
   });
 });

@@ -3,6 +3,7 @@ import type {
   AppUpdatePort,
   AuthPort,
   AuthUser,
+  EntryDraftingPort,
   EntryRepository,
   Page,
   PageQuery,
@@ -572,4 +573,39 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
       persist();
     },
   };
+};
+
+/**
+ * The drafting port, answered from the prompt instead of from a model.
+ *
+ * A stand-in and not a stub: it implements the port the architecture already
+ * defines, exactly as the repositories above do. What it removes from the
+ * end-to-end run is a network call, a quota and a non-deterministic answer —
+ * none of which the thing under test is about. What is under test is that the
+ * button reaches the port, that the reply goes through `jsonToDraft` rather
+ * than around it, and that the form ends up filled.
+ *
+ * The headword is read back out of the prompt so the assertion can be about
+ * *this* word rather than about a fixture that would pass for any of them.
+ * `buildPrompt` opens with 「…」, which is why that is what is matched; if it
+ * ever stops doing so the fallback below keeps the reply valid and the test
+ * fails on the headword, which is the right place for it to fail.
+ */
+export const entryDraftingPort: EntryDraftingPort = {
+  available: () => true,
+  // Not `async`: there is nothing to await, and an async function with no
+  // await is a lint error rather than a style. The port is still a promise.
+  draft: (prompt) => {
+    const headword = /^「(.+?)」/.exec(prompt)?.[1] ?? '兆候';
+    // Fenced, because a real reply is: the prompt asks for a ```json block and
+    // `jsonToDraft` strips one. An unfenced fixture would leave that unexercised.
+    const entry = {
+      headword,
+      reading: 'ちょうこう',
+      definition: `${headword}の意味`,
+      pos: ['名詞'],
+      jlpt: 'N2',
+    };
+    return Promise.resolve(['```json', JSON.stringify(entry, null, 2), '```'].join('\n'));
+  },
 };

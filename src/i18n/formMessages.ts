@@ -56,6 +56,15 @@ const en = {
   'import.sentence': 'Sentence where you found it',
   'import.contextHint':
     'Adding a sentence lets AI explain how the word works in that context. You may leave it blank.',
+  'import.generate': 'Draft with AI',
+  'import.generating': 'Drafting…',
+  'import.aiDisclaimer':
+    'AI-written, so it can be wrong. Check the reading, pitch accent and level before you save.',
+  'import.aiUnavailable':
+    'AI drafting is not available here. Use the prompt below and your own assistant.',
+  'import.aiQuota': "Today's AI allowance is used up. Use the prompt below, or try again tomorrow.",
+  'import.aiBlocked': 'AI would not answer for this word. Try another, or use the prompt below.',
+  'import.aiFailed': 'Could not reach AI. Check your connection and try again.',
   'import.copyPrompt': 'Copy prompt',
   'import.copied': 'Copied',
   'import.copyError': 'Could not copy. Select and copy the prompt below instead.',
@@ -141,6 +150,17 @@ const ja: FormMessages = {
   'import.sentence': '出会った文',
   'import.contextHint':
     '文を入れると、その文脈での役割まで AI に書かせます。空のままでも構いません。',
+  'import.generate': 'AIで作成',
+  'import.generating': '作成中…',
+  'import.aiDisclaimer':
+    'AIが書いた内容なので誤りが含まれることがあります。保存する前に読み・アクセント・レベルを確認してください。',
+  'import.aiUnavailable':
+    'ここではAI作成を利用できません。下のプロンプトをお使いのAIでご利用ください。',
+  'import.aiQuota':
+    '本日のAI利用回数の上限に達しました。下のプロンプトを使うか、明日お試しください。',
+  'import.aiBlocked':
+    'この単語にはAIが回答しませんでした。別の単語か、下のプロンプトをお試しください。',
+  'import.aiFailed': 'AIに接続できませんでした。通信環境を確認してもう一度お試しください。',
   'import.copyPrompt': 'プロンプトをコピー',
   'import.copied': 'コピーしました',
   'import.copyError': 'コピーできませんでした。下のプロンプトを選択してコピーしてください。',
@@ -223,6 +243,13 @@ const zhHant: FormMessages = {
   'import.translationLanguage': '翻譯語言',
   'import.sentence': '遇到這個詞的句子',
   'import.contextHint': '加入句子後，AI 會一併說明詞語在該語境中的作用；亦可留空。',
+  'import.generate': '用 AI 建立',
+  'import.generating': '建立中…',
+  'import.aiDisclaimer': 'AI 撰寫的內容可能有誤，儲存前請確認讀音、聲調與程度。',
+  'import.aiUnavailable': '此處無法使用 AI 建立。請改用下方的提示詞與你自己的 AI。',
+  'import.aiQuota': '今日的 AI 使用次數已用完。請改用下方的提示詞，或明天再試。',
+  'import.aiBlocked': 'AI 沒有回答這個單字。請換一個單字，或改用下方的提示詞。',
+  'import.aiFailed': '無法連接 AI。請檢查網路後再試一次。',
   'import.copyPrompt': '複製 prompt',
   'import.copied': '已複製',
   'import.copyError': '無法複製，請選取並複製下方的 prompt。',
@@ -304,6 +331,15 @@ const ko: FormMessages = {
   'import.translationLanguage': '번역 언어',
   'import.sentence': '단어를 만난 문장',
   'import.contextHint': '문장을 넣으면 AI가 해당 문맥에서의 역할도 설명합니다. 비워 두어도 됩니다.',
+  'import.generate': 'AI로 작성',
+  'import.generating': '작성 중…',
+  'import.aiDisclaimer':
+    'AI가 작성한 내용이라 틀릴 수 있습니다. 저장하기 전에 읽는 법, 억양, 레벨을 확인하세요.',
+  'import.aiUnavailable': '여기서는 AI 작성을 사용할 수 없습니다. 아래 프롬프트를 사용하세요.',
+  'import.aiQuota':
+    '오늘의 AI 사용 횟수를 모두 사용했습니다. 아래 프롬프트를 쓰거나 내일 다시 시도하세요.',
+  'import.aiBlocked': 'AI가 이 단어에 답하지 않았습니다. 다른 단어나 아래 프롬프트를 사용하세요.',
+  'import.aiFailed': 'AI에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도하세요.',
   'import.copyPrompt': '프롬프트 복사',
   'import.copied': '복사했습니다',
   'import.copyError': '복사할 수 없습니다. 아래 프롬프트를 선택하여 복사해 주세요.',
@@ -388,6 +424,16 @@ const es: FormMessages = {
   'import.sentence': 'Frase donde la encontraste',
   'import.contextHint':
     'Si añades una frase, la IA también explicará el uso en ese contexto. Puedes dejarla vacía.',
+  'import.generate': 'Redactar con IA',
+  'import.generating': 'Redactando…',
+  'import.aiDisclaimer':
+    'Lo ha escrito una IA, así que puede equivocarse. Comprueba la lectura, el acento y el nivel antes de guardar.',
+  'import.aiUnavailable':
+    'La redacción con IA no está disponible aquí. Usa el texto de abajo con tu propio asistente.',
+  'import.aiQuota': 'Has agotado el uso de IA de hoy. Usa el texto de abajo o inténtalo mañana.',
+  'import.aiBlocked':
+    'La IA no respondió para esta palabra. Prueba con otra o usa el texto de abajo.',
+  'import.aiFailed': 'No se pudo conectar con la IA. Comprueba tu conexión e inténtalo de nuevo.',
   'import.copyPrompt': 'Copiar prompt',
   'import.copied': 'Copiado',
   'import.copyError': 'No se pudo copiar. Selecciona y copia el prompt de abajo.',

@@ -1,11 +1,13 @@
 import type {
   AppUpdatePort,
   AuthPort,
+  EntryDraftingPort,
   EntryRepository,
   ProgressRepository,
   UserRepository,
   WordSetRepository,
 } from '@/domain/ports';
+import { geminiEntryDrafting } from '@/infra/ai/entryDrafting';
 import { firebaseAuth } from '@/infra/firebase/authAdapter';
 import { db } from '@/infra/firebase/client';
 import { createEntryRepository } from '@/infra/firebase/entryRepo';
@@ -39,3 +41,5 @@ export const userRepository: UserRepository = createUserRepository(db);
 
 export const wordSetRepositoryFor = (uid: string): WordSetRepository =>
   createWordSetRepository(db, uid);
+
+export const entryDraftingPort: EntryDraftingPort = geminiEntryDrafting;

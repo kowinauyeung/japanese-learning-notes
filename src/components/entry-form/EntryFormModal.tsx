@@ -66,21 +66,42 @@ export function EntryFormModal({
    * is outside the scrollport and already `shrink-0`, so nothing about it moves.
    */
   const [json, setJson] = useState<JsonImportState>(() => emptyJsonImport(translationLanguage));
+  /**
+   * Whether what is in the form was written by a model rather than by the user.
+   *
+   * Held so the warning can be rendered beside the filled fields, which is
+   * where a wrong reading or pitch accent is actually visible. Saying it only
+   * on the button that fetched it would put the warning on the screen the user
+   * has already left. Cleared when the modal reopens with the rest of the
+   * state, and deliberately *not* cleared on edit: a form the user has
+   * corrected two fields of is still mostly the model's work.
+   */
+  const [fromModel, setFromModel] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setDraft(entry ? toDraft(entry) : emptyDraft());
     setTab(entry ? 'full' : 'simple');
     setJson(emptyJsonImport(translationLanguage));
+    setFromModel(false);
     setErrors([]);
   }, [open, entry, translationLanguage]);
 
-  const loadJson = () => {
+  /**
+   * Takes the text rather than reading `json.raw`, so the model's reply can be
+   * imported in the same tick it arrives.
+   *
+   * `setJson` is asynchronous; calling this straight after it would parse the
+   * *previous* paste — on the first draft, an empty one. Passing the text is
+   * also what keeps the two routes on one implementation: there is no second
+   * import path for the generated reply to drift away from.
+   */
+  const loadJson = (raw: string = json.raw) => {
     const {
       draft: loaded,
       error: failure,
       oversize,
-    } = jsonToDraft(json.raw, { original: json.original, source: json.source });
+    } = jsonToDraft(raw, { original: json.original, source: json.source });
     if (failure) return setErrors([localizeFormError(failure, t)]);
     // Deliberately not loaded and not truncated: the user is looking at the JSON
     // that produced these, so naming every field they have to shorten is both
@@ -97,6 +118,18 @@ export function EntryFormModal({
       setDraft(loaded);
       setTab('full');
     }
+  };
+
+  /**
+   * The model answered. Import it, and remember that is where it came from.
+   *
+   * The flag is set even when the import then fails its own validation: the
+   * reply is in the paste box either way, and the reader is about to edit
+   * something a model wrote.
+   */
+  const loadDrafted = (raw: string) => {
+    setFromModel(true);
+    loadJson(raw);
   };
 
   const save = async () => {
@@ -142,7 +175,10 @@ export function EntryFormModal({
           {tab === 'json' && !entry && (
             <button
               type="button"
-              onClick={loadJson}
+              // Wrapped, not passed by reference: `loadJson` now takes the text
+              // to import, and a bare handler would hand it the MouseEvent —
+              // which `jsonToDraft` would dutifully try to parse.
+              onClick={() => loadJson()}
               disabled={!json.raw.trim()}
               className="min-h-10 rounded-pill bg-bg-alt px-5 text-sm font-semibold text-ink disabled:opacity-50"
             >
@@ -234,9 +270,24 @@ export function EntryFormModal({
         </div>
       )}
 
-      {tab === 'full' && <EntryForm draft={draft} onChange={setDraft} />}
+      {tab === 'full' && (
+        <>
+          {/* Above the fields, not below them: the reader arrives here from the
+              draft button and reads downwards, and a caution under a 20-field
+              form is one nobody reaches before deciding the reading looks
+              plausible. It stays for the life of the modal — see `fromModel`. */}
+          {fromModel && (
+            <p className="mb-3 rounded-panel border border-line px-3 py-2 text-[11px] text-muted">
+              {t('import.aiDisclaimer')}
+            </p>
+          )}
+          <EntryForm draft={draft} onChange={setDraft} />
+        </>
+      )}
 
-      {tab === 'json' && !entry && <JsonImport value={json} onChange={setJson} />}
+      {tab === 'json' && !entry && (
+        <JsonImport value={json} onChange={setJson} onDrafted={loadDrafted} />
+      )}
     </Modal>
   );
 }

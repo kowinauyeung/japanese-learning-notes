@@ -1,9 +1,28 @@
 import { useState } from 'react';
 import { INPUT_LIMITS } from '@/domain/limits';
+import { EntryDraftingError, type EntryDraftingFailure } from '@/domain/ports';
 import type { TranslationLanguage } from '@/domain/user';
 import { useI18n } from '@/i18n/context';
+import type { MessageKey } from '@/i18n/messages';
+import { entryDraftingPort } from '@/lib/backend';
 import { buildPrompt, promptLanguageName, SCHEMA } from '@/lib/jsonImport';
 import { Area, Field, inputClass } from './fields';
+
+/**
+ * What to say for each way the drafting can fail.
+ *
+ * Separated from the call because only one of the four is worth trying again,
+ * and a single "something went wrong" would invite a retry on the three that
+ * cannot succeed. `unavailable` in particular is permanent for this reader —
+ * the API is not offered in every country — so its message points at the manual
+ * prompt below rather than at the button they just pressed.
+ */
+const FAILURE_MESSAGE: Record<EntryDraftingFailure, MessageKey> = {
+  unavailable: 'import.aiUnavailable',
+  quota: 'import.aiQuota',
+  blocked: 'import.aiBlocked',
+  failed: 'import.aiFailed',
+};
 
 /**
  * Everything the tab collects. Held by the modal rather than here, because the
@@ -30,13 +49,32 @@ export const emptyJsonImport = (
 export function JsonImport({
   value,
   onChange,
+  onDrafted,
 }: {
   value: JsonImportState;
   onChange: (next: JsonImportState) => void;
+  /**
+   * Hand the model's reply to the modal, which runs it through the same
+   * `jsonToDraft` a pasted one goes through. Not `onChange`, because filling
+   * the box and importing it are two things and this button does both.
+   */
+  onDrafted: (raw: string) => void;
 }) {
   // Purely local: nothing outside this component acts on it.
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [drafting, setDrafting] = useState(false);
+  const [aiError, setAiError] = useState<EntryDraftingFailure | null>(null);
   const { t } = useI18n();
+
+  /*
+    Asked once, at render, rather than stored: `available()` is a synchronous
+    read of whether the SDK initialised, and it does not change during a
+    session. Hiding the button outright — rather than showing one that explains
+    itself away when pressed — is deliberate. The manual prompt underneath is
+    the route in either case, and a control that is present but never works is
+    worse than one that was never offered.
+  */
+  const canDraft = entryDraftingPort.available();
 
   const set = <K extends keyof JsonImportState>(key: K, next: JsonImportState[K]) =>
     onChange({ ...value, [key]: next });
@@ -95,6 +133,33 @@ export function JsonImport({
       .catch(() => setState('failed'));
   };
 
+  /*
+    The model's reply is not inspected here. It goes to the modal verbatim and
+    through `jsonToDraft`, which is the same function the paste box's reply goes
+    through — so a malformed answer is refused with the same words whichever
+    route it arrived by. A second parser here is exactly the thing that would
+    let a bad reply through one door while the other refused it.
+
+    The raw box is filled as well as imported. If the import fails on a field
+    that is too long, the reply is then on screen to edit and retry, instead of
+    having been discarded by the button that fetched it.
+  */
+  const generate = async () => {
+    setAiError(null);
+    setDrafting(true);
+    try {
+      const raw = await entryDraftingPort.draft(prompt);
+      onChange({ ...value, raw });
+      onDrafted(raw);
+    } catch (cause) {
+      setAiError(cause instanceof EntryDraftingError ? cause.reason : 'failed');
+    } finally {
+      // In `finally` rather than after the call: an error path that leaves this
+      // true is a button that stays disabled for the rest of the session.
+      setDrafting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -142,10 +207,35 @@ export function JsonImport({
 
       <p className="text-xs text-muted">{t('import.contextHint')}</p>
 
+      {canDraft && (
+        <div className="space-y-2">
+          <button
+            type="button"
+            // `void`, not the bare handler: `generate` is async, and React's
+            // onClick wants void — a returned promise is one nothing awaits and
+            // whose rejection would go nowhere. It cannot reject (the try/catch
+            // is total), and this says so rather than relying on it.
+            onClick={() => void generate()}
+            disabled={drafting || !value.word.trim()}
+            className="min-h-10 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"
+          >
+            {drafting ? t('import.generating') : t('import.generate')}
+          </button>
+          {/* Shown before the button is pressed as well as after, because it is
+              a statement about what the button produces and the reader decides
+              whether to press it. The same warning appears again beside the
+              filled form, where the wrong reading is actually visible. */}
+          <p className="text-[11px] text-muted">{t('import.aiDisclaimer')}</p>
+          {aiError && <p className="text-[11px] text-danger">{t(FAILURE_MESSAGE[aiError])}</p>}
+        </div>
+      )}
+
       <button
         type="button"
         onClick={copyPrompt}
-        className="min-h-10 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent"
+        className={`min-h-10 w-full rounded-pill text-sm font-semibold ${
+          canDraft ? 'border border-line text-ink' : 'bg-accent text-on-accent'
+        }`}
       >
         {state === 'copied' ? t('import.copied') : t('import.copyPrompt')}
       </button>
