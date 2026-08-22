@@ -291,6 +291,9 @@ test.describe('word sets', () => {
     const ghostBox = await ghost.boundingBox();
     expect(ghostBox).not.toBeNull();
     expect(ghostBox?.width ?? Infinity).toBeLessThanOrEqual(320);
+    // If the held drag never advances `scrollTop`, the target rows below the
+    // fold never come into reach and the gesture fails exactly like a broken
+    // auto-scroll implementation would fail for a reader.
     await expect
       .poll(() => list.evaluate((element) => element.scrollTop), { timeout: 5000 })
       .toBeGreaterThan(0);
