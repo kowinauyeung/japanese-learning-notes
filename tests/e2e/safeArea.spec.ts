@@ -131,6 +131,12 @@ test('reads the device insets rather than a constant the tests can satisfy', asy
     return null;
   });
 
+  // What breaks when this goes red: the app renders under the notch and the
+  // home indicator on a real installed device, while every other test in this
+  // file — and the whole suite — stays green. That is the failure this exists
+  // to catch, because the four tests below can only prove the layout follows
+  // `--safe-*`; nothing they can measure distinguishes a variable fed by the
+  // device from one hardcoded to `0px`.
   expect(declared).toEqual([
     'env(safe-area-inset-top,0px)',
     'env(safe-area-inset-right,0px)',

@@ -120,9 +120,18 @@
  * asserts the layout moved. That is `tests/e2e/safeArea.spec.ts`, and it is
  * red without the declarations below.
  *
- * The `0px` fallbacks are load-bearing rather than tidy: `env()` naming a
- * keyword the browser does not know makes the whole declaration invalid, which
- * for `bottom` or `padding` means losing the offset as well as the inset.
+ * The `0px` fallbacks change nothing today and are kept for the edit that
+ * would need them. Measured in Chromium against a deliberately unknown keyword:
+ * with the inset alone on its own property, `margin-bottom: var(--safe-bottom)`
+ * computes to `0px` with the fallback and `0px` without it — an `env()` the
+ * browser cannot resolve is invalid at computed-value time, and the property
+ * falls back to its initial value, which is the same zero. Combined with a
+ * design offset it is not the same: `calc(20px + var(--safe-bottom))` computes
+ * to `20px` with the fallback and `0px` without, losing the offset as well as
+ * the inset. This stylesheet never combines them — `bottom-5` and `mb-safe` are
+ * separate properties for exactly that reason — so the fallbacks are insurance
+ * against the first person who writes the combined form, not something holding
+ * the current layout up.
  */
 :root {
   --safe-top: env(safe-area-inset-top, 0px);
