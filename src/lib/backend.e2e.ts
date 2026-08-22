@@ -13,6 +13,7 @@ import type {
 import type { EntryProgress, PracticeSession, PracticeSessionDraft } from '@/domain/practice';
 import type { UserProfile, UserProfileDraft } from '@/domain/user';
 import type { WordSet, WordSetDraft } from '@/domain/wordSet';
+import type { E2ESeed } from './e2eSeed';
 import { sanitizeEntry, sanitizeSession, sanitizeWordSet } from './sanitize';
 
 /**
@@ -31,36 +32,15 @@ import { sanitizeEntry, sanitizeSession, sanitizeWordSet } from './sanitize';
  * tests/rules, both against a real emulator, and neither needs a browser.
  */
 
-interface Seed {
-  /** Start already signed in, skipping the login screen. */
-  signedIn?: boolean;
-  /** Raw documents, coerced through the same sanitiser the real read path uses. */
-  entries?: unknown[];
-  /** Entry ids to start marked wrong, so 苦手のみ has something to select. */
-  weak?: string[];
-  /** Raw 単語集 documents. Nothing in the app creates one yet. */
-  wordSets?: unknown[];
-  /** Test-only network latency used to make concurrent-write guards observable. */
-  wordSetWriteDelayMs?: number;
-  /** Finished sessions, so 履歴 can be reached without drilling first. */
-  sessions?: unknown[];
-  /** Raw persisted profile; absent means first sign-in. */
-  profile?: unknown;
-  /** Force the next settings write to fail so the localized error path is reachable. */
-  settingsSave?: 'fail' | 'defer' | 'unreachable';
-  settingsRefresh?: 'fail';
-  updateWaiting?: boolean;
-}
-
 declare global {
   interface Window {
-    __GOITEI_E2E__?: Seed;
+    __GOITEI_E2E__?: E2ESeed;
     __GOITEI_E2E_READS__?: Record<'entries' | 'progress' | 'wordSets', number>;
     __GOITEI_E2E_RELEASE_SETTINGS_SAVE__?: () => void;
   }
 }
 
-const seed = (): Seed => (typeof window === 'undefined' ? {} : (window.__GOITEI_E2E__ ?? {}));
+const seed = (): E2ESeed => (typeof window === 'undefined' ? {} : (window.__GOITEI_E2E__ ?? {}));
 
 function countRead(store: 'entries' | 'progress' | 'wordSets'): void {
   if (typeof window === 'undefined') return;

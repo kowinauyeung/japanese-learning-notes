@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Locator, Page, TestInfo } from '@playwright/test';
+import type { Entry, Frequency } from '@/domain/entry';
 import { seed } from './fixtures';
 
 interface Scenario {
@@ -64,7 +65,7 @@ const TEXT_CORPUS = [
   '長'.repeat(500),
 ];
 
-const MONKEY_ENTRIES: Record<string, unknown>[] = Array.from({ length: 50 }, (_, index) => ({
+const MONKEY_ENTRIES = Array.from({ length: 50 }, (_, index) => ({
   id: `monkey-word-${index + 1}`,
   headword:
     index === 0
@@ -79,12 +80,12 @@ const MONKEY_ENTRIES: Record<string, unknown>[] = Array.from({ length: 50 }, (_,
   origin: '漢語',
   style: '書き言葉',
   politeness: '普通',
-  freq: (index % 5) + 1,
+  freq: ((index % 5) + 1) as Frequency,
   tags: index % 2 === 0 ? ['負荷試験'] : ['monkey'],
   learnedOn: `2026-06-${String(24 - (index % 20)).padStart(2, '0')}`,
   createdAt: new Date(Date.UTC(2026, 5, 24, 0, 0, index)).toISOString(),
   updatedAt: new Date(Date.UTC(2026, 5, 24, 0, 0, index)).toISOString(),
-}));
+})) satisfies Partial<Entry>[];
 
 const MONKEY_SET = {
   id: 'monkey-set',

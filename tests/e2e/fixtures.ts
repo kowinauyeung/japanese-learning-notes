@@ -1,4 +1,8 @@
 import type { Page } from '@playwright/test';
+import type { Entry } from '@/domain/entry';
+import type { PracticeSession } from '@/domain/practice';
+import type { WordSet } from '@/domain/wordSet';
+import type { E2ESeed } from '@/lib/e2eSeed';
 
 /**
  * Shared setup for every end-to-end spec.
@@ -10,32 +14,6 @@ import type { Page } from '@playwright/test';
  * every screenshot overnight).
  */
 
-export interface E2ESeed {
-  /** Start already signed in, skipping the login screen. */
-  signedIn?: boolean;
-  entries?: Record<string, unknown>[];
-  /** Entry ids to start marked wrong, so 苦手のみ has something to select. */
-  weak?: string[];
-  wordSets?: Record<string, unknown>[];
-  /** Keep a word-set write in flight long enough to exercise the busy gate. */
-  wordSetWriteDelayMs?: number;
-  /** Finished sessions, so 履歴 can be reached without drilling first. */
-  sessions?: Record<string, unknown>[];
-  profile?: Record<string, unknown>;
-  /**
-   * `unreachable` rejects with Firestore's `unavailable`, which is what a
-   * settings save produces when the backend cannot be reached — the save is a
-   * transaction, and a transaction cannot be queued. Named for what the client
-   * saw, not for a cause: the same code arrives whether the device dropped off
-   * the network or the service did.
-   */
-  settingsSave?: 'fail' | 'defer' | 'unreachable';
-  /** Fail the profile re-read that follows a committed save, and only that one. */
-  settingsRefresh?: 'fail';
-  /** Put a waiting build on screen, so `UpdatePrompt` can be laid out against. */
-  updateWaiting?: boolean;
-}
-
 /** Fixed instant every spec runs at. A Wednesday; its ISO week starts on the 22nd. */
 export const NOW = new Date('2026-06-24T10:00:00+09:00');
 
@@ -46,7 +24,7 @@ export const NOW = new Date('2026-06-24T10:00:00+09:00');
  * with no kanji at all. The dates put two in the current ISO week and one
  * earlier in the same year.
  */
-export const WORDS: Record<string, unknown>[] = [
+export const WORDS = [
   {
     id: 'w-kiriwake',
     headword: '切り分け',
@@ -101,7 +79,7 @@ export const WORDS: Record<string, unknown>[] = [
     createdAt: '2026-01-15T01:00:00.000Z',
     updatedAt: '2026-01-15T01:00:00.000Z',
   },
-];
+] satisfies Partial<Entry>[];
 
 /**
  * A note whose fields are long enough to break the layout, in the two ways that
@@ -124,7 +102,7 @@ export const WORDS: Record<string, unknown>[] = [
  *    card beside it, so one long word leaves a grid of otherwise short entries
  *    with a band of empty space through it.
  */
-export const OVERSIZE_WORDS: Record<string, unknown>[] = [
+export const OVERSIZE_WORDS = [
   {
     id: 'w-latin',
     headword: 'W'.repeat(200),
@@ -151,7 +129,7 @@ export const OVERSIZE_WORDS: Record<string, unknown>[] = [
     createdAt: '2026-06-23T02:00:00.000Z',
     updatedAt: '2026-06-23T02:00:00.000Z',
   },
-];
+] satisfies Partial<Entry>[];
 
 /**
  * A 単語集 whose name is far past its limit, holding the oversize entries.
@@ -161,14 +139,14 @@ export const OVERSIZE_WORDS: Record<string, unknown>[] = [
  * still has to survive one — a set written before the limit existed, or by
  * anything that is not this client.
  */
-export const OVERSIZE_SET: Record<string, unknown>[] = [
+export const OVERSIZE_SET = [
   {
     id: 'set-oversize',
     name: 'W'.repeat(400),
     description: 'この単語集の説明。'.repeat(40),
     entryIds: ['w-latin', 'w-longja', 'w-kiriwake'],
   },
-];
+] satisfies Partial<WordSet>[];
 
 /**
  * Must be called before the first navigation: `addInitScript` runs ahead of the
@@ -178,7 +156,7 @@ export const OVERSIZE_SET: Record<string, unknown>[] = [
 export async function seed(page: Page, data: E2ESeed = {}): Promise<void> {
   await page.clock.setFixedTime(NOW);
   await page.addInitScript((value) => {
-    (window as unknown as { __GOITEI_E2E__?: unknown }).__GOITEI_E2E__ = value;
+    (window as { __GOITEI_E2E__?: E2ESeed }).__GOITEI_E2E__ = value;
   }, data);
 }
 
@@ -217,9 +195,9 @@ export async function watchForBlanking(page: Page): Promise<() => Promise<boolea
  * the specs about what a set *does* should not each pay for the four clicks
  * that make it. `wordsets.spec.ts` covers those clicks once.
  */
-export const WORD_SETS: Record<string, unknown>[] = [
+export const WORD_SETS = [
   { id: 'set-work', name: '仕事セット', entryIds: ['w-kiriwake', 'w-choukou'] },
-];
+] satisfies Partial<WordSet>[];
 
 /**
  * One 単語集 holding all three words.
@@ -228,13 +206,13 @@ export const WORD_SETS: Record<string, unknown>[] = [
  * rows it renders — the state in which a visible row index and a stored index
  * stop agreeing, and the only shape that can see it.
  */
-export const FULL_SET: Record<string, unknown>[] = [
+export const FULL_SET = [
   {
     id: 'set-all',
     name: '全部セット',
     entryIds: ['w-kiriwake', 'w-choukou', 'w-chotto'],
   },
-];
+] satisfies Partial<WordSet>[];
 
 /**
  * Two 単語集 that both claim 兆候.
@@ -243,10 +221,10 @@ export const FULL_SET: Record<string, unknown>[] = [
  * set, and nothing on the entry records which of them claimed it. That is what
  * makes deleting the word a question about several documents at once.
  */
-export const OVERLAPPING_SETS: Record<string, unknown>[] = [
+export const OVERLAPPING_SETS = [
   { id: 'set-work', name: '仕事セット', entryIds: ['w-kiriwake', 'w-choukou'] },
   { id: 'set-news', name: 'ニュースセット', entryIds: ['w-choukou'] },
-];
+] satisfies Partial<WordSet>[];
 
 /**
  * `count` finished sessions, newest last, an hour apart.
@@ -255,7 +233,7 @@ export const OVERLAPPING_SETS: Record<string, unknown>[] = [
  * than a couple of them is the cursor, and a page boundary needs more rows than
  * anybody wants to read in a fixture.
  */
-export function makeSessions(count: number): Record<string, unknown>[] {
+export function makeSessions(count: number): Partial<PracticeSession>[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `e2e-session-${index + 1}`,
     mode: index % 2 === 0 ? 'flashcard' : 'dictation',
@@ -265,5 +243,5 @@ export function makeSessions(count: number): Record<string, unknown>[] {
     missed: [],
     startedAt: new Date(Date.UTC(2026, 5, 1, index)).toISOString(),
     finishedAt: new Date(Date.UTC(2026, 5, 1, index, 5)).toISOString(),
-  }));
+  })) satisfies Partial<PracticeSession>[];
 }

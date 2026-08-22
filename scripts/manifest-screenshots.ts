@@ -3,6 +3,7 @@ import { createServer } from 'node:net';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
+import type { E2ESeed } from '@/lib/e2eSeed';
 import { manifestScreenshots } from './manifest-screenshot-specs';
 
 const root = (path: string) => fileURLToPath(new URL(`../${path}`, import.meta.url));
@@ -86,12 +87,12 @@ async function stopPreview(preview: ReturnType<typeof spawn>): Promise<void> {
   ]);
 }
 
-async function seed(page: import('@playwright/test').Page, data: unknown): Promise<void> {
+async function seed(page: import('@playwright/test').Page, data: E2ESeed): Promise<void> {
   await page.clock.setFixedTime(NOW);
   await page.addInitScript((value) => {
     (
-      globalThis as unknown as {
-        __GOITEI_E2E__?: unknown;
+      globalThis as {
+        __GOITEI_E2E__?: E2ESeed;
       }
     ).__GOITEI_E2E__ = value;
   }, data);
