@@ -64,11 +64,17 @@ A dry run writes nothing. Read the version it proposes and the changelog it
 would generate; this is the moment to notice a wrong prefix, while it still
 costs a title edit rather than a tag.
 
+**For the release that leaves `0.x`, and only that one, add `--release-as
+major`** — to this command and to the one in step 2. Without it both compute
+`0.1.1`, for the reason above, and you would be naming a branch `release/1.0.0`
+around a `0.1.1`. After `1.0.0` is on `main`, drop the flag and never pass it
+again.
+
 **2. Cut the branch and run it for real.**
 
 ```sh
 git switch -c release/1.0.0
-yarn release
+yarn release --release-as major   # the flag is for this one release only
 ```
 
 It bumps `package.json`, writes `CHANGELOG.md` and commits both as
@@ -101,17 +107,28 @@ commit. If a new account has to work after this release, do the claim steps in
 [README → Operator runbook](../README.md#operator-runbook) **first**; the order
 there is not a preference.
 
-Once the deploy is green:
+Once the deploy is green, tag **the SHA you gave the workflow** — not whatever
+`main` points at by then:
 
 ```sh
-git switch main && git pull
-git tag -a v1.0.0 -m 'v1.0.0' && git push origin v1.0.0
-gh release create v1.0.0 --title v1.0.0 --notes-file <(awk '/^## /{n++} n==1' CHANGELOG.md)
+SHA=<the same 40 characters you pasted into Deploy (production)>
+git fetch origin main
+git tag -a v1.0.0 "$SHA" -m 'v1.0.0'
+git push origin v1.0.0
+gh release create v1.0.0 --title v1.0.0 \
+  --notes-file <(git show "$SHA:CHANGELOG.md" | awk '/^## /{n++} n==1')
 ```
 
 The tag comes after the deploy, not with the bump, so that **a tag means
 something shipped**. A tag written by `yarn release` would be a claim about a
 deploy that had not happened and might still fail.
+
+Naming the SHA is the other half of the same guarantee, and it is the half that
+is easy to drop. `git switch main && git pull` tags whatever has landed since —
+and a hotfix merged in the minutes between the deploy and the tag would put
+`v1.0.0`, and the GitHub Release, on code that was never deployed. Reading the
+changelog out of `$SHA` rather than the working tree keeps the release notes on
+the same footing.
 
 **7. Merge `main` back into `develop`.**
 

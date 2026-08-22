@@ -36,7 +36,13 @@ jobs:
       #
       # `chore` covers the release commit itself — `chore(release): v1.0.0` —
       # so the release pull request passes this check without an exception.
-      - uses: amannn/action-semantic-pull-request@v6
+      #
+      # Pinned to a commit rather than to `v6`, unlike the `actions/*` steps in
+      # the other workflows. Those are GitHub's own; this is the first
+      # third-party action in the repository, and a moving tag on one is a
+      # write someone else can make to what runs here. Dependabot updates the
+      # SHA and the comment together — see .github/dependabot.yml.
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -56,9 +62,16 @@ jobs:
           # genuinely spans the app — "fix: minor UI cleanups on account,
           # dashboard and footer" — should not have to invent a false one.
           requireScope: false
-          # Imperative mood, lower case, no full stop: what CLAUDE.md already
-          # asks for and what every commit since v0.1.0 does.
+          # Imperative mood, no leading capital, no full stop: what CLAUDE.md
+          # already asks for and what every commit since v0.1.0 does.
+          #
+          # It forbids a leading capital rather than requiring `[a-z]`, because
+          # CLAUDE.md also says identifiers are quoted exactly as they appear in
+          # the code — so "`pwa-config.ts` gains a version signal" is a correct
+          # title and starts with a backtick. A capital is the thing actually
+          # worth catching: it reads as a sentence rather than a commit subject.
+          # The message below says what is enforced, not something narrower.
           subjectPattern: '^(?![A-Z])(?!.*\.$).+$'
           subjectPatternError: |
             The subject "{subject}" in "{title}" is not in the repository's form.
-            Start it with a lower-case letter and leave off the full stop.
+            Do not start it with a capital letter, and do not end it with a full stop.
