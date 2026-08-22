@@ -196,6 +196,51 @@ test.describe('adding a word', () => {
   });
 
   /**
+   * The one claim about AI drafting that the component tests cannot make.
+   *
+   * `tests/component/JsonImport.test.tsx` already covers what the button hands
+   * over and that the warning is rendered, and does it in milliseconds — so
+   * this deliberately does not re-check either. What is only observable here is
+   * the span: the reply crosses the port, goes through `jsonToDraft`, moves the
+   * modal to another tab, fills a form nothing typed into, and is then saved
+   * through the repository and counted in the list behind it. Five components
+   * and a provider, none of which a jsdom render of one panel can see.
+   *
+   * The model is `backend.e2e.ts`'s stand-in, which answers from the prompt.
+   * That is what makes 「兆候」 below an assertion about this request rather
+   * than about a fixture that would pass for any word.
+   */
+  test('fills the form from a drafted reply and saves it', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByRole('button', { name: 'JSON' }).click();
+    await dialog.getByLabel('単語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成' }).click();
+
+    // The import moved the modal to 詳細 and filled it. Asserted on the fields
+    // rather than on the tab, because a tab that switched over an empty form is
+    // the failure this is looking for.
+    await expect(dialog.getByLabel('見出し語')).toHaveValue('兆候');
+    await expect(dialog.getByLabel('読み方')).toHaveValue('ちょうこう');
+    await expect(dialog.getByLabel('意味・説明')).toHaveValue('兆候の意味');
+
+    // The warning travels with the draft to the screen the reader is now on.
+    // On the JSON panel it was a statement about a button; here it is about the
+    // twenty fields in front of them, which is where a wrong reading is visible.
+    await expect(
+      dialog.getByText(/AIが書いた内容なので誤りが含まれることがあります/),
+    ).toBeVisible();
+
+    await dialog.getByRole('button', { name: '保存する' }).click();
+    await expect(page.getByText('兆候の意味')).toBeVisible();
+
+    await page.goto('/vocabulary');
+    await expect(page.getByText('4 語')).toBeVisible();
+  });
+
+  /**
    * Tags reach `?tag=…`, so they may not contain whitespace or punctuation. The
    * form has to say which tag is the problem rather than refusing silently.
    */
