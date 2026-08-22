@@ -25,13 +25,33 @@ is what the release reads.
 | `docs: style: chore: refactor: test: build: ci:` | none  | no              |
 
 Highest wins across the range. A release whose commits are all `chore` and
-`test` computes no version at all, and `yarn release` says so rather than
-inventing a patch bump.
+`test` computes no version at all — `yarn release` reports `no commits found, so
+not bumping version` rather than inventing a patch.
+
+That behaviour is `noBumpWhenEmptyChanges` in `.versionrc.json`, and it has to
+live in that file rather than in the `release` script. `commit-and-tag-version`
+declares the option in camelCase, so yargs reads the obvious
+`--no-bump-when-empty-changes` as the negation of a `bumpWhenEmptyChanges` that
+does not exist, and ignores it without saying so. Measured against a tag with
+only `chore` and `test` commits after it: the command-line flag still produced a
+patch bump and an empty changelog section; the same setting in `.versionrc.json`
+produced `no commits found`.
 
 Because the number is derived, a mistyped prefix does not merely read badly — it
 changes the version and nothing downstream can tell. That is what
 [`.github/workflows/pr-title.yml`](../.github/workflows/pr-title.yml) is for, and
 why its type list has to stay in step with `.versionrc.json`.
+
+Checking the title is not quite sufficient, because GitHub does not always use
+it. The repository's `squash_merge_commit_title` is `COMMIT_OR_PR_TITLE`, and on
+a pull request with exactly one commit the squash dialog offers that commit's
+message instead — so a title accepted as `feat:` can land as `chore:`. The
+workflow therefore also sets `validateSingleCommit` and
+`validateSingleCommitMatchesPrTitle`, which make the two agree before the choice
+can matter. Setting `squash_merge_commit_title` to `PR_TITLE` closes the same
+gap from the other side and is worth doing; it is not a substitute, because a
+repository setting can be changed without review and is invisible to anyone
+reading this.
 
 ### Why this project left `0.x`
 

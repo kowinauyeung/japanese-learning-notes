@@ -1,6 +1,7 @@
 {
   "packageFiles": ["package.json"],
   "bumpFiles": ["package.json"],
+  "noBumpWhenEmptyChanges": true,
   "skip": {
     "tag": true
   }

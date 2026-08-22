@@ -22,6 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
+  contents: read
   pull-requests: read
 
 jobs:
@@ -58,6 +59,22 @@ jobs:
             test
             build
             ci
+          # The title alone is not enough, because GitHub does not always use
+          # it. `squash_merge_commit_title` is `COMMIT_OR_PR_TITLE`, and on a
+          # pull request with exactly one commit the squash dialog offers that
+          # commit's message instead — so a title this check passed as `feat:`
+          # can land on `develop` as `chore:` and quietly change the next
+          # version. The action's own documentation describes this case, and
+          # these two options close it: the single commit is validated too, and
+          # it has to say the same thing the title does, so whichever GitHub
+          # picks is the same string.
+          #
+          # Setting the repository's `squash_merge_commit_title` to `PR_TITLE`
+          # fixes it as well, and is worth doing. It is not enough on its own:
+          # a repository setting is invisible to a reader of this file and can
+          # be changed without review, whereas this is version-controlled.
+          validateSingleCommit: true
+          validateSingleCommitMatchesPrTitle: true
           # Scopes are optional here. Most titles carry one, but a change that
           # genuinely spans the app — "fix: minor UI cleanups on account,
           # dashboard and footer" — should not have to invent a false one.
