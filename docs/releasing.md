@@ -24,18 +24,26 @@ is what the release reads.
 | `feat!:` / `fix!:` / `BREAKING CHANGE:`          | major | —               |
 | `docs: style: chore: refactor: test: build: ci:` | none  | no              |
 
-Highest wins across the range. A release whose commits are all `chore` and
-`test` computes no version at all — `yarn release` reports `no commits found, so
-not bumping version` rather than inventing a patch.
+Highest wins across the range. **That table is enforced by the `types` array in
+`.versionrc.json`, and it has to be spelled out there** — the defaults do not
+match it. `commit-and-tag-version` passes the config-spec's own list rather than
+the preset's, and in the config-spec list `perf` is hidden and `revert` is absent
+entirely, so out of the box a `perf:` change neither bumps nor appears anywhere
+in the changelog. Measured both ways: with the list written out, a `perf`-only
+range produces a patch and a Performance section; without it, the same range
+produces a patch and an empty release.
 
-That behaviour is `noBumpWhenEmptyChanges` in `.versionrc.json`, and it has to
-live in that file rather than in the `release` script. `commit-and-tag-version`
-declares the option in camelCase, so yargs reads the obvious
-`--no-bump-when-empty-changes` as the negation of a `bumpWhenEmptyChanges` that
-does not exist, and ignores it without saying so. Measured against a tag with
-only `chore` and `test` commits after it: the command-line flag still produced a
-patch bump and an empty changelog section; the same setting in `.versionrc.json`
-produced `no commits found`.
+**A range with nothing but `chore`, `docs`, `test` and `ci` still bumps a
+patch**, and writes a release section with nothing under it. There is no setting
+that prevents this without breaking something else: `noBumpWhenEmptyChanges`
+looks like the answer and is not, because it hard-codes "empty" as "no `feat`,
+`fix` or breaking change" and ignores the `types` array — measured, a `perf`-only
+range under that option reports `no commits found` and cuts no release at all,
+which is worse than the pointless patch it was meant to avoid.
+
+So the guard is step 1 below rather than a flag: run the dry run, read what it
+produced, and if the release section is empty, do not cut one. That is the same
+reading that catches a wrong prefix.
 
 Because the number is derived, a mistyped prefix does not merely read badly — it
 changes the version and nothing downstream can tell. That is what
