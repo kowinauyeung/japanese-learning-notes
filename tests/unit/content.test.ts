@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { about } from '@/content/about';
@@ -14,6 +15,37 @@ const DOCS: [string, Doc][] = [
   ['support', support],
 ];
 
+const PINNED_DOCS = {
+  about: {
+    updated: '2026-08-13',
+    hash: '62c72d1cdef71d8b154ca3b8d5a258f5be866e729936697c7d01dbe53a6cc231',
+  },
+  privacy: {
+    updated: '2026-08-14',
+    hash: 'e6589a4a4779972669b21ad2758696b5a169f93720eac46d606ad579f06f0d64',
+  },
+  terms: {
+    updated: '2026-08-14',
+    hash: '1510f90a4d65d916a8a21d141d70fd6691a6163bf6b921d73336d6559e00eaa1',
+  },
+  support: {
+    updated: '2026-08-13',
+    hash: '74b4d29fdc83a88d2217f629ff629f25a49507094f23da250e8ecd2f31028747',
+  },
+} satisfies Record<string, { updated: string; hash: string }>;
+
+function fingerprintDoc(doc: Doc) {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        title: doc.title,
+        lead: doc.lead,
+        sections: doc.sections,
+      }),
+    )
+    .digest('hex');
+}
+
 /**
  * The public documents are prose, and prose is not usually worth a test. These
  * four are, for one reason: **they are the pages a stranger reads before
@@ -21,7 +53,7 @@ const DOCS: [string, Doc][] = [
  * Google's OAuth review looks at. A missing date or an empty section is a
  * broken promise rather than a typo.
  */
-describe.each(DOCS)('%s', (_name, doc) => {
+describe.each(DOCS)('%s', (name, doc) => {
   it('has a title, a lead and a date a reader can compare', () => {
     expect(doc.title).not.toBe('');
     expect(doc.lead).not.toBe('');
@@ -33,6 +65,11 @@ describe.each(DOCS)('%s', (_name, doc) => {
       expect(section.heading).not.toBe('');
       expect(section.body.length + (section.list?.length ?? 0)).toBeGreaterThan(0);
     }
+  });
+
+  it('moves its updated date when the prose changes', () => {
+    expect(doc.updated).toBe(PINNED_DOCS[name].updated);
+    expect(fingerprintDoc(doc)).toBe(PINNED_DOCS[name].hash);
   });
 });
 
