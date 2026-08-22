@@ -170,7 +170,7 @@ function persistedProfile(uid: string): UserProfile | null {
   const raw = seed().profile;
   if (typeof raw !== 'object' || raw === null) return null;
   const now = new Date().toISOString();
-  const record = raw as Partial<UserProfile>;
+  const record = raw;
   const profile: UserProfile = {
     uid,
     nickname: typeof record.nickname === 'string' ? record.nickname : '',
