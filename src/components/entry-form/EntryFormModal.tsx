@@ -75,6 +75,11 @@ export function EntryFormModal({
    * has already left. Cleared when the modal reopens with the rest of the
    * state, and deliberately *not* cleared on edit: a form the user has
    * corrected two fields of is still mostly the model's work.
+   *
+   * Set by `loadJson` and therefore by all three routes — drafted here, pasted
+   * from the clipboard, or loaded from a hand-filled box — because all three
+   * are the JSON panel, and that panel exists to receive what an assistant
+   * wrote.
    */
   const [fromModel, setFromModel] = useState(false);
 
@@ -97,6 +102,13 @@ export function EntryFormModal({
    * import path for the generated reply to drift away from.
    */
   const loadJson = (raw: string = json.raw) => {
+    // Set here rather than only on the drafting button, because every route
+    // into this function is an assistant's reply — the panel is labelled
+    // 「AIが返したJSONを貼り付け」 and the footer button that calls this
+    // renders only while that panel is open. Pasting one from a chatbot in
+    // another tab is no less AI-written than fetching it from this one, so the
+    // warning cannot depend on which button was pressed.
+    setFromModel(true);
     const {
       draft: loaded,
       error: failure,
@@ -118,18 +130,6 @@ export function EntryFormModal({
       setDraft(loaded);
       setTab('full');
     }
-  };
-
-  /**
-   * The model answered. Import it, and remember that is where it came from.
-   *
-   * The flag is set even when the import then fails its own validation: the
-   * reply is in the paste box either way, and the reader is about to edit
-   * something a model wrote.
-   */
-  const loadDrafted = (raw: string) => {
-    setFromModel(true);
-    loadJson(raw);
   };
 
   const save = async () => {
@@ -286,7 +286,7 @@ export function EntryFormModal({
       )}
 
       {tab === 'json' && !entry && (
-        <JsonImport value={json} onChange={setJson} onDrafted={loadDrafted} />
+        <JsonImport value={json} onChange={setJson} onDrafted={loadJson} />
       )}
     </Modal>
   );

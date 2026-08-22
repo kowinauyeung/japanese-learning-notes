@@ -64,6 +64,7 @@ export function JsonImport({
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [drafting, setDrafting] = useState(false);
   const [aiError, setAiError] = useState<EntryDraftingFailure | null>(null);
+  const [pasteFailed, setPasteFailed] = useState(false);
   const { t } = useI18n();
 
   /*
@@ -75,6 +76,22 @@ export function JsonImport({
     worse than one that was never offered.
   */
   const canDraft = entryDraftingPort.available();
+
+  /*
+    Reading the clipboard is a narrower capability than writing to it, and the
+    same contexts that take `writeText` do not necessarily give `readText`: it
+    is absent outside a secure context, absent in several of the in-app webviews
+    a phone opens links in, and gated behind a permission the browser may put
+    its own confirmation in front of. Probed as a function rather than for the
+    property, because a webview stub can define the name and nothing else.
+
+    Feature-detected for the same reason the drafting button is: the box below
+    still takes an ordinary paste from the keyboard or a long press, so a reader
+    without this loses a shortcut rather than the route. Permission is a
+    separate matter and cannot be probed — it is refused at the tap, which is
+    what `pasteFailed` is for.
+  */
+  const canPaste = typeof navigator.clipboard?.readText === 'function';
 
   const set = <K extends keyof JsonImportState>(key: K, next: JsonImportState[K]) =>
     onChange({ ...value, [key]: next });
@@ -131,6 +148,45 @@ export function JsonImport({
         setTimeout(() => setState('idle'), 1800);
       })
       .catch(() => setState('failed'));
+  };
+
+  /*
+    Overwrite rather than append: the box holds one JSON document, and appending
+    to a non-empty one produces something that cannot parse — a failure whose
+    message would be about JSON rather than about the paste that caused it.
+
+    Imported in the same breath, like the drafting button, and through the same
+    `onDrafted`. So a reply that does not parse is refused with exactly the
+    words a pasted-and-then-imported one is refused with, and it stays in the
+    box to be corrected. Nothing about the failure path is new here, which is
+    the point.
+  */
+  const pasteJson = () => {
+    setPasteFailed(false);
+    let read: Promise<string> | undefined;
+    try {
+      read = navigator.clipboard?.readText();
+    } catch {
+      // Present and still throwing before it returns a promise — the same
+      // webview and focus cases `copyPrompt` documents above, in the other
+      // direction.
+      setPasteFailed(true);
+      return;
+    }
+    if (read === undefined) {
+      setPasteFailed(true);
+      return;
+    }
+    read
+      .then((text) => {
+        // An empty clipboard is not a failure of the button and must not be
+        // reported as one; it would also wipe a box the reader had already
+        // filled by hand.
+        if (!text.trim()) return setPasteFailed(true);
+        onChange({ ...value, raw: text });
+        onDrafted(text);
+      })
+      .catch(() => setPasteFailed(true));
   };
 
   /*
@@ -259,6 +315,25 @@ export function JsonImport({
         <pre className="mt-2 overflow-x-auto text-[11px] leading-relaxed">{SCHEMA}</pre>
       </details>
 
+      {/* Outside the `Field` below, not inside it. `Field` renders a <label>
+          around its children, and a <label> names its first labelable
+          descendant — so a button placed in there takes the label meant for the
+          textarea, leaving one control misnamed and the other unnamed. Caught
+          by the component test, which could not find the button by its own
+          text. */}
+      {canPaste && (
+        <div className="space-y-1">
+          <button
+            type="button"
+            onClick={pasteJson}
+            className="min-h-10 w-full rounded-pill border border-line text-sm font-semibold text-ink"
+          >
+            {t('import.paste')}
+          </button>
+          {pasteFailed && <p className="text-[11px] text-danger">{t('import.pasteError')}</p>}
+        </div>
+      )}
+
       <Field label={t('import.pasteJson')}>
         {/* The one box in the form with no `maxLength`. It is not an oversight
             and it is not laxer: `jsonToDraft` refuses a paste past
@@ -271,7 +346,13 @@ export function JsonImport({
           value={value.raw}
           onChange={(v) => set('raw', v)}
           maxLength="unbounded"
-          rows={10}
+          // Four, not the ten it was. The box stopped being the place the JSON
+          // arrives once the two buttons above could fill it, so its height was
+          // paying for a paste most readers no longer perform by hand. Ten rows
+          // also pushed the schema block and everything under it below the fold
+          // on a phone. It still grows with its content and still accepts a
+          // typed paste, which is what the fallback needs it for.
+          rows={4}
           placeholder="{ …"
         />
       </Field>

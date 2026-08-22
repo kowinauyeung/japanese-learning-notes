@@ -219,3 +219,69 @@ describe('JsonImport — drafting with AI', () => {
     expect(screen.getByRole('button', { name: 'AIで作成' })).toBeDisabled();
   });
 });
+
+/*
+  That a reply which does not parse is refused, and refused by name, is settled
+  in tests/unit/jsonImport.test.ts over `jsonToDraft` itself — four cases there,
+  in milliseconds. The button below hands its text to that same function, so
+  none of this re-checks it. What is only observable here is the button: whether
+  it appears at all, what it does with what it read, and whether a refusal is
+  visible or silent.
+*/
+describe('JsonImport — pasting from the clipboard', () => {
+  it('overwrites the box and imports, rather than appending to what is there', async () => {
+    // Appending would produce two JSON documents in one box, which cannot
+    // parse — and the message would then be about JSON rather than about the
+    // paste that broke it.
+    let imported = '';
+    withClipboard({ readText: () => Promise.resolve('{"headword":"兆候"}') });
+    render(
+      <Harness
+        initial={{ ...emptyJsonImport('yue-Hant'), raw: '{"headword":"古い"}' }}
+        onDrafted={(raw) => {
+          imported = raw;
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'クリップボードから貼り付け' }));
+    await waitFor(() => expect(imported).not.toBe(''));
+
+    // The box is the assertion that catches an append, not `imported`: what is
+    // handed to the importer is the clipboard text either way, so appending to
+    // `raw` and passing the new text on would leave this passing while the box
+    // held two JSON documents. Checked by reverting the overwrite and watching
+    // it stay green — which is why the box is read here at all.
+    expect(screen.getByRole('textbox', { name: 'AI の返した JSON を貼り付け' })).toHaveValue(
+      '{"headword":"兆候"}',
+    );
+    expect(imported).toBe('{"headword":"兆候"}');
+  });
+
+  it('is absent where the clipboard cannot be read, instead of failing on the tap', () => {
+    // `readText` is a narrower capability than `writeText`: it is missing
+    // outside a secure context and in the webviews a phone opens links in. The
+    // box below still takes a typed or long-pressed paste, so what is lost is a
+    // shortcut — but a button that could never work is worse than no button.
+    withClipboard({ writeText: () => Promise.resolve() });
+    render(<Harness initial={emptyJsonImport('yue-Hant')} />);
+
+    expect(
+      screen.queryByRole('button', { name: 'クリップボードから貼り付け' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('says a refused clipboard was refused, which is the defect #59 fixed the other way', () => {
+    // A permission the reader denies rejects the promise. Unhandled, that is a
+    // console warning and a button that did nothing — the exact shape of the
+    // copy-side bug fixed in #59, in the opposite direction.
+    withClipboard({ readText: () => Promise.reject(new Error('denied')) });
+    render(<Harness initial={emptyJsonImport('yue-Hant')} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'クリップボードから貼り付け' }));
+
+    return waitFor(() =>
+      expect(screen.getByText(/クリップボードを読み取れませんでした/)).toBeInTheDocument(),
+    );
+  });
+});
