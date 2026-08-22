@@ -32,8 +32,19 @@ import { app } from '@/infra/firebase/client';
  * The no-cost tier covers the Flash family only, and filling a fixed schema for
  * one word is not a task a larger model answers better. Moving off this string
  * is a decision about money, so it should be a diff somebody reads.
+ *
+ * **A stable model has a retirement date, so this line expires.** It was
+ * `gemini-2.5-flash` until 2026-08-23, when the proxy began answering
+ * `404 … no longer available to new users`. Nothing in the build catches that:
+ * the name is a string until it reaches the model, so a retired one compiles,
+ * bundles, passes every test and fails once, for a reader, in production.
+ *
+ * What makes it recoverable is that the 404 names its own replacement — the
+ * reply above said to use `gemini-3.6-flash` — and `classify` below logs the
+ * cause before discarding it. So the fix instruction arrives in the console of
+ * whoever hits it. Do not remove that log to tidy up.
  */
-const MODEL = 'gemini-2.5-flash';
+const MODEL = 'gemini-3.6-flash';
 
 /**
  * `getAI` runs once, lazily, rather than at module scope.
@@ -93,13 +104,36 @@ const PERMANENT = new Set([
  * about rather than "try again".
  */
 function classify(error: unknown): EntryDraftingError {
+  /*
+    The cause is logged before it is thrown away, and this is not a debugging
+    leftover.
+
+    Four reasons collapse into four sentences, and `failed` is the one that
+    means "none of the above" — so the reader is told to check their connection
+    for a model that does not exist, a project whose AI Logic was never
+    provisioned, and a key whose API allowlist is wrong. Those are indis-
+    tinguishable on screen by design, because none of them is the reader's to
+    fix. They are not indistinguishable to whoever has to fix them, and without
+    this line the only record of which one it was is gone.
+
+    `console.error` and not a rethrow: the message may name the project or the
+    model, which belongs in a console and not in the form.
+  */
+  console.error('Entry drafting failed', error);
+
   if (error instanceof AIError) {
     if (PERMANENT.has(error.code)) return new EntryDraftingError('unavailable');
     if (error.code === 'response-error') return new EntryDraftingError('blocked');
   }
   const text = error instanceof Error ? error.message : String(error);
   if (/\b429\b|quota|rate.?limit|exhausted/i.test(text)) return new EntryDraftingError('quota');
-  if (/\b403\b|not.?enabled|unsupported.?user.?location/i.test(text)) {
+  // 404 belongs with the permanent failures, not with the network ones, even
+  // though the SDK reports it as `fetch-error`. It is what a retired model
+  // name returns, and no amount of retrying brings one back — the reader
+  // should be sent to the prompt below rather than told to check a connection
+  // that is working. Measured: the retirement of `gemini-2.5-flash` arrived
+  // exactly this way, and this branch is what stops it reading as an outage.
+  if (/\b40[34]\b|not.?enabled|no longer available|unsupported.?user.?location/i.test(text)) {
     return new EntryDraftingError('unavailable');
   }
   return new EntryDraftingError('failed');
