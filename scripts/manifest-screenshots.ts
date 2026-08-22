@@ -37,10 +37,7 @@ async function reservePort(): Promise<number> {
   });
 }
 
-async function waitForServer(
-  origin: string,
-  preview: ReturnType<typeof spawn>,
-): Promise<void> {
+async function waitForServer(origin: string, preview: ReturnType<typeof spawn>): Promise<void> {
   const deadline = Date.now() + 30_000;
   let exited = false;
   let exitCode: number | null = null;
@@ -56,7 +53,9 @@ async function waitForServer(
   while (Date.now() < deadline) {
     if (spawnError) throw spawnError;
     if (exited) {
-      throw new Error(`preview server exited before becoming ready${exitCode === null ? '' : ` (${exitCode})`}`);
+      throw new Error(
+        `preview server exited before becoming ready${exitCode === null ? '' : ` (${exitCode})`}`,
+      );
     }
     try {
       const response = await fetch(`${origin}/manifest.webmanifest`);
