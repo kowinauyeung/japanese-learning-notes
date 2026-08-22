@@ -80,14 +80,11 @@ Pointing this at a fresh Firebase project takes a few more steps, in order:
    alias points at your project) or
    `yarn firebase deploy --only firestore:rules --project <your-project-id>`.
 5. Sign in once, then grant yourself access — the rules deny everything until
-   your account carries the `allowed` custom claim. `yarn allow <your-email>`
-   sets it, and the account must have signed in before that, because the claim
-   goes on the uid Google issued and there is nothing to set it on until then.
-   **`yarn allow` is the one step here that cannot be pointed at your project.**
-   `admin/allow-user.ts` names `goitei-dev` and `goitei` directly, never reads
-   `.firebaserc`, and rejects any argument other than `prod` and `--revoke` — so
-   on a fresh project it will tell you the account has never signed in. Set the
-   claim through the Admin SDK yourself; that script is the worked example.
+   your account carries the `allowed` custom claim. `yarn allow <your-email>
+--project <your-project-id>` sets it, and the account must have signed in
+   before that, because the claim goes on the uid Google issued and there is
+   nothing to set it on until then. The repository shortcuts still work too:
+   omit `--project` for `goitei-dev`, or pass `prod` for `goitei`.
 6. **Sign out and sign back in.** A claim reaches the client only in a freshly
    minted ID token, so the session you granted access to is still denied — for
    up to an hour, until its token expires on its own.
