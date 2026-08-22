@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -129,12 +129,30 @@ describe('the icons a home screen actually reaches for', () => {
     },
   );
 
-  // The reverse direction: the loop above passes if an icon is dropped from the
-  // manifest *and* from this list in the same edit. This is what notices the
-  // file still sitting in `public/` unreferenced, or a new one never wired up.
-  it('names every PNG icon in public/, so one added or removed cannot go unreferenced', () => {
-    const referenced = manifest.icons.map((icon) => icon.src).sort();
-    expect(referenced).toEqual(['/icon-192.png', '/icon-512.png', '/icon-maskable-512.png']);
+  /**
+   * The reverse direction, and it has to read the directory to be one.
+   *
+   * The loop above walks the manifest and asks whether each file exists, so by
+   * construction it cannot see a PNG that exists and is named nowhere — `yarn
+   * icons` emitting a new size, or a file left behind by a rename. An earlier
+   * version of this compared the manifest against a list written here instead,
+   * which has exactly the same blind spot with more ceremony: both halves get
+   * edited together, and `public/icon-1024.png` would sit there unreferenced
+   * with the suite green.
+   *
+   * `apple-touch-icon.png` is the one deliberate exclusion. It is not a manifest
+   * icon and must not become one: iOS ignores `manifest.icons` for "Add to Home
+   * Screen" and reads the `<link>` tag instead, which the block below pins.
+   */
+  const IOS_HOME_SCREEN_ICON = 'apple-touch-icon.png';
+
+  it('references every icon PNG in public/, so an orphaned or unwired one cannot go unnoticed', () => {
+    const onDisk = readdirSync(root('public'))
+      .filter((name) => name.endsWith('.png') && name !== IOS_HOME_SCREEN_ICON)
+      .sort();
+    const referenced = manifest.icons.map((icon) => icon.src.replace(/^\//, '')).sort();
+
+    expect(referenced).toEqual(onDisk);
   });
 });
 
