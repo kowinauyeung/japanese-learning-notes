@@ -193,7 +193,7 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="flex max-h-[88vh] w-full flex-col rounded-t-3xl bg-card shadow-panel nav:max-h-[86vh] nav:max-w-2xl nav:rounded-3xl"
+        className="flex max-h-[88vh] w-full flex-col rounded-t-3xl bg-card px-safe pb-safe shadow-panel nav:max-h-[86vh] nav:max-w-2xl nav:rounded-3xl nav:px-0 nav:pb-0"
       >
         <div className="shrink-0 px-5 pt-3 nav:pt-5">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line nav:hidden" />

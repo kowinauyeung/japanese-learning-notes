@@ -376,12 +376,21 @@ test.describe('the footer', () => {
       const footer = document.querySelector('footer');
       const main = document.querySelector('main');
       if (!footer || !main) return null;
-      const inner = footer.firstElementChild;
-      if (!inner) return null;
+      // Both measured one level in, because both outer boxes are now full
+      // bleed: they carry the device's safe-area insets so their backgrounds
+      // still reach the screen edge, and the box that carries the gutter and
+      // the measure is the child. Comparing `<main>` itself, which is what this
+      // did while it *was* that box, now compares the viewport to a centred
+      // 1024px column and reports a 128px misalignment that is not there.
+      const innerFooter = footer.firstElementChild;
+      const innerMain = main.firstElementChild;
+      if (!innerFooter || !innerMain) return null;
+      const f = innerFooter.getBoundingClientRect();
+      const m = innerMain.getBoundingClientRect();
       return {
         gapBelow: Math.round(window.innerHeight - footer.getBoundingClientRect().bottom),
-        left: Math.round(inner.getBoundingClientRect().left - main.getBoundingClientRect().left),
-        width: Math.round(inner.getBoundingClientRect().width - main.getBoundingClientRect().width),
+        left: Math.round(f.left - m.left),
+        width: Math.round(f.width - m.width),
       };
     });
 

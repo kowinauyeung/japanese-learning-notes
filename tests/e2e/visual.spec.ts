@@ -228,7 +228,13 @@ test.describe('visual', () => {
 
     const cards = page.locator('a[href^="/vocabulary/"]');
     await expect(cards.first()).toBeVisible();
-    await expect(page.locator('main')).toHaveScreenshot('long-entry-cards.png');
+    // `main > div`, not `main`. `<main>` is now the full-bleed box that carries
+    // the device's side insets so its background still reaches the screen edge,
+    // and the column with the gutter and the `max-w-5xl` measure is its child.
+    // Shooting `<main>` captures the viewport's full 1280px and 256px of page
+    // background either side of the grid — which is not what this baseline is
+    // of, and would have quietly widened every future comparison.
+    await expect(page.locator('main > div')).toHaveScreenshot('long-entry-cards.png');
   });
 
   /**
