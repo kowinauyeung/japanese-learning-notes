@@ -1,12 +1,11 @@
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 import { manifestScreenshots } from './manifest-screenshot-specs';
 
 const root = (path: string) => fileURLToPath(new URL(`../${path}`, import.meta.url));
-const PORT = 4175;
-const ORIGIN = `http://127.0.0.1:${PORT}`;
 const NOW = new Date('2026-06-24T10:00:00+09:00');
 
 function run(command: string, args: string[]): Promise<void> {
@@ -20,18 +19,55 @@ function run(command: string, args: string[]): Promise<void> {
   });
 }
 
-async function waitForServer(): Promise<void> {
+async function reservePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        server.close(() => reject(new Error('failed to reserve a preview port')));
+        return;
+      }
+      server.close((error) => {
+        if (error) reject(error);
+        else resolve(address.port);
+      });
+    });
+    server.on('error', reject);
+  });
+}
+
+async function waitForServer(
+  origin: string,
+  preview: ReturnType<typeof spawn>,
+): Promise<void> {
   const deadline = Date.now() + 30_000;
+  let exited = false;
+  let exitCode: number | null = null;
+  preview.once('exit', (code) => {
+    exited = true;
+    exitCode = code;
+  });
+
   while (Date.now() < deadline) {
+    if (exited) {
+      throw new Error(`preview server exited before becoming ready${exitCode === null ? '' : ` (${exitCode})`}`);
+    }
     try {
-      const response = await fetch(`${ORIGIN}/manifest.webmanifest`);
+      const response = await fetch(`${origin}/manifest.webmanifest`);
       if (response.ok) return;
     } catch {
       // Retry until the preview server is ready.
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  throw new Error(`preview server at ${ORIGIN} did not become ready in time`);
+  throw new Error(`preview server at ${origin} did not become ready in time`);
+}
+
+async function stopPreview(preview: ReturnType<typeof spawn>): Promise<void> {
+  if (preview.exitCode !== null || preview.signalCode !== null) return;
+  preview.kill('SIGTERM');
+  await new Promise((resolve) => preview.once('exit', resolve));
 }
 
 async function seed(page: import('@playwright/test').Page, data: unknown): Promise<void> {
@@ -47,6 +83,9 @@ async function seed(page: import('@playwright/test').Page, data: unknown): Promi
 
 await run('yarn', ['build:e2e']);
 
+const PORT = await reservePort();
+const ORIGIN = `http://127.0.0.1:${PORT}`;
+
 const preview = spawn(
   'yarn',
   ['vite', 'preview', '--mode', 'e2e', '--port', `${PORT}`, '--strictPort', '--host', '127.0.0.1'],
@@ -54,7 +93,7 @@ const preview = spawn(
 );
 
 try {
-  await waitForServer();
+  await waitForServer(ORIGIN, preview);
 
   const browser = await chromium.launch();
 
@@ -77,5 +116,5 @@ try {
     await browser.close();
   }
 } finally {
-  preview.kill('SIGTERM');
+  await stopPreview(preview);
 }

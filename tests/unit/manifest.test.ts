@@ -27,6 +27,11 @@ import { manifestScreenshots as generatedScreenshots } from '../../scripts/manif
 
 const root = (path: string) => fileURLToPath(new URL(`../../${path}`, import.meta.url));
 
+function pngSize(path: string): { width: number; height: number } {
+  const png = readFileSync(path);
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
 interface Icon {
   src: string;
   sizes: string;
@@ -207,6 +212,15 @@ describe('the install screenshots Chromium reads from the manifest', () => {
   it('points each screenshot entry at a file that exists in public/', () => {
     for (const shot of manifest.screenshots ?? []) {
       expect(existsSync(root(`public${shot.src}`)), shot.src).toBe(true);
+    }
+  });
+
+  it('matches the committed PNG pixel dimensions, not only the manifest metadata string', () => {
+    for (const expected of generatedScreenshots) {
+      expect(pngSize(root(`public/${expected.file}`))).toEqual({
+        width: expected.width,
+        height: expected.height,
+      });
     }
   });
 
