@@ -44,3 +44,7 @@ service-account-*.json
 coverage/
 playwright-report/
 test-results/
+
+# Local agent instructions alias. Keep the repo-owned source file (`CLAUDE.md`)
+# tracked, but ignore a workstation-specific `AGENTS.md` symlink beside it.
+AGENTS.md
