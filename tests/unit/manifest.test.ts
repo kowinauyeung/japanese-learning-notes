@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { icons as generated } from '../../scripts/icon-specs';
+import { manifestScreenshots as generatedScreenshots } from '../../scripts/manifest-screenshot-specs';
 
 /**
  * `public/manifest.webmanifest`, which is what turns the site into an app.
@@ -26,6 +27,11 @@ import { icons as generated } from '../../scripts/icon-specs';
 
 const root = (path: string) => fileURLToPath(new URL(`../../${path}`, import.meta.url));
 
+function pngSize(path: string): { width: number; height: number } {
+  const png = readFileSync(path);
+  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) };
+}
+
 interface Icon {
   src: string;
   sizes: string;
@@ -43,6 +49,15 @@ interface Manifest {
   background_color: string;
   theme_color: string;
   icons: Icon[];
+  screenshots?: Screenshot[];
+}
+
+interface Screenshot {
+  src: string;
+  sizes: string;
+  type: string;
+  label: string;
+  form_factor?: string;
 }
 
 const manifest = JSON.parse(readFileSync(root('public/manifest.webmanifest'), 'utf8')) as Manifest;
@@ -165,6 +180,78 @@ describe('the icons a home screen actually reaches for', () => {
       // kept, and a manifest pointing at a file that was never rasterised is the
       // blank-tile install again, one step earlier.
       expect(existsSync(root(`public/${icon.file}`)), icon.file).toBe(true);
+    }
+  });
+});
+
+/**
+ * Chromium's richer install dialog.
+ *
+ * The app installs without these and therefore nothing functional fails when
+ * they are missing; what goes missing is the dialog that shows a reader what
+ * they are installing. That makes drift here silent in exactly the way the
+ * icon drift above is silent: install still works, but it works with the wrong
+ * product surface.
+ */
+describe('the install screenshots Chromium reads from the manifest', () => {
+  // Without both slots Chromium falls back to the plain install prompt, so the
+  // dialog loses the screenshots that show what the app looks like on desktop
+  // and on mobile before a reader commits to installing it.
+  it('declares at least two screenshots, because Chromium picks one wide and one non-wide prompt surface', () => {
+    expect(manifest.screenshots?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+
+  // Desktop and mobile prompts choose different screenshot buckets; losing
+  // either one regresses one install flow back to the icon-only dialog.
+  it('offers one wide screenshot for desktop and one non-wide screenshot for mobile', () => {
+    expect(manifest.screenshots?.some((shot) => shot.form_factor === 'wide')).toBe(true);
+    expect(manifest.screenshots?.some((shot) => shot.form_factor !== 'wide')).toBe(true);
+  });
+
+  // A screenshot committed but unnamed in the manifest is invisible to the
+  // install prompt, while a manifest entry with no committed file degrades to a
+  // broken asset the browser cannot show.
+  it('references every committed install screenshot the generator names, and no other', () => {
+    const expected = generatedScreenshots.map((shot) => `/${shot.file}`).sort();
+    const referenced = (manifest.screenshots ?? []).map((shot) => shot.src).sort();
+    expect(referenced).toEqual(expected);
+  });
+
+  // A manifest that points at a missing file keeps installability green while
+  // dropping the richer prompt asset on the floor, which is why existence is
+  // worth checking directly here.
+  it('points each screenshot entry at a file that exists in public/', () => {
+    for (const shot of manifest.screenshots ?? []) {
+      expect(existsSync(root(`public${shot.src}`)), shot.src).toBe(true);
+    }
+  });
+
+  // Chromium reads actual image pixels, not the manifest string alone; a
+  // manually replaced PNG with the wrong size can be ignored or warned about
+  // even when `sizes` still says the old dimensions.
+  it('matches the committed PNG pixel dimensions, not only the manifest metadata string', () => {
+    for (const expected of generatedScreenshots) {
+      expect(pngSize(root(`public/${expected.file}`))).toEqual({
+        width: expected.width,
+        height: expected.height,
+      });
+    }
+  });
+
+  // These fields are the user-facing prompt content, so drift here means the
+  // browser shows the wrong caption, wrong form factor, or stale metadata even
+  // though the screenshot files themselves still exist.
+  it('matches the generator spec for sizes, type, label, and form factor', () => {
+    const screenshotsBySrc = new Map((manifest.screenshots ?? []).map((shot) => [shot.src, shot]));
+    for (const expected of generatedScreenshots) {
+      const shot = screenshotsBySrc.get(`/${expected.file}`);
+      expect(shot).toEqual({
+        src: `/${expected.file}`,
+        sizes: `${expected.width}x${expected.height}`,
+        type: expected.type,
+        label: expected.label,
+        ...(expected.formFactor ? { form_factor: expected.formFactor } : {}),
+      });
     }
   });
 });
