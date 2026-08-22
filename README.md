@@ -207,8 +207,11 @@ signups are closed until an operator grants it. Nothing in front of the site can
 substitute for this: Hosting serves the config that reaches Firestore, so a
 password on the HTML protects the page, not the data.
 
-Rules deploy before anything that writes through them. A client briefly older
-than its rules fails closed; the other way round fails open.
+Rules deploy before anything that writes through them, so a new top-level field
+is allowlisted before any client can send it. A client that ships a new field
+before the rules that name it is denied by `hasOnly` until the rules follow;
+the direction that really stays open is a looser product limit in the deployed
+rules.
 
 ### Response headers
 
@@ -344,9 +347,9 @@ the data — that part takes effect now.
 3. Run _Deploy (production)_.
 
 The order is not a preference. The workflow deploys rules before hosting on
-purpose — a client briefly older than its rules fails closed, the other way
-round fails open — and the rules being deployed require a claim that no token
-issued before step 1 carries. Reversing steps 1 and 3 locks out everyone who was
+purpose, so a new top-level field is allowlisted before any client can send it
+— and because the rules being deployed require a claim that no token issued
+before step 1 carries. Reversing steps 1 and 3 locks out everyone who was
 already signed in, for up to an hour, including whoever is doing the deploy.
 
 This matters most exactly once: the first production run of that workflow _is_
