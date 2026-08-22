@@ -343,10 +343,12 @@ browser against the dev site or a preview channel.
 Everything below assumes `GOOGLE_APPLICATION_CREDENTIALS`, or `gcloud auth
 application-default login` against the right project.
 
-**Granting access.** `yarn allow you@example.com prod`. The account must have
-signed in once first — the claim is set on the uid Google issued, so there is
-nothing to set it on before that. Anything other than `prod` or `--revoke` is
-rejected rather than ignored.
+**Granting access.** `yarn allow you@example.com prod` targets the repository
+production project, and `yarn allow you@example.com --project your-project-id`
+targets any other Firebase project. The account must have signed in once first
+— the claim is set on the uid Google issued, so there is nothing to set it on
+before that. Anything other than `prod`, `--project <project-id>` or
+`--revoke` is rejected rather than ignored.
 
 **Revoking it.** `yarn allow you@example.com prod --revoke`. **This lands within
 the hour, not on the keystroke.** The claim lives inside the ID token the client

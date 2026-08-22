@@ -41,6 +41,14 @@ describe('allow-user lookup failures', () => {
     });
   });
 
+  it('rejects the --prod typo so operators do not silently grant the dev project', () => {
+    expect(parseAllowUserArgs(['reader@example.com', '--prod'])).toEqual({
+      ok: false,
+      errors: ['unknown argument: --prod'],
+      usage: 'usage: allow-user.ts <email> [prod] [--project <project-id>] [--revoke]',
+    });
+  });
+
   it('prevents diagnostics from hiding a configured GOOGLE_APPLICATION_CREDENTIALS file', () => {
     expect(
       describeCredentialSource({
