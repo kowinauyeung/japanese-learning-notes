@@ -291,8 +291,9 @@ test.describe('word sets', () => {
     const ghostBox = await ghost.boundingBox();
     expect(ghostBox).not.toBeNull();
     expect(ghostBox?.width ?? Infinity).toBeLessThanOrEqual(320);
-    await page.waitForTimeout(1000);
-    expect(await list.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await expect
+      .poll(() => list.evaluate((element) => element.scrollTop), { timeout: 5000 })
+      .toBeGreaterThan(0);
     await page.keyboard.press('Escape');
     await page.mouse.up();
 
