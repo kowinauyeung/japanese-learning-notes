@@ -119,6 +119,7 @@ source tree.
 | `yarn typecheck`                       | The app, then `tsconfig.test.json`                    |
 | `yarn test`                            | Unit, component, rules and adapter tests              |
 | `yarn test:e2e`                        | Playwright: user flows and visual regression          |
+| `yarn release`                         | Bump the version and write `CHANGELOG.md`             |
 | `yarn rules:dev` / `yarn rules:prod`   | Deploy `firestore.rules`                              |
 | `yarn auth:login` / `yarn auth:revoke` | Repo-local Google ADC, used by the operator scripts   |
 
@@ -358,7 +359,9 @@ until that token expires. Revoking the refresh tokens ends the session at the
 next refresh but does not shorten that window. When responding to abuse, delete
 the data — that part takes effect now.
 
-**Releasing.** Three steps, in this order:
+**Releasing.** Cutting the version — the branch, the changelog and the tag — is
+[docs/releasing.md](docs/releasing.md). What follows is only the access half of
+it, which has an order that matters. Three steps:
 
 1. `yarn allow <email> prod` for every account that must keep working.
 2. Ask each of them to sign out and sign back in. A claim reaches the client

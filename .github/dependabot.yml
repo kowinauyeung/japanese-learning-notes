@@ -5,9 +5,9 @@ updates:
   # dozen. Major bumps stay separate: React, Firebase and Vite majors each
   # need reading release notes, which is not a review to rubber-stamp
   # alongside a patch bump.
-  # develop, not the repository default. The default branch is main, which is
-  # production; a dependency bump has no business landing there without going
-  # through dev first.
+  # Named explicitly rather than left to the repository default, so that a bump
+  # keeps arriving on develop whatever the default is set to. It has already
+  # moved once, from main to develop.
   - package-ecosystem: npm
     directory: /
     target-branch: develop
