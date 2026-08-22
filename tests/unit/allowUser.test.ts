@@ -6,7 +6,7 @@ import {
 } from '../../admin/allow-user.shared';
 
 describe('allow-user lookup failures', () => {
-  it('describes GOOGLE_APPLICATION_CREDENTIALS when one is set', () => {
+  it('prevents diagnostics from hiding a configured GOOGLE_APPLICATION_CREDENTIALS file', () => {
     expect(
       describeCredentialSource({
         GOOGLE_APPLICATION_CREDENTIALS: '/tmp/service-account.json',
@@ -14,17 +14,17 @@ describe('allow-user lookup failures', () => {
     ).toBe('GOOGLE_APPLICATION_CREDENTIALS=/tmp/service-account.json');
   });
 
-  it('describes CLOUDSDK_CONFIG for application default credentials', () => {
+  it('prevents diagnostics from hiding a configured CLOUDSDK_CONFIG directory', () => {
     expect(describeCredentialSource({ CLOUDSDK_CONFIG: '.gcloud' })).toBe(
       'applicationDefault() with CLOUDSDK_CONFIG=.gcloud',
     );
   });
 
-  it('says when application default credentials use the default config location', () => {
+  it('prevents diagnostics from inventing a configured gcloud directory when none is set', () => {
     expect(describeCredentialSource({})).toBe('applicationDefault() with CLOUDSDK_CONFIG unset');
   });
 
-  it('keeps the signed-in-once wording only for auth/user-not-found', () => {
+  it('prevents non-user-not-found failures from being misreported as never-signed-in accounts', () => {
     expect(
       lookupFailureLines(
         'reader@example.com',
@@ -35,7 +35,7 @@ describe('allow-user lookup failures', () => {
     ).toEqual(['reader@example.com has never signed in to goitei; ask them to try once first.']);
   });
 
-  it('reports other lookup failures as themselves, with the credential source', () => {
+  it('prevents other lookup failures from hiding their credential configuration', () => {
     expect(
       lookupFailureLines(
         'reader@example.com',
@@ -45,11 +45,11 @@ describe('allow-user lookup failures', () => {
       ),
     ).toEqual([
       'failed to look up reader@example.com in goitei (app/invalid-credential).',
-      'credential source: applicationDefault() with CLOUDSDK_CONFIG=.gcloud',
+      'credential configuration: applicationDefault() with CLOUDSDK_CONFIG=.gcloud',
     ]);
   });
 
-  it('extracts string error codes only', () => {
+  it('prevents non-string thrown codes from being treated as valid Firebase error codes', () => {
     expect(lookupErrorCode({ code: 'auth/user-not-found' })).toBe('auth/user-not-found');
     expect(lookupErrorCode({ code: 404 })).toBeUndefined();
     expect(lookupErrorCode(null)).toBeUndefined();

@@ -32,6 +32,6 @@ export function lookupFailureLines(
   const code = lookupErrorCode(cause);
   return [
     `failed to look up ${email} in ${projectId}${code ? ` (${code})` : ''}.`,
-    `credential source: ${describeCredentialSource(env)}`,
+    `credential configuration: ${describeCredentialSource(env)}`,
   ];
 }

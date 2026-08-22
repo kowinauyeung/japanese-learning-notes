@@ -1,5 +1,5 @@
 import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+import { getAuth, type UserRecord } from 'firebase-admin/auth';
 import { lookupErrorCode, lookupFailureLines } from './allow-user.shared';
 
 /**
@@ -55,7 +55,7 @@ if (getApps().length === 0) {
 
 const auth = getAuth();
 
-let user;
+let user: UserRecord;
 
 try {
   user = await auth.getUserByEmail(email);
