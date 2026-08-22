@@ -128,7 +128,7 @@ key in this project, and there should not be one.
 
 ## Tests
 
-Five layers, split by what each one needs to run rather than by what it covers.
+Six layers, split by what each one needs to run rather than by what it covers.
 [`CLAUDE.md`](CLAUDE.md) has the rules for choosing between them and for writing
 new ones.
 
@@ -140,7 +140,7 @@ new ones.
 | `yarn test:visual:update` | Regenerates those baselines                                                                                                | Docker   |
 | `yarn coverage`           | Reported, never enforced                                                                                                   | nothing  |
 
-Three things worth knowing before adding to it:
+Four things worth knowing before adding to it:
 
 - **The end-to-end build does not touch Firebase.** `vite build --mode e2e`
   aliases `src/lib/backend.ts` to an in-memory twin, so Playwright is

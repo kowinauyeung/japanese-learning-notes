@@ -15,14 +15,14 @@ went wrong here, not by general principle.
 
 ### Pick the cheapest layer that can see the defect
 
-| Layer               | Directory           | Runs on               | Use it when                                                                 |
-| ------------------- | ------------------- | --------------------- | --------------------------------------------------------------------------- |
-| Unit                | `tests/unit`        | node, no dependencies | The behaviour is a function of its inputs. **Default. Most tests go here.** |
-| Component           | `tests/component`   | jsdom                 | The claim is about rendered DOM structure, text or roles.                   |
-| Adapter integration | `tests/integration` | Firestore emulator    | The claim involves a query, an index, a cursor or a server timestamp.       |
-| Rules               | `tests/rules`       | Firestore emulator    | The claim is "who may read or write what".                                  |
-| End-to-end / visual | `tests/e2e`         | Chromium (+ WebKit)   | The claim spans routing, the URL and a provider — or is about layout.       |
-| Offline             | `offline.spec.ts`   | Chromium + a worker   | The claim is about the service worker: what it precaches and serves.        |
+| Layer               | Directory                   | Runs on               | Use it when                                                                 |
+| ------------------- | --------------------------- | --------------------- | --------------------------------------------------------------------------- |
+| Unit                | `tests/unit`                | node, no dependencies | The behaviour is a function of its inputs. **Default. Most tests go here.** |
+| Component           | `tests/component`           | jsdom                 | The claim is about rendered DOM structure, text or roles.                   |
+| Adapter integration | `tests/integration`         | Firestore emulator    | The claim involves a query, an index, a cursor or a server timestamp.       |
+| Rules               | `tests/rules`               | Firestore emulator    | The claim is "who may read or write what".                                  |
+| End-to-end / visual | `tests/e2e`                 | Chromium (+ WebKit)   | The claim spans routing, the URL and a provider — or is about layout.       |
+| Offline             | `tests/e2e/offline.spec.ts` | Chromium + a worker   | The claim is about the service worker: what it precaches and serves.        |
 
 Two consequences worth stating outright, because getting either wrong produces a
 suite that looks thorough and proves nothing:

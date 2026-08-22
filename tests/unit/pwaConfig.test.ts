@@ -150,12 +150,19 @@ describe('the end-to-end build that keeps its worker', () => {
    * comment asking whoever edits one to remember the other.
    */
   it('builds against the same project id as `e2e`, which a screenshot baseline is pinned to', () => {
-    const read = (file: string) =>
+    const KEY = 'VITE_FIREBASE_PROJECT_ID=';
+    const projectId = (file: string) =>
       readFileSync(fileURLToPath(new URL(`../../${file}`, import.meta.url)), 'utf8')
         .split('\n')
-        .find((line) => line.startsWith('VITE_FIREBASE_PROJECT_ID='));
+        .find((line) => line.startsWith(KEY))
+        ?.slice(KEY.length)
+        .trim();
 
-    expect(read('.env.e2e-pwa')).toBeDefined();
-    expect(read('.env.e2e-pwa')).toBe(read('.env.e2e'));
+    // The value, not the line. Comparing the lines passes when both files carry
+    // a bare `VITE_FIREBASE_PROJECT_ID=` — two builds agreeing on nothing, which
+    // is the state where the login screen renders an empty project id into the
+    // baseline this exists to protect.
+    expect(projectId('.env.e2e-pwa')).toBeTruthy();
+    expect(projectId('.env.e2e-pwa')).toBe(projectId('.env.e2e'));
   });
 });
