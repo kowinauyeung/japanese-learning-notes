@@ -1,6 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 4173;
+/**
+ * The second server, and it is a second *build*, not a second view of the first.
+ * `e2e` deliberately ships no service worker; `e2e-pwa` is the same in-memory
+ * build with the worker left in, which is the only way `offline.spec.ts` can
+ * have anything to load offline. See `pwa-config.ts` and `backend.e2e-pwa.ts`.
+ */
+const PWA_PORT = 4174;
 const CI = !!process.env.CI;
 
 /**
@@ -113,7 +120,39 @@ export default defineConfig({
    * block keeps them out of its way.
    */
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    // `offline.spec.ts` is excluded rather than merely unlisted: this project
+    // serves the build with no worker, so the spec would run here too and fail
+    // for the one reason that is not a defect.
+    //
+    // The monkey entry is repeated from the top-level `testIgnore` and is not
+    // redundant: a project's `testIgnore` *replaces* the global one rather than
+    // adding to it, so naming only the offline spec here would quietly hand the
+    // random-exploration suite to the deterministic gate.
+    {
+      name: 'chromium',
+      testIgnore: ['**/monkey.spec.ts', /offline\.spec\.ts/],
+      use: { ...devices['Desktop Chrome'] },
+    },
+
+    /**
+     * The service worker, against the build that actually has one.
+     *
+     * One spec, and it stays one spec. Everything else about the worker is a
+     * value `tests/unit/pwaConfig.test.ts` reads back without a browser, which
+     * is faster and says why; what cannot be read back is whether the app still
+     * loads with the network off, and that is all this project is for.
+     *
+     * **No screenshot may be taken here.** `snapshotPathTemplate` keys baselines
+     * on the project name, so a shot in this project would write a third set of
+     * PNGs that nothing else regenerates — and `build-info.ts` does not pin the
+     * commit for this mode, so any baseline containing the build line would
+     * change on every commit.
+     */
+    {
+      name: 'chromium-pwa',
+      testMatch: /offline\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], baseURL: `http://127.0.0.1:${PWA_PORT}` },
+    },
     {
       name: 'webkit',
       testMatch: /visual\.spec\.ts/,
@@ -121,14 +160,33 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
-    // `--host 127.0.0.1` is not decoration: vite preview otherwise binds to
-    // `localhost`, which resolves to ::1 first on macOS, and the readiness poll
-    // below is over IPv4. Without it the server starts fine and Playwright
-    // times out waiting for a port nothing is listening on.
-    command: `yarn build:e2e && yarn vite preview --port ${PORT} --strictPort --host 127.0.0.1`,
-    url: `http://127.0.0.1:${PORT}`,
-    reuseExistingServer: !CI,
-    timeout: 120_000,
-  },
+  /**
+   * Two servers, started in parallel, from two builds that write to different
+   * directories — `vite.config.ts` gives `e2e-pwa` its own `outDir` precisely
+   * because these race otherwise.
+   *
+   * `--host 127.0.0.1` is not decoration: vite preview otherwise binds to
+   * `localhost`, which resolves to ::1 first on macOS, and the readiness poll is
+   * over IPv4. Without it the server starts fine and Playwright times out
+   * waiting for a port nothing is listening on.
+   *
+   * `--mode` is passed to `vite preview` as well as to the build, because the
+   * config is a function of the mode: preview reads `outDir` from it, and
+   * without the flag it would serve `dist/` — the build with no worker — on the
+   * port whose whole purpose is the one that has it.
+   */
+  webServer: [
+    {
+      command: `yarn build:e2e && yarn vite preview --port ${PORT} --strictPort --host 127.0.0.1`,
+      url: `http://127.0.0.1:${PORT}`,
+      reuseExistingServer: !CI,
+      timeout: 120_000,
+    },
+    {
+      command: `yarn build:e2e-pwa && yarn vite preview --mode e2e-pwa --port ${PWA_PORT} --strictPort --host 127.0.0.1`,
+      url: `http://127.0.0.1:${PWA_PORT}`,
+      reuseExistingServer: !CI,
+      timeout: 120_000,
+    },
+  ],
 });

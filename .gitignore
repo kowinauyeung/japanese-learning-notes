@@ -13,6 +13,10 @@ bak/
 
 node_modules/
 dist/
+# The e2e-pwa build cannot share `dist/`: Playwright starts its two web servers
+# in parallel, and whichever `vite build` ran second would empty the other's
+# output from under a server already serving it.
+dist-e2e-pwa/
 *.tsbuildinfo
 
 # Vite's dependency pre-bundling cache. Normally lands in node_modules/.vite,
@@ -26,6 +30,7 @@ dist/
 # Committed on purpose: no credentials, only the mode name for the end-to-end
 # build. See the file itself for why.
 !.env.e2e
+!.env.e2e-pwa
 
 # Service-account private keys — never commit these. This project deliberately
 # has none; `yarn auth:login` is the supported path.

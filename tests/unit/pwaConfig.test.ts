@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { pwaOptions } from '../../pwa-config';
 
@@ -11,11 +13,10 @@ import { pwaOptions } from '../../pwa-config';
  * above `it(...)` cannot say which of several assertions it belongs to.
  *
  * What this deliberately does **not** cover is whether the app actually loads
- * with the network off. That needs a production-mode build in a real browser,
- * and the Playwright harness builds `--mode e2e`, where the worker does not
- * exist by design. #65 owns that and names the layer it needs. The offline
- * behaviour was verified by hand for this change instead: 37/37 precached, `/`
- * and `/vocabulary` both rendering offline, the manifest still served.
+ * with the network off. No amount of reading the configuration back can settle
+ * that, so it is not attempted here: `tests/e2e/offline.spec.ts` owns it, in its
+ * own Playwright project, against the `e2e-pwa` build this file's last block
+ * describes.
  */
 
 const workboxOf = (mode: string) => {
@@ -33,7 +34,7 @@ describe('the service worker is absent from the end-to-end build', () => {
     expect(pwaOptions('e2e').disable).toBe(true);
   });
 
-  it.each(['production', 'development'])(
+  it.each(['production', 'development', 'e2e-pwa'])(
     'is enabled under %s, since disabling it everywhere would silently drop the feature',
     (mode) => {
       // `development` is not padding beside `production`. `disable` governs the
@@ -114,4 +115,47 @@ describe('what an offline navigation can reach', () => {
       expect(denied.some((pattern) => pattern.test(path))).toBe(false);
     },
   );
+});
+
+/**
+ * The build the offline spec runs against.
+ *
+ * `e2e-pwa` is `e2e` with the worker left in, and the two have to stay that way:
+ * it exists so `tests/e2e/offline.spec.ts` has something to load with the
+ * network off, and every way it can quietly stop being that build ends with the
+ * spec passing against a page that was simply served normally.
+ */
+describe('the end-to-end build that keeps its worker', () => {
+  it('leaves the worker enabled, which is the entire difference from `e2e`', () => {
+    // `disable` is an exact comparison against `'e2e'` in pwa-config.ts, so a
+    // well-meaning change to `mode.startsWith('e2e')` would take the worker out
+    // of this build too — and `offline.spec.ts` would then fail for a reason
+    // that is not a defect in the app.
+    expect(pwaOptions('e2e-pwa').disable).toBe(false);
+  });
+
+  it('is otherwise the same worker as production, so the spec is not testing a special case', () => {
+    // Everything except `disable` has to match, or the offline behaviour under
+    // test is the test build's rather than the shipped one's.
+    const { disable: _pwa, ...pwa } = pwaOptions('e2e-pwa');
+    const { disable: _prod, ...production } = pwaOptions('production');
+    expect(pwa).toEqual(production);
+  });
+
+  /**
+   * Both builds render the same login screen and the same account page from
+   * `VITE_FIREBASE_PROJECT_ID`, and `.env.e2e`'s value is pinned because a
+   * screenshot baseline contains it. A second env file is a second place for
+   * that to drift, so the two are held to each other here rather than by a
+   * comment asking whoever edits one to remember the other.
+   */
+  it('builds against the same project id as `e2e`, which a screenshot baseline is pinned to', () => {
+    const read = (file: string) =>
+      readFileSync(fileURLToPath(new URL(`../../${file}`, import.meta.url)), 'utf8')
+        .split('\n')
+        .find((line) => line.startsWith('VITE_FIREBASE_PROJECT_ID='));
+
+    expect(read('.env.e2e-pwa')).toBeDefined();
+    expect(read('.env.e2e-pwa')).toBe(read('.env.e2e'));
+  });
 });

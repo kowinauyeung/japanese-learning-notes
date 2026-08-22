@@ -12,6 +12,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:e2e": "vite build --mode e2e",
+    "build:e2e-pwa": "vite build --mode e2e-pwa",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.test.json --noEmit && tsc -p tsconfig.scripts.json --noEmit",
     "test": "yarn test:unit && yarn test:emulator",

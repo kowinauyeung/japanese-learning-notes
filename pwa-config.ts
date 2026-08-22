@@ -26,6 +26,19 @@ export const pwaOptions = (mode: string): Partial<VitePWAOptions> => ({
    * a build nobody shipped. `vite.config.ts` already branches on this mode for
    * the backend alias, so the seam is one the architecture had rather than one
    * added for this.
+   *
+   * **`e2e-pwa` is the deliberate exception**, and the comparison is exact
+   * rather than a prefix for that reason. It is the same in-memory build with
+   * the worker left in, so that `tests/e2e/offline.spec.ts` can load the app
+   * with the network off — the one claim in this file that no amount of reading
+   * the configuration back can settle.
+   *
+   * The hazard above does not follow it there, and that was measured rather
+   * than assumed: `chromium.launch()` starts from an empty profile, so a fresh
+   * browser reports `caches.keys()` as `[]` and precaches 40 entries from the
+   * build it was just given. Contexts inside one launch do share the cache —
+   * but one launch is one build, so there is no earlier build for them to be
+   * served. Only a cache surviving *between runs* could do that, and none does.
    */
   disable: mode === 'e2e',
 
@@ -69,9 +82,17 @@ export const pwaOptions = (mode: string): Partial<VitePWAOptions> => ({
     globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
 
     /**
-     * Matches the `rewrites` block in `firebase.json`. Without it an offline
-     * navigation to `/vocabulary` asks the cache for a document that was never
-     * a file.
+     * Matches the `rewrites` block in `firebase.json`: without a navigation
+     * fallback an offline navigation to `/vocabulary` asks the cache for a
+     * document that was never a file.
+     *
+     * **This restates the plugin's own default rather than establishing the
+     * behaviour**, which was found by trying to prove the opposite: deleting
+     * this line still emits `createHandlerBoundToURL("index.html")` into
+     * `sw.js`, and `tests/e2e/offline.spec.ts` stayed green. It is kept because
+     * the fallback is a decision this app depends on and a default is a decision
+     * nobody made — but it is not what holds the behaviour up, so nothing should
+     * be red-proofed by removing it. The denylist below is the load-bearing half.
      */
     navigateFallback: '/index.html',
 

@@ -136,7 +136,7 @@ new ones.
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `yarn test:unit`          | `tests/unit` — coercion, filters, dates, furigana, import, redirects; `tests/component` — rendered DOM                     | nothing  |
 | `yarn test:emulator`      | `tests/rules` — who may read and write what; `tests/integration` — the Firestore adapter's queries, cursors and timestamps | JDK 21   |
-| `yarn test:e2e`           | `tests/e2e` — sign-in, browse, create, edit, delete; four screenshot baselines                                             | Chromium |
+| `yarn test:e2e`           | `tests/e2e` — sign-in, browse, create, edit, delete; offline navigation; four screenshot baselines                         | Chromium |
 | `yarn test:visual:update` | Regenerates those baselines                                                                                                | Docker   |
 | `yarn coverage`           | Reported, never enforced                                                                                                   | nothing  |
 
@@ -147,6 +147,10 @@ Three things worth knowing before adding to it:
   deterministic and needs no emulator or Google popup. Firestore is covered
   where it can be asserted precisely instead — `tests/integration` for the
   adapter, `tests/rules` for the boundary.
+- **The service worker has a second build of its own.** `--mode e2e` ships none
+  on purpose, so `vite build --mode e2e-pwa` produces the same in-memory app with
+  the worker left in; `yarn test:e2e` builds and serves both, and
+  `tests/e2e/offline.spec.ts` is the only spec that runs against the second.
 - **Screenshot baselines are Linux-only.** They are generated in the same
   container image CI runs, because macOS renders Japanese glyphs differently.
   The visual specs skip themselves anywhere else and say so.
@@ -284,6 +288,14 @@ serves it to Playwright, and the suite then passes against code that is not the
 code under test. That is the one failure here that would make every other test
 in this repository green and meaningless.
 
+**`mode === 'e2e-pwa'` is the deliberate exception**: the same in-memory build
+with the worker left in, so the offline behaviour below can be checked by
+something other than a person. It gets its own output directory, its own preview
+server and its own Playwright project, and one spec runs there. The hazard above
+does not follow it, which was measured rather than assumed — a fresh
+`chromium.launch()` starts from an empty profile, so nothing survives from one
+run to the next.
+
 #### What it changes about deploying
 
 Before the worker, a client running a stale build fixed itself: the next load
@@ -305,14 +317,22 @@ one, which is the one a bug report is actually about.
 
 #### Checking it
 
-The end-to-end suite cannot: it builds `--mode e2e`, where there is no worker.
-Against a production-mode build served locally, in a real browser:
+`tests/e2e/offline.spec.ts` does, in the `chromium-pwa` project — `yarn test:e2e`
+runs it with everything else. What it pins, and what is worth knowing before
+reading it:
 
-- the worker must reach `activated`, and must **not** control the first page —
-  that is `clientsClaim: false` behaving correctly, not a failure;
-- it takes control from the second navigation onwards;
-- with the network off, `/` and a deep route such as `/vocabulary` must both
-  render, and no same-origin request may fail.
+- `navigator.serviceWorker.ready` resolves with the worker in state
+  `activating`, not `activated`, and the precache is already full at that point;
+- the worker does **not** control the page that installed it. That is
+  `clientsClaim: false` behaving correctly, not a failure — control begins at the
+  next navigation, which is also why an installed window works: the process the
+  reader sees is never the one that installed the worker;
+- with the network off, `/`, `/vocabulary` and a deep route such as
+  `/practice/dictation` all render, and the manifest is still served.
+
+A `fetch` issued from the installing page still goes to the network and fails
+offline. That is not a defect and the spec navigates first for the same reason
+the app does.
 
 Installability is Chrome DevTools → Application → Manifest on a deployed build.
 Headless Chromium does not fire `beforeinstallprompt`, so that half needs a real
