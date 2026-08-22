@@ -24,7 +24,7 @@ export function PublicLayout({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-ink">
-      <header className="border-b border-line bg-card">
+      <header className="border-b border-line bg-card pt-safe px-safe">
         <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-3">
           <Link to="/" className="flex items-center gap-2">
             <LogoMark className="h-8 w-8" />
@@ -39,7 +39,12 @@ export function PublicLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">{children}</main>
+      {/* Split for the same reason as `AppLayout`: the outer box takes the
+          device's side strips, the inner one the reading gutter and the
+          measure. */}
+      <main className="w-full flex-1 px-safe">
+        <div className="mx-auto max-w-3xl px-4 py-8">{children}</div>
+      </main>
 
       <PublicFooter />
     </div>
@@ -62,8 +67,11 @@ export function PublicLayout({ children }: { children: ReactNode }) {
  */
 export function PublicFooter({ width = 'max-w-3xl' }: { width?: string }) {
   const { t } = useI18n();
+  // The bottom inset lives here rather than on each shell, because this is the
+  // last element of all three of them — the public pages, the login screen, and
+  // the signed-in layout above the `nav` breakpoint.
   return (
-    <footer className="border-t border-line bg-card">
+    <footer className="border-t border-line bg-card px-safe pb-safe">
       <div
         className={`mx-auto flex ${width} flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 py-5 text-xs text-muted sm:justify-start`}
       >

@@ -36,12 +36,16 @@ import { UpdatePrompt } from './UpdatePrompt';
  * the transparent gap between the two panels would swallow taps meant for the
  * page underneath — the add button among them.
  *
- * The bottom offset still does not read `env(safe-area-inset-bottom)`; that is
- * #64, and this stack is now the single place it has to be applied.
+ * `mx-safe mb-safe` is where the device's own strips land, and one stack is
+ * why it is one line: with the two panels still placing themselves, the same
+ * inset would have had to be written twice and stay in agreement with the add
+ * button's. Margin rather than a bigger offset, because `inset-x-4` and
+ * `bottom-24` are the design's spacing and the inset is not — keeping them
+ * separate is what lets a reader see which number came from where.
  */
 export function BottomNotices() {
   return (
-    <div className="pointer-events-none fixed inset-x-4 bottom-24 z-40 flex flex-col gap-3 nav:bottom-5">
+    <div className="pointer-events-none fixed inset-x-4 bottom-24 z-40 mx-safe mb-safe flex flex-col gap-3 nav:bottom-5">
       {/* Above the prompt, which is the one with buttons on it: the reachable
           end of the stack belongs to the panel that asks for an action. */}
       <OfflineNotice />

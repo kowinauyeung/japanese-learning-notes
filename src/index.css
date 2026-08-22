@@ -99,6 +99,84 @@
   --shadow-panel: var(--shadow-card);
 }
 
+/*
+ * The four strips of the screen a phone does not actually give the page.
+ *
+ * `index.html` has asked for `viewport-fit=cover` since before the manifest,
+ * which lays the document out edge to edge — under the notch, under the status
+ * bar, under the home indicator — instead of inside the safe rectangle. In a
+ * browser tab that is nearly invisible, because Safari's own chrome already
+ * occupies those strips. Installed, with `display: standalone`, there is no
+ * chrome and the app owns the whole screen; nothing here read the insets, so
+ * the header ran under the status bar and the add button sat under the home
+ * indicator, where the swipe that leaves the app starts.
+ *
+ * **Named properties rather than `env()` at each use site, and the indirection
+ * is what makes the layout testable.** `env(safe-area-inset-*)` resolves to
+ * zero in every browser Playwright can drive, and there is no protocol for
+ * setting it, so geometry measured against `env()` directly measures nothing —
+ * a layout that ignores the insets entirely passes identically. Against a
+ * variable, a test overrides `:root` with a real device's 34px and 47px and
+ * asserts the layout moved. That is `tests/e2e/safeArea.spec.ts`, and it is
+ * red without the declarations below.
+ *
+ * The `0px` fallbacks are load-bearing rather than tidy: `env()` naming a
+ * keyword the browser does not know makes the whole declaration invalid, which
+ * for `bottom` or `padding` means losing the offset as well as the inset.
+ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+/*
+ * Padding for the elements whose background has to keep reaching the screen
+ * edge — a header inset by its own margin leaves a strip of page showing above
+ * it, which is the notch drawn in the wrong colour rather than a layout that
+ * respects it. So the box stays full bleed and only its contents move in,
+ * which means the inset belongs on an ancestor that carries no padding of its
+ * own: `px-safe` on `<header>`, `px-4` on the row inside it.
+ *
+ * Margin for the fixed elements, which cannot use padding without changing
+ * their own shape — the add button is a 56px circle and padding would make it
+ * an oval. A fixed box with `bottom` set is displaced by its bottom margin
+ * (CSS 2.1 10.6.4 solves for `top`), so `bottom-5 mb-safe` reads as "five
+ * spacing units above whatever the device takes", which is the intent exactly.
+ *
+ * Two screens deliberately take nothing: the login card and the error screen
+ * are single boxes centred in both axes and narrower than any notched viewport
+ * — 360px and 448px against 844px in landscape — so no strip can reach them.
+ * They carry the top inset only, for the case where their content grows tall
+ * enough to run to the edges.
+ */
+@utility pt-safe {
+  padding-top: var(--safe-top);
+}
+
+@utility pb-safe {
+  padding-bottom: var(--safe-bottom);
+}
+
+@utility px-safe {
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+@utility mb-safe {
+  margin-bottom: var(--safe-bottom);
+}
+
+@utility mx-safe {
+  margin-left: var(--safe-left);
+  margin-right: var(--safe-right);
+}
+
+@utility mr-safe {
+  margin-right: var(--safe-right);
+}
+
 html {
   color-scheme: light dark;
 }

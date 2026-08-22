@@ -110,7 +110,7 @@ function AuthenticatedLayout({
                 footer floating with page background under it, which reads as a
                 stray edge across the screen in dark mode. */}
             <div className="flex min-h-dvh flex-col bg-bg text-ink">
-              <header className="sticky top-0 z-30 border-b border-line bg-card/85 backdrop-blur">
+              <header className="sticky top-0 z-30 border-b border-line bg-card/85 pt-safe px-safe backdrop-blur">
                 <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
                   <NavLink
                     to="/"
@@ -153,8 +153,20 @@ function AuthenticatedLayout({
                 {menuOpen && <MobileNav onNavigate={() => setMenuOpen(false)} />}
               </header>
 
-              <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 pb-28 nav:pb-10">
-                <Outlet />
+              {/* Two boxes rather than one, because `px-4` and the side inset
+                  both want padding-inline and a single element cannot hold both.
+                  The outer one takes the device's strips, the inner one the
+                  gutter and the width — so the page centres inside the space
+                  the screen actually gives, not inside the notch.
+
+                  `pb-safe nav:pb-0`, because below the `nav` breakpoint this is
+                  the last thing on the page: the footer is `nav:block` and the
+                  home indicator would otherwise sit on the final row of cards.
+                  Above it the footer follows and carries its own. */}
+              <main className="w-full flex-1 px-safe pb-safe nav:pb-0">
+                <div className="mx-auto max-w-5xl px-4 py-6 pb-28 nav:pb-10">
+                  <Outlet />
+                </div>
               </main>
 
               {/* The same footer the public pages carry, so the two never
@@ -169,7 +181,7 @@ function AuthenticatedLayout({
                 type="button"
                 onClick={() => setAdding(true)}
                 aria-label={t('action.addVocabulary')}
-                className="fixed right-5 bottom-5 z-20 grid h-14 w-14 place-items-center rounded-pill bg-accent text-2xl text-on-accent shadow-panel nav:hidden"
+                className="fixed right-5 bottom-5 z-20 mr-safe mb-safe grid h-14 w-14 place-items-center rounded-pill bg-accent text-2xl text-on-accent shadow-panel nav:hidden"
               >
                 ＋
               </button>

@@ -42,7 +42,7 @@ export function Component() {
   return (
     /* A column with the card centred in the growing part, so the footer sits on
        the bottom edge instead of wherever the card happens to end. */
-    <div className="flex min-h-dvh flex-col bg-bg">
+    <div className="flex min-h-dvh flex-col bg-bg pt-safe">
       <main className="grid flex-1 place-items-center px-4 py-8">
         <div className="w-full max-w-[360px] rounded-card bg-card p-8 shadow-panel">
           <h1 className="flex flex-col items-center gap-3">
