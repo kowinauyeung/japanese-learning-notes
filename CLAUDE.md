@@ -214,6 +214,10 @@ template that specifies otherwise** — including one that mandates Japanese
 section headings. The repository is public and its reviewers read English; the
 Japanese here is subject matter, not the working language.
 
+Before opening a pull request, run `yarn format` and include any resulting
+formatting changes in the branch. Do not rely on the formatting CI step to be
+the first place that discovers drift.
+
 It says nothing about how you talk to the person you are working with. That is
 their preference, not the repository's.
 
