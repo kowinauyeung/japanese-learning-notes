@@ -50,16 +50,18 @@ changes the version and nothing downstream can tell. That is what
 [`.github/workflows/pr-title.yml`](../.github/workflows/pr-title.yml) is for, and
 why its type list has to stay in step with `.versionrc.json`.
 
-Checking the title is not quite sufficient, because GitHub does not always use
-it. The repository's `squash_merge_commit_title` is `COMMIT_OR_PR_TITLE`, and on
-a pull request with exactly one commit the squash dialog offers that commit's
-message instead — so a title accepted as `feat:` can land as `chore:`. The
-workflow therefore also sets `validateSingleCommit` and
-`validateSingleCommitMatchesPrTitle`, which make the two agree before the choice
-can matter. Setting `squash_merge_commit_title` to `PR_TITLE` closes the same
-gap from the other side and is worth doing; it is not a substitute, because a
-repository setting can be changed without review and is invisible to anyone
-reading this.
+Checking the title is not quite sufficient on its own, because GitHub does not
+always use it. Under `squash_merge_commit_title: COMMIT_OR_PR_TITLE`, which is
+what this repository had until 2026-08-22, a pull request with exactly one commit
+gets that commit's message offered instead — so a title accepted as `feat:` can
+land as `chore:` and move the next version with nothing reporting it.
+
+Two things now prevent that, and both should stay. The setting is `PR_TITLE`, so
+the title is what lands. The workflow also sets `validateSingleCommit` and
+`validateSingleCommitMatchesPrTitle`, which make the commit and the title agree
+before the choice can matter — because the setting is invisible to anyone reading
+the repository and can be changed back without review, while the workflow is a
+file that says why it exists.
 
 ### Why this project left `0.x`
 
