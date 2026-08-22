@@ -19,8 +19,12 @@ export type ParsedAllowUserArgs =
 const USAGE = 'usage: allow-user.ts <email> [prod] [--project <project-id>] [--revoke]';
 
 export function parseAllowUserArgs(args: string[]): ParsedAllowUserArgs {
-  const [email, ...rest] = args;
+  const [emailToken, ...rest] = args;
   const errors: string[] = [];
+  const emailIsMissing = !emailToken || emailToken === 'prod' || emailToken.startsWith('--');
+  const email = emailIsMissing ? null : emailToken;
+
+  if (emailIsMissing) errors.push('missing email');
 
   let revoke = false;
   let prod = false;
@@ -42,6 +46,11 @@ export function parseAllowUserArgs(args: string[]): ParsedAllowUserArgs {
         errors.push('--project requires a project id');
         continue;
       }
+      if (projectId) {
+        errors.push('--project specified multiple times');
+        index += 1;
+        continue;
+      }
       projectId = value;
       index += 1;
       continue;
@@ -49,15 +58,10 @@ export function parseAllowUserArgs(args: string[]): ParsedAllowUserArgs {
     errors.push(`unknown argument: ${arg}`);
   }
 
-  if (!email) errors.push('missing email');
   if (prod && projectId) errors.push('choose either prod or --project <project-id>, not both');
 
-  if (errors.length > 0) {
+  if (errors.length > 0 || !email) {
     return { ok: false, errors, usage: USAGE };
-  }
-
-  if (!email) {
-    return { ok: false, errors: ['missing email'], usage: USAGE };
   }
 
   return {

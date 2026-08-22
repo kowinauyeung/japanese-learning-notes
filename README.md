@@ -80,8 +80,8 @@ Pointing this at a fresh Firebase project takes a few more steps, in order:
    alias points at your project) or
    `yarn firebase deploy --only firestore:rules --project <your-project-id>`.
 5. Sign in once, then grant yourself access — the rules deny everything until
-   your account carries the `allowed` custom claim. `yarn allow <your-email>
---project <your-project-id>` sets it, and the account must have signed in
+   your account carries the `allowed` custom claim. `yarn allow <your-email> --project <your-project-id>`
+   sets it, and the account must have signed in
    before that, because the claim goes on the uid Google issued and there is
    nothing to set it on until then. The repository shortcuts still work too:
    omit `--project` for `goitei-dev`, or pass `prod` for `goitei`.

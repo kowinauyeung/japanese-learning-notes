@@ -6,8 +6,8 @@ import {
   parseAllowUserArgs,
 } from '../../admin/allow-user.shared';
 
-describe('allow-user lookup failures', () => {
-  it('accepts an explicit project override for fresh Firebase projects', () => {
+describe('allow-user helpers', () => {
+  it('parseAllowUserArgs accepts an explicit project override instead of falling back to goitei-dev', () => {
     expect(parseAllowUserArgs(['reader@example.com', '--project', 'reader-dev'])).toEqual({
       ok: true,
       email: 'reader@example.com',
@@ -16,7 +16,7 @@ describe('allow-user lookup failures', () => {
     });
   });
 
-  it('keeps the prod shorthand for the repository production project', () => {
+  it('parseAllowUserArgs keeps the prod shorthand from falling back to goitei-dev', () => {
     expect(parseAllowUserArgs(['reader@example.com', 'prod', '--revoke'])).toEqual({
       ok: true,
       email: 'reader@example.com',
@@ -25,7 +25,7 @@ describe('allow-user lookup failures', () => {
     });
   });
 
-  it('rejects missing project ids instead of silently granting access on dev', () => {
+  it('parseAllowUserArgs rejects missing project ids instead of silently granting access on dev', () => {
     expect(parseAllowUserArgs(['reader@example.com', '--project'])).toEqual({
       ok: false,
       errors: ['--project requires a project id'],
@@ -33,7 +33,7 @@ describe('allow-user lookup failures', () => {
     });
   });
 
-  it('rejects mixing the prod shorthand with an explicit project override', () => {
+  it('parseAllowUserArgs rejects mixing the prod shorthand with an explicit project override', () => {
     expect(parseAllowUserArgs(['reader@example.com', 'prod', '--project', 'reader-prod'])).toEqual({
       ok: false,
       errors: ['choose either prod or --project <project-id>, not both'],
@@ -41,7 +41,7 @@ describe('allow-user lookup failures', () => {
     });
   });
 
-  it('rejects the --prod typo so operators do not silently grant the dev project', () => {
+  it('parseAllowUserArgs rejects the --prod typo so operators do not silently grant the dev project', () => {
     expect(parseAllowUserArgs(['reader@example.com', '--prod'])).toEqual({
       ok: false,
       errors: ['unknown argument: --prod'],
@@ -49,7 +49,41 @@ describe('allow-user lookup failures', () => {
     });
   });
 
-  it('prevents diagnostics from hiding a configured GOOGLE_APPLICATION_CREDENTIALS file', () => {
+  it('parseAllowUserArgs rejects repeated project overrides instead of silently taking the last one', () => {
+    expect(
+      parseAllowUserArgs([
+        'reader@example.com',
+        '--project',
+        'reader-dev',
+        '--project',
+        'reader-prod',
+      ]),
+    ).toEqual({
+      ok: false,
+      errors: ['--project specified multiple times'],
+      usage: 'usage: allow-user.ts <email> [prod] [--project <project-id>] [--revoke]',
+    });
+  });
+
+  it('parseAllowUserArgs rejects option tokens in the required email position', () => {
+    expect(parseAllowUserArgs(['--revoke'])).toEqual({
+      ok: false,
+      errors: ['missing email'],
+      usage: 'usage: allow-user.ts <email> [prod] [--project <project-id>] [--revoke]',
+    });
+    expect(parseAllowUserArgs(['--project', 'reader-dev'])).toEqual({
+      ok: false,
+      errors: ['missing email', 'unknown argument: reader-dev'],
+      usage: 'usage: allow-user.ts <email> [prod] [--project <project-id>] [--revoke]',
+    });
+    expect(parseAllowUserArgs(['prod'])).toEqual({
+      ok: false,
+      errors: ['missing email'],
+      usage: 'usage: allow-user.ts <email> [prod] [--project <project-id>] [--revoke]',
+    });
+  });
+
+  it('describeCredentialSource prefers a configured GOOGLE_APPLICATION_CREDENTIALS file', () => {
     expect(
       describeCredentialSource({
         GOOGLE_APPLICATION_CREDENTIALS: '/tmp/service-account.json',
@@ -57,17 +91,17 @@ describe('allow-user lookup failures', () => {
     ).toBe('GOOGLE_APPLICATION_CREDENTIALS=/tmp/service-account.json');
   });
 
-  it('prevents diagnostics from hiding a configured CLOUDSDK_CONFIG directory', () => {
+  it('describeCredentialSource falls back to a configured CLOUDSDK_CONFIG directory', () => {
     expect(describeCredentialSource({ CLOUDSDK_CONFIG: '.gcloud' })).toBe(
       'applicationDefault() with CLOUDSDK_CONFIG=.gcloud',
     );
   });
 
-  it('prevents diagnostics from inventing a configured gcloud directory when none is set', () => {
+  it('describeCredentialSource reports when no gcloud directory is configured', () => {
     expect(describeCredentialSource({})).toBe('applicationDefault() with CLOUDSDK_CONFIG unset');
   });
 
-  it('prevents non-user-not-found failures from being misreported as never-signed-in accounts', () => {
+  it('lookupFailureLines keeps auth/user-not-found failures on the signed-in-once guidance', () => {
     expect(
       lookupFailureLines(
         'reader@example.com',
@@ -78,7 +112,7 @@ describe('allow-user lookup failures', () => {
     ).toEqual(['reader@example.com has never signed in to goitei; ask them to try once first.']);
   });
 
-  it('prevents other lookup failures from hiding their credential configuration', () => {
+  it('lookupFailureLines reports other lookup failures with credential diagnostics', () => {
     expect(
       lookupFailureLines(
         'reader@example.com',
@@ -92,7 +126,7 @@ describe('allow-user lookup failures', () => {
     ]);
   });
 
-  it('prevents non-string thrown codes from being treated as valid Firebase error codes', () => {
+  it('lookupErrorCode returns only string Firebase error codes', () => {
     expect(lookupErrorCode({ code: 'auth/user-not-found' })).toBe('auth/user-not-found');
     expect(lookupErrorCode({ code: 404 })).toBeUndefined();
     expect(lookupErrorCode(null)).toBeUndefined();
