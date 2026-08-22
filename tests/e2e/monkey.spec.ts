@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Locator, Page, TestInfo } from '@playwright/test';
+import type { Frequency } from '@/domain/entry';
+import type { SeedEntry, SeedWordSet } from '@/lib/e2eSeed';
 import { seed } from './fixtures';
 
 interface Scenario {
@@ -64,34 +66,38 @@ const TEXT_CORPUS = [
   '長'.repeat(500),
 ];
 
-const MONKEY_ENTRIES: Record<string, unknown>[] = Array.from({ length: 50 }, (_, index) => ({
-  id: `monkey-word-${index + 1}`,
-  headword:
-    index === 0
-      ? 'W'.repeat(200)
-      : index === 1
-        ? '<script>🚀</script>'
-        : `負荷試験${String(index + 1).padStart(2, '0')}`,
-  reading: index < 2 ? '' : `ふかしけん${String(index + 1).padStart(2, '0')}`,
-  definition: index === 0 ? 'W'.repeat(500) : `予測できない操作を試す語 ${index + 1}`,
-  pos: ['名詞'],
-  jlpt: 'N2',
-  origin: '漢語',
-  style: '書き言葉',
-  politeness: '普通',
-  freq: (index % 5) + 1,
-  tags: index % 2 === 0 ? ['負荷試験'] : ['monkey'],
-  learnedOn: `2026-06-${String(24 - (index % 20)).padStart(2, '0')}`,
-  createdAt: new Date(Date.UTC(2026, 5, 24, 0, 0, index)).toISOString(),
-  updatedAt: new Date(Date.UTC(2026, 5, 24, 0, 0, index)).toISOString(),
-}));
+function makeMonkeyEntry(index: number): SeedEntry {
+  return {
+    id: `monkey-word-${index + 1}`,
+    headword:
+      index === 0
+        ? 'W'.repeat(200)
+        : index === 1
+          ? '<script>🚀</script>'
+          : `負荷試験${String(index + 1).padStart(2, '0')}`,
+    reading: index < 2 ? '' : `ふかしけん${String(index + 1).padStart(2, '0')}`,
+    definition: index === 0 ? 'W'.repeat(500) : `予測できない操作を試す語 ${index + 1}`,
+    pos: ['名詞'],
+    jlpt: 'N2',
+    origin: '漢語',
+    style: '書き言葉',
+    politeness: '普通',
+    freq: ((index % 5) + 1) as Frequency,
+    tags: index % 2 === 0 ? ['負荷試験'] : ['monkey'],
+    learnedOn: `2026-06-${String(24 - (index % 20)).padStart(2, '0')}`,
+    createdAt: new Date(Date.UTC(2026, 5, 24, 0, 0, index)).toISOString(),
+    updatedAt: new Date(Date.UTC(2026, 5, 24, 0, 0, index)).toISOString(),
+  };
+}
+
+const MONKEY_ENTRIES = Array.from({ length: 50 }, (_, index) => makeMonkeyEntry(index));
 
 const MONKEY_SET = {
   id: 'monkey-set',
   name: 'W'.repeat(200),
   description: 'W'.repeat(5000),
   entryIds: MONKEY_ENTRIES.slice(0, 12).map((entry) => entry.id),
-};
+} satisfies SeedWordSet;
 
 function hashSeed(value: string): number {
   let hash = 2166136261;

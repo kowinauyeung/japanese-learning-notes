@@ -1,7 +1,6 @@
-export interface ManifestSeed {
-  signedIn?: boolean;
-  entries?: Record<string, unknown>[];
-}
+import type { E2ESeed, SeedEntry } from '@/lib/e2eSeed';
+
+export type ManifestSeed = Pick<E2ESeed, 'signedIn' | 'entries'>;
 
 export interface ManifestScreenshotSpec {
   file: string;
@@ -15,7 +14,7 @@ export interface ManifestScreenshotSpec {
   seed: ManifestSeed;
 }
 
-const WORDS: Record<string, unknown>[] = [
+const WORDS = [
   {
     id: 'w-kiriwake',
     headword: '切り分け',
@@ -68,7 +67,7 @@ const WORDS: Record<string, unknown>[] = [
     createdAt: '2026-01-15T01:00:00.000Z',
     updatedAt: '2026-01-15T01:00:00.000Z',
   },
-];
+] satisfies SeedEntry[];
 
 export const manifestScreenshots: readonly ManifestScreenshotSpec[] = [
   {
