@@ -80,14 +80,11 @@ Pointing this at a fresh Firebase project takes a few more steps, in order:
    alias points at your project) or
    `yarn firebase deploy --only firestore:rules --project <your-project-id>`.
 5. Sign in once, then grant yourself access — the rules deny everything until
-   your account carries the `allowed` custom claim. `yarn allow <your-email>`
-   sets it, and the account must have signed in before that, because the claim
-   goes on the uid Google issued and there is nothing to set it on until then.
-   **`yarn allow` is the one step here that cannot be pointed at your project.**
-   `admin/allow-user.ts` names `goitei-dev` and `goitei` directly, never reads
-   `.firebaserc`, and rejects any argument other than `prod` and `--revoke` — so
-   on a fresh project it will tell you the account has never signed in. Set the
-   claim through the Admin SDK yourself; that script is the worked example.
+   your account carries the `allowed` custom claim. `yarn allow <your-email> --project <your-project-id>`
+   sets it, and the account must have signed in
+   before that, because the claim goes on the uid Google issued and there is
+   nothing to set it on until then. The repository shortcuts still work too:
+   omit `--project` for `goitei-dev`, or pass `prod` for `goitei`.
 6. **Sign out and sign back in.** A claim reaches the client only in a freshly
    minted ID token, so the session you granted access to is still denied — for
    up to an hour, until its token expires on its own.
@@ -347,10 +344,12 @@ browser against the dev site or a preview channel.
 Everything below assumes `GOOGLE_APPLICATION_CREDENTIALS`, or `gcloud auth
 application-default login` against the right project.
 
-**Granting access.** `yarn allow you@example.com prod`. The account must have
-signed in once first — the claim is set on the uid Google issued, so there is
-nothing to set it on before that. Anything other than `prod` or `--revoke` is
-rejected rather than ignored.
+**Granting access.** `yarn allow you@example.com prod` targets the repository
+production project, and `yarn allow you@example.com --project your-project-id`
+targets any other Firebase project. The account must have signed in once first
+— the claim is set on the uid Google issued, so there is nothing to set it on
+before that. Anything other than `prod`, `--project <project-id>` or
+`--revoke` is rejected rather than ignored.
 
 **Revoking it.** `yarn allow you@example.com prod --revoke`. **This lands within
 the hour, not on the keystroke.** The claim lives inside the ID token the client
