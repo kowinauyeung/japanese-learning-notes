@@ -1,5 +1,6 @@
 import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { lookupErrorCode, lookupFailureLines } from './allow-user.shared';
 
 /**
  * Grant or revoke access, by custom claim.
@@ -54,11 +55,19 @@ if (getApps().length === 0) {
 
 const auth = getAuth();
 
-const user = await auth.getUserByEmail(email).catch(() => null);
-if (!user) {
+let user;
+
+try {
+  user = await auth.getUserByEmail(email);
+} catch (cause) {
   // Deliberately not created here: the uid has to be the one Google issued, so
   // the account must have signed in once before it can be allowed.
-  console.error(`${email} has never signed in to ${projectId}; ask them to try once first.`);
+  for (const line of lookupFailureLines(email, projectId, cause, process.env)) {
+    console.error(line);
+  }
+  if (lookupErrorCode(cause) !== 'auth/user-not-found') {
+    console.error(cause);
+  }
   process.exit(1);
 }
 
