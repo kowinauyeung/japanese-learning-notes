@@ -1,6 +1,7 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { icons as generated } from '../../scripts/icon-specs';
 
 /**
  * `public/manifest.webmanifest`, which is what turns the site into an app.
@@ -130,29 +131,41 @@ describe('the icons a home screen actually reaches for', () => {
   );
 
   /**
-   * The reverse direction, and it has to read the directory to be one.
+   * The reverse direction, and it has to come from somewhere other than the
+   * manifest to be one.
    *
    * The loop above walks the manifest and asks whether each file exists, so by
-   * construction it cannot see a PNG that exists and is named nowhere — `yarn
+   * construction it cannot see an icon that exists and is named nowhere — `yarn
    * icons` emitting a new size, or a file left behind by a rename. An earlier
-   * version of this compared the manifest against a list written here instead,
-   * which has exactly the same blind spot with more ceremony: both halves get
-   * edited together, and `public/icon-1024.png` would sit there unreferenced
-   * with the suite green.
+   * version compared the manifest against a list written here instead, which has
+   * exactly the same blind spot with more ceremony: both halves get edited
+   * together.
    *
-   * `apple-touch-icon.png` is the one deliberate exclusion. It is not a manifest
-   * icon and must not become one: iOS ignores `manifest.icons` for "Add to Home
-   * Screen" and reads the `<link>` tag instead, which the block below pins.
+   * The comparison is against the *generator's* list and not against every PNG
+   * in `public/`, which an earlier version did do. That version would go red the
+   * day #80 adds a manifest screenshot, or anyone adds an Open Graph card —
+   * images that are not icons, on a manifest that is entirely valid.
    */
-  const IOS_HOME_SCREEN_ICON = 'apple-touch-icon.png';
-
-  it('references every icon PNG in public/, so an orphaned or unwired one cannot go unnoticed', () => {
-    const onDisk = readdirSync(root('public'))
-      .filter((name) => name.endsWith('.png') && name !== IOS_HOME_SCREEN_ICON)
+  it('references every icon the generator marks as a manifest icon, and no other', () => {
+    const expected = generated
+      .filter((icon) => icon.inManifest)
+      .map((icon) => icon.file)
       .sort();
     const referenced = manifest.icons.map((icon) => icon.src.replace(/^\//, '')).sort();
+    // Red in both directions: an icon `yarn icons` produces but the manifest
+    // never names installs as a missing tile, and an icon the manifest names
+    // but the generator does not produce is a 404 the install flow reports
+    // nowhere.
+    expect(referenced).toEqual(expected);
+  });
 
-    expect(referenced).toEqual(onDisk);
+  it('has actually been generated, so a spec added without running `yarn icons` cannot pass', () => {
+    for (const icon of generated) {
+      // The list above is a promise about `public/`. Nothing else checks it was
+      // kept, and a manifest pointing at a file that was never rasterised is the
+      // blank-tile install again, one step earlier.
+      expect(existsSync(root(`public/${icon.file}`)), icon.file).toBe(true);
+    }
   });
 });
 
@@ -163,6 +176,9 @@ describe('the icons a home screen actually reaches for', () => {
  */
 describe('the manifest against index.html', () => {
   it('is linked from the document, or nothing reads it at all', () => {
+    // Without the tag the file is just a JSON document nobody fetches: no
+    // install prompt, no home-screen name, no `standalone` window — and the app
+    // in a browser tab looks exactly the same, which is why nothing catches it.
     expect(indexHtml).toContain('rel="manifest" href="/manifest.webmanifest"');
   });
 
