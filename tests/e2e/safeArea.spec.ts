@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { seed } from './fixtures';
 
 /**
@@ -12,17 +12,15 @@ import { seed } from './fixtures';
  * button sat under the home indicator — on top of the swipe that leaves the
  * app, so the control the reader reaches for most was the one hardest to hit.
  *
- * **The insets are injected, and that is the only way this claim can be
- * measured.** `env(safe-area-inset-*)` resolves to zero in every browser
- * Playwright can drive and no protocol sets it, so a spec written against
- * `env()` directly passes just as well on a layout that ignores it entirely.
- * `src/index.css` therefore reads the four values into `--safe-*` once, and
- * this overrides those on `:root` with numbers taken off real hardware. What
- * stays untested by geometry is the one line joining the two, so the first test
- * below asserts that join directly.
+ * The insets are set through the DevTools protocol, so what these tests measure
+ * is the real thing: `Emulation.setSafeAreaInsetsOverride` makes
+ * `env(safe-area-inset-*)` resolve to the given values, and the layout is then
+ * observed the way any other layout is. Nothing here knows how the stylesheet
+ * is written.
  *
- * Chromium only. Every claim here is box arithmetic, which both engines agree
- * on; WebKit is reserved for how something is painted.
+ * Chromium only. Every claim is box arithmetic, which both engines agree on;
+ * WebKit is reserved for how something is painted. The override is a Chromium
+ * protocol method, which is the second reason.
  */
 
 /** iPhone 14 Pro, held upright: the status bar above, the home indicator below. */
@@ -45,15 +43,9 @@ type Insets = typeof PORTRAIT;
 
 async function applyInsets(page: Page, insets: Insets) {
   await page.setViewportSize(insets.viewport);
-  // Appended to <head> after the bundle's own stylesheet, so it wins on order
-  // at equal specificity.
-  await page.addStyleTag({
-    content: `:root {
-      --safe-top: ${insets.top}px;
-      --safe-right: ${insets.right}px;
-      --safe-bottom: ${insets.bottom}px;
-      --safe-left: ${insets.left}px;
-    }`,
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+    insets: { top: insets.top, left: insets.left, bottom: insets.bottom, right: insets.right },
   });
 }
 
@@ -75,7 +67,7 @@ function elements(page: Page) {
   };
 }
 
-async function openSignedInApp(page: Page, context: { setOffline: (v: boolean) => Promise<void> }) {
+async function openSignedInApp(page: Page, context: BrowserContext) {
   await seed(page, { signedIn: true });
   await page.goto('/');
   // The offline pill is one of the two panels in the bottom stack, and the
@@ -85,64 +77,33 @@ async function openSignedInApp(page: Page, context: { setOffline: (v: boolean) =
 }
 
 /**
- * The join the geometry cannot see.
+ * Guards every measurement below.
  *
- * Every other test here proves the layout responds to `--safe-bottom`. None of
- * them can prove `--safe-bottom` is fed by the device, because the value it is
- * fed is zero on every machine this runs on — so a stylesheet declaring
- * `--safe-bottom: 0px` and nothing else would pass every one of them.
- *
- * **The stylesheet, not the computed style, and the difference is why this
- * test exists in the shape it does.** Reading `--safe-bottom` off
- * `getComputedStyle(document.documentElement)` was the obvious way to do it and
- * returns `0px`: `env()` is substituted when the custom property is computed,
- * not deferred to its use sites the way `var()` is, so the computed value of a
- * correctly wired variable is byte for byte the computed value of the constant
- * this is meant to catch. The specified value on the rule keeps the token.
+ * If the override ever stops taking effect — a protocol method renamed, a
+ * browser build without it — `env()` quietly returns to zero and every
+ * assertion here passes against a layout that ignores the insets entirely,
+ * which is the exact defect this file exists for. So one test reads the value
+ * back out of a real declaration first.
  */
-test('reads the device insets rather than a constant the tests can satisfy', async ({ page }) => {
-  await seed(page, { signedIn: true });
-  await page.goto('/');
+test('sets insets the page can actually see, so the rest is not measuring zero', async ({
+  page,
+  context,
+}) => {
+  await openSignedInApp(page, context);
+  await applyInsets(page, PORTRAIT);
 
-  const declared = await page.evaluate(() => {
-    const sides = ['top', 'right', 'bottom', 'left'] as const;
-    for (const sheet of Array.from(document.styleSheets)) {
-      let rules: CSSRule[];
-      // Cross-origin sheets throw rather than return nothing. There are none in
-      // this build, but a font or an extension would make this the difference
-      // between skipping a sheet and failing the test for the wrong reason.
-      try {
-        rules = Array.from(sheet.cssRules);
-      } catch {
-        continue;
-      }
-      for (const rule of rules) {
-        if (!(rule instanceof CSSStyleRule) || rule.selectorText !== ':root') continue;
-        // Whitespace stripped rather than trimmed: the production build
-        // minifies the declaration to `env(safe-area-inset-top,0px)`, and the
-        // dev server does not, so comparing the raw text passes in one and
-        // fails in the other.
-        const values = sides.map((side) =>
-          rule.style.getPropertyValue(`--safe-${side}`).replace(/\s+/g, ''),
-        );
-        if (values.every(Boolean)) return values;
-      }
-    }
-    return null;
+  const seen = await page.evaluate(() => {
+    const probe = document.createElement('div');
+    probe.style.paddingTop = 'env(safe-area-inset-top, 0px)';
+    probe.style.paddingBottom = 'env(safe-area-inset-bottom, 0px)';
+    document.body.append(probe);
+    const style = getComputedStyle(probe);
+    const result = { top: style.paddingTop, bottom: style.paddingBottom };
+    probe.remove();
+    return result;
   });
 
-  // What breaks when this goes red: the app renders under the notch and the
-  // home indicator on a real installed device, while every other test in this
-  // file — and the whole suite — stays green. That is the failure this exists
-  // to catch, because the four tests below can only prove the layout follows
-  // `--safe-*`; nothing they can measure distinguishes a variable fed by the
-  // device from one hardcoded to `0px`.
-  expect(declared).toEqual([
-    'env(safe-area-inset-top,0px)',
-    'env(safe-area-inset-right,0px)',
-    'env(safe-area-inset-bottom,0px)',
-    'env(safe-area-inset-left,0px)',
-  ]);
+  expect(seen).toEqual({ top: `${PORTRAIT.top}px`, bottom: `${PORTRAIT.bottom}px` });
 });
 
 test('keeps the add button and the notices above the home indicator', async ({ page, context }) => {
@@ -200,11 +161,11 @@ test('clears the notch and the rounded corners when the phone is turned sideways
 /**
  * The other half of the change, and the one a browser tab actually sees.
  *
- * `env()` falls back to `0px` everywhere except an installed app on a notched
- * device, so these declarations are inert for almost every reader — and inert
- * has to mean *unchanged*, not "shifted by a few pixels nobody measured". A
- * `bottom` that had been rewritten as an inset rather than added to one would
- * put the add button flat against the edge here.
+ * `env()` is zero everywhere except an installed app on a notched device, so
+ * these declarations are inert for almost every reader — and inert has to mean
+ * *unchanged*, not "shifted by a few pixels nobody measured". A `bottom` that
+ * had been rewritten as an inset rather than added to one would put the add
+ * button flat against the edge here.
  */
 test('leaves the layout exactly where it was when the device asks for nothing', async ({
   page,

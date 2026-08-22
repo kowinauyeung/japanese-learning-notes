@@ -100,7 +100,7 @@
 }
 
 /*
- * The four strips of the screen a phone does not actually give the page.
+ * The strips of the screen a phone does not actually give the page.
  *
  * `index.html` has asked for `viewport-fit=cover` since before the manifest,
  * which lays the document out edge to edge — under the notch, under the status
@@ -111,36 +111,6 @@
  * the header ran under the status bar and the add button sat under the home
  * indicator, where the swipe that leaves the app starts.
  *
- * **Named properties rather than `env()` at each use site, and the indirection
- * is what makes the layout testable.** `env(safe-area-inset-*)` resolves to
- * zero in every browser Playwright can drive, and there is no protocol for
- * setting it, so geometry measured against `env()` directly measures nothing —
- * a layout that ignores the insets entirely passes identically. Against a
- * variable, a test overrides `:root` with a real device's 34px and 47px and
- * asserts the layout moved. That is `tests/e2e/safeArea.spec.ts`, and it is
- * red without the declarations below.
- *
- * The `0px` fallbacks change nothing today and are kept for the edit that
- * would need them. Measured in Chromium against a deliberately unknown keyword:
- * with the inset alone on its own property, `margin-bottom: var(--safe-bottom)`
- * computes to `0px` with the fallback and `0px` without it — an `env()` the
- * browser cannot resolve is invalid at computed-value time, and the property
- * falls back to its initial value, which is the same zero. Combined with a
- * design offset it is not the same: `calc(20px + var(--safe-bottom))` computes
- * to `20px` with the fallback and `0px` without, losing the offset as well as
- * the inset. This stylesheet never combines them — `bottom-5` and `mb-safe` are
- * separate properties for exactly that reason — so the fallbacks are insurance
- * against the first person who writes the combined form, not something holding
- * the current layout up.
- */
-:root {
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
-}
-
-/*
  * Padding for the elements whose background has to keep reaching the screen
  * edge — a header inset by its own margin leaves a strip of page showing above
  * it, which is the notch drawn in the wrong colour rather than a layout that
@@ -154,36 +124,48 @@
  * (CSS 2.1 10.6.4 solves for `top`), so `bottom-5 mb-safe` reads as "five
  * spacing units above whatever the device takes", which is the intent exactly.
  *
- * Two screens deliberately take nothing: the login card and the error screen
- * are single boxes centred in both axes and narrower than any notched viewport
- * — 360px and 448px against 844px in landscape — so no strip can reach them.
- * They carry the top inset only, for the case where their content grows tall
- * enough to run to the edges.
+ * Two screens deliberately take nothing horizontal: the login card and the
+ * error screen are single boxes centred in both axes and narrower than any
+ * notched viewport — 360px and 448px against 844px in landscape — so no strip
+ * can reach them. They carry the top inset only, for the case where their
+ * content grows tall enough to run to the edges.
+ *
+ * The `0px` fallbacks change nothing today and are kept for the edit that
+ * would need them. Measured in Chromium against a deliberately unknown
+ * keyword: `padding-top: env(unknown, 0px)` and `padding-top: env(unknown)`
+ * both compute to `0px`, because an `env()` the browser cannot resolve is
+ * invalid at computed-value time and the property falls back to its initial
+ * value, which is the same zero. Combined with a design offset it differs —
+ * `calc(20px + env(unknown, 0px))` computes to `20px` and the same without a
+ * fallback to `0px`, losing the offset as well as the inset. Nothing here
+ * combines them, because `bottom-5` and `mb-safe` are separate properties for
+ * exactly that reason, so the fallbacks are insurance against the first person
+ * to write the combined form rather than something holding this layout up.
  */
 @utility pt-safe {
-  padding-top: var(--safe-top);
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 @utility pb-safe {
-  padding-bottom: var(--safe-bottom);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 @utility px-safe {
-  padding-left: var(--safe-left);
-  padding-right: var(--safe-right);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 @utility mb-safe {
-  margin-bottom: var(--safe-bottom);
+  margin-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 @utility mx-safe {
-  margin-left: var(--safe-left);
-  margin-right: var(--safe-right);
+  margin-left: env(safe-area-inset-left, 0px);
+  margin-right: env(safe-area-inset-right, 0px);
 }
 
 @utility mr-safe {
-  margin-right: var(--safe-right);
+  margin-right: env(safe-area-inset-right, 0px);
 }
 
 html {
