@@ -140,12 +140,22 @@ Run _Deploy (production)_:
 - In the left sidebar, select **Deploy (production)**.
 - Click **Run workflow**, then select `main` under "Use workflow from".
 
-The workflow asks for the full 40-character SHA of the merge commit from step 5
-as **"Commit SHA to deploy"**. Get it one of two ways:
+The workflow's only input is `sha`, described as _"Full commit SHA on main to
+deploy (40 characters)"_ — the merge commit from step 5. Get it one of two
+ways:
 
-- Terminal: `git switch main && git pull`, then `git rev-parse HEAD`.
-- GitHub web UI: open the `main` branch's commit history and copy the full
-  40-character SHA of the merge commit.
+```sh
+gh pr view <the step-4 pull request number> --json mergeCommit -q '.mergeCommit.oid'
+```
+
+This asks the pull request what it merged as, so it is correct regardless of
+what lands on `main` afterwards. `git switch main && git pull` followed by
+`git rev-parse HEAD` looks equivalent and is not: if anything else reaches
+`main` between step 5 and when you run it, `HEAD` is that later commit, not
+the one step 5 produced.
+
+Or, via the GitHub web UI: open the `main` branch's commit history and copy
+the full 40-character SHA of the merge commit.
 
 If a new account has to work after this release, do the claim steps in
 [README → Operator runbook](../README.md#operator-runbook) **first**; the order
