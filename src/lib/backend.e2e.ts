@@ -597,14 +597,28 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
  * unavailable afterwards exactly as the Gemini adapter does.
  */
 let draftingIsSpent = false;
+/**
+ * The seed the flag above was set under, compared by identity.
+ *
+ * Comparing the *reason* instead was not enough, and the difference only shows
+ * up in the second test to seed `unavailable`: the flag survives, `available()`
+ * answers false before that test has pressed anything, and the button it needs
+ * is never rendered. One case passes, two cases are order-dependent. Every
+ * end-to-end page and every component test installs a fresh object, so identity
+ * is what actually distinguishes one run from the next.
+ */
+let draftingSeed: E2ESeed | undefined;
 
 export const entryDraftingPort: EntryDraftingPort = {
   available: () => {
-    // The flag's memory is the seed's, not the session's. Every end-to-end page
-    // and every component test installs a fresh seed, and a flag that outlived
-    // one would hide the button in the next test for no reason that test
-    // stated — the kind of cross-contamination that reads as flake.
-    if (seed().entryDrafting !== 'unavailable') draftingIsSpent = false;
+    // The flag's memory is the seed's, not the session's: a flag that outlived
+    // one run would hide the button in the next for no reason that run stated,
+    // which is the kind of cross-contamination that reads as flake.
+    const current = seed();
+    if (current !== draftingSeed) {
+      draftingSeed = current;
+      draftingIsSpent = false;
+    }
     return !draftingIsSpent;
   },
   // Not `async`: there is nothing to await, and an async function with no

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Entry, EntryDraft } from '@/domain/entry';
 import { ENTRY_LIMITS, TAG_INPUT_MAX } from '@/domain/limits';
@@ -82,6 +82,27 @@ export function EntryFormModal({
    * wrote.
    */
   const [fromModel, setFromModel] = useState(false);
+  /**
+   * The current `json`, readable from a callback that outlived the render it
+   * was created in.
+   *
+   * `loadJson` reads `original` and `source` to build the import context, and
+   * the panel calls it *after* an await — after a clipboard read that a browser
+   * may have put its own confirmation in front of, for as long as the reader
+   * takes to answer it. Through the closure those two fields were whatever they
+   * held when the button was pressed, so a 出典 typed during the wait was
+   * dropped from the entry that arrived. The `raw` half of the same defect was
+   * fixed by passing the text as an argument; this is the other half, and it
+   * cannot be an argument because the panel's own copy is stale in the same way.
+   *
+   * Written in an effect rather than during render: a ref assigned while
+   * rendering is a mutation React does not promise to keep, and nothing here
+   * reads it before paint.
+   */
+  const jsonRef = useRef(json);
+  useEffect(() => {
+    jsonRef.current = json;
+  }, [json]);
 
   useEffect(() => {
     if (!open) return;
@@ -113,7 +134,10 @@ export function EntryFormModal({
       draft: loaded,
       error: failure,
       oversize,
-    } = jsonToDraft(raw, { original: json.original, source: json.source });
+    } = jsonToDraft(raw, {
+      original: jsonRef.current.original,
+      source: jsonRef.current.source,
+    });
     if (failure) return setErrors([localizeFormError(failure, t)]);
     // Deliberately not loaded and not truncated: the user is looking at the JSON
     // that produced these, so naming every field they have to shorten is both

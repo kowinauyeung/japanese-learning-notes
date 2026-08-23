@@ -241,6 +241,65 @@ test.describe('adding a word', () => {
   });
 
   /**
+   * The panel's fields keep their value across an import that resolves late.
+   *
+   * `loadJson` reads 出会った文 and 出典 to build the context it hands
+   * `jsonToDraft`, and the paste button calls it after an await — after a
+   * clipboard read that a browser may put its own confirmation in front of, for
+   * as long as the reader takes to answer. Through the closure those two were
+   * whatever they held when the button was pressed, so a 出典 typed during the
+   * wait was dropped from the entry that arrived.
+   *
+   * Only reachable through the clipboard: the drafting button disables these
+   * fields while its request is out, and this one cannot, because the wait is a
+   * dialog the browser owns and may never show.
+   *
+   * Here rather than in tests/component because what is under test is
+   * `loadJson`, which lives in the modal and needs the entries provider behind
+   * it — the reply has to cross the panel, the modal and `jsonToDraft` before
+   * the assertion means anything.
+   */
+  test('keeps a source typed while the clipboard was still being read', async ({ page }) => {
+    // A clipboard the test resolves by hand, so "still being read" is a state
+    // the test controls rather than a race it hopes for.
+    await page.addInitScript(() => {
+      let release: ((text: string) => void) | undefined;
+      (window as unknown as { releaseClipboard: (text: string) => void }).releaseClipboard = (
+        text,
+      ) => release?.(text);
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          readText: () =>
+            new Promise<string>((resolve) => {
+              release = resolve;
+            }),
+        },
+      });
+    });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByRole('button', { name: 'JSON' }).click();
+    await dialog.getByRole('button', { name: 'クリップボードから貼り付け' }).click();
+
+    // Typed after the read started and before it finished.
+    await dialog.getByLabel('出典').fill('会議');
+    await page.evaluate(() =>
+      (window as unknown as { releaseClipboard: (text: string) => void }).releaseClipboard(
+        '{"headword":"兆候","definition":"きざし。"}',
+      ),
+    );
+
+    // The panel is gone by now — the import moved the modal to 詳細 — so this
+    // 出典 is the form's, not the one that was typed into.
+    await expect(dialog.getByLabel('出典')).toHaveValue('会議');
+    await expect(dialog.getByLabel('見出し語')).toHaveValue('兆候');
+  });
+
+  /**
    * Tags reach `?tag=…`, so they may not contain whitespace or punctuation. The
    * form has to say which tag is the problem rather than refusing silently.
    */
