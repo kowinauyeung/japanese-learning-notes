@@ -19,7 +19,13 @@ const withClipboard = (clipboard: unknown) => {
 
 afterEach(() => {
   withClipboard(undefined);
+  delete (window as { __GOITEI_E2E__?: unknown }).__GOITEI_E2E__;
 });
+
+/** The seed the aliased `backend.e2e` port reads, installed per test. */
+const seedDrafting = (entryDrafting: 'unavailable' | 'quota' | 'blocked' | 'failed') => {
+  (window as { __GOITEI_E2E__?: unknown }).__GOITEI_E2E__ = { entryDrafting };
+};
 
 const FAILED = 'コピーできませんでした。下のプロンプトを選択してコピーしてください。';
 
@@ -283,5 +289,73 @@ describe('JsonImport — pasting from the clipboard', () => {
     return waitFor(() =>
       expect(screen.getByText(/クリップボードを読み取れませんでした/)).toBeInTheDocument(),
     );
+  });
+});
+
+describe('JsonImport — when drafting cannot work again', () => {
+  it('keeps the reason on screen after the button that caused it has gone', async () => {
+    /*
+      A retired model, a project with the API switched off and a country where
+      it is not offered all fail on the first call and never succeed after it,
+      so the port stops reporting itself available and the button goes. Rendered
+      inside that same condition — which it was — the explanation went with it,
+      in the same paint: a control that vanished and nothing saying why.
+
+      This is the shape `gemini-2.5-flash`'s retirement arrived in, and the
+      reason the block outlives the button it contains.
+    */
+    seedDrafting('unavailable');
+    render(<Harness initial={{ ...emptyJsonImport('yue-Hant'), word: '兆候' }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'AIで作成' }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/ここではAI作成を利用できません/)).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('button', { name: 'AIで作成' })).not.toBeInTheDocument();
+  });
+
+  it('offers a retry for a spent allowance, which is not the same as a dead one', async () => {
+    // `quota` returns tomorrow, so the button stays. Asserted beside the case
+    // above because the two used to be indistinguishable on screen.
+    seedDrafting('quota');
+    render(<Harness initial={{ ...emptyJsonImport('yue-Hant'), word: '兆候' }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'AIで作成' }));
+
+    await waitFor(() => expect(screen.getByText(/本日のAI利用回数の上限/)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'AIで作成' })).toBeInTheDocument();
+  });
+});
+
+describe('JsonImport — edits made while a request is in flight', () => {
+  it('does not let a slow clipboard read revert what was typed after it started', async () => {
+    /*
+      Both asynchronous handlers resumed after an await and wrote
+      `{ ...value, raw }` — `value` as captured when the button was pressed. A
+      browser may put its own paste confirmation in front of `readText` and sit
+      there for seconds, so anything typed in the meantime was silently reverted
+      by the reply. The clipboard path is the reachable one; `generate` had the
+      same defect and now locks its fields as well.
+    */
+    let release!: (text: string) => void;
+    withClipboard({
+      readText: () => new Promise<string>((resolve) => (release = resolve)),
+    });
+    render(<Harness initial={emptyJsonImport('yue-Hant')} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'クリップボードから貼り付け' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '単語' }), {
+      target: { value: '古い' },
+    });
+    release('{"headword":"兆候"}');
+
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'AI の返した JSON を貼り付け' })).toHaveValue(
+        '{"headword":"兆候"}',
+      ),
+    );
+    // The word typed during the wait survived the reply.
+    expect(screen.getByRole('textbox', { name: '単語' })).toHaveValue('古い');
   });
 });

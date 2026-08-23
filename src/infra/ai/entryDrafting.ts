@@ -154,7 +154,16 @@ export const geminiEntryDrafting: EntryDraftingPort = {
       // above, and `classify` is the only place that decides what it means.
       text = result.response.text();
     } catch (error) {
-      throw classify(error);
+      const failure = classify(error);
+      // A permanent failure has to reach `available()`, or the comment on
+      // `ensureModel` above is a lie: it says a button that retries a permanent
+      // failure reads as a broken button, and until this line that was only
+      // true of the ones that threw at initialisation. A retired model name and
+      // a project whose API is off both fail *here* instead, on the first call
+      // — and the button stayed, offering to try again forever. That is how
+      // `gemini-2.5-flash`'s retirement presented.
+      if (failure.reason === 'unavailable') unavailable = true;
+      throw failure;
     }
 
     // An empty reply is a failure the SDK does not raise — a response that

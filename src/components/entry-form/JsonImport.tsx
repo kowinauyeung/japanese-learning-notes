@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type Dispatch, type SetStateAction, useState } from 'react';
 import { INPUT_LIMITS } from '@/domain/limits';
 import { EntryDraftingError, type EntryDraftingFailure } from '@/domain/ports';
 import type { TranslationLanguage } from '@/domain/user';
@@ -52,7 +52,19 @@ export function JsonImport({
   onDrafted,
 }: {
   value: JsonImportState;
-  onChange: (next: JsonImportState) => void;
+  /**
+   * A React setter rather than `(next: JsonImportState) => void`, so the two
+   * asynchronous handlers below can update from the *current* state instead of
+   * the one their closure captured.
+   *
+   * The narrower type was a real defect. `generate` and `pasteJson` both resume
+   * after an await and then wrote `{ ...value, raw }` — `value` as it was when
+   * the button was pressed. Anything typed into 単語, 訳の言語, 出会った文 or
+   * 出典 while the request was in flight was silently reverted by the reply.
+   * The clipboard path made that easy to reach, because a browser may put its
+   * own paste confirmation in front of `readText` and sit there for seconds.
+   */
+  onChange: Dispatch<SetStateAction<JsonImportState>>;
   /**
    * Hand the model's reply to the modal, which runs it through the same
    * `jsonToDraft` a pasted one goes through. Not `onChange`, because filling
@@ -94,7 +106,7 @@ export function JsonImport({
   const canPaste = typeof navigator.clipboard?.readText === 'function';
 
   const set = <K extends keyof JsonImportState>(key: K, next: JsonImportState[K]) =>
-    onChange({ ...value, [key]: next });
+    onChange((prev) => ({ ...prev, [key]: next }));
 
   const prompt = buildPrompt(value.word || '（単語）', value.language, {
     original: value.original,
@@ -183,7 +195,7 @@ export function JsonImport({
         // reported as one; it would also wipe a box the reader had already
         // filled by hand.
         if (!text.trim()) return setPasteFailed(true);
-        onChange({ ...value, raw: text });
+        onChange((prev) => ({ ...prev, raw: text }));
         onDrafted(text);
       })
       .catch(() => setPasteFailed(true));
@@ -205,7 +217,7 @@ export function JsonImport({
     setDrafting(true);
     try {
       const raw = await entryDraftingPort.draft(prompt);
-      onChange({ ...value, raw });
+      onChange((prev) => ({ ...prev, raw }));
       onDrafted(raw);
     } catch (cause) {
       setAiError(cause instanceof EntryDraftingError ? cause.reason : 'failed');
@@ -224,6 +236,7 @@ export function JsonImport({
             type="text"
             value={value.word}
             onChange={(event) => set('word', event.target.value)}
+            disabled={drafting}
             maxLength={INPUT_LIMITS.importWord}
             placeholder="兆候"
             className={inputClass}
@@ -234,6 +247,7 @@ export function JsonImport({
             type="text"
             value={value.language}
             onChange={(event) => set('language', event.target.value)}
+            disabled={drafting}
             maxLength={INPUT_LIMITS.importLanguage}
             className={inputClass}
           />
@@ -244,6 +258,7 @@ export function JsonImport({
         <Area
           value={value.original}
           onChange={(v) => set('original', v)}
+          disabled={drafting}
           maxLength={INPUT_LIMITS.importOriginal}
           rows={2}
           placeholder="あやしい兆候ではあるのだろうけれど"
@@ -255,6 +270,7 @@ export function JsonImport({
           type="text"
           value={value.source}
           onChange={(event) => set('source', event.target.value)}
+          disabled={drafting}
           maxLength={INPUT_LIMITS.importSource}
           placeholder="会議、同僚、小説「海辺のカフカ」…"
           className={inputClass}
@@ -263,25 +279,34 @@ export function JsonImport({
 
       <p className="text-xs text-muted">{t('import.contextHint')}</p>
 
-      {canDraft && (
+      {/* The block outlives the button. A permanent failure makes
+          `available()` answer false from then on, so rendering the message
+          inside `canDraft` would take the explanation away in the same paint
+          that removed the control — leaving a button that vanished and nothing
+          saying why. */}
+      {(canDraft || aiError) && (
         <div className="space-y-2">
-          <button
-            type="button"
-            // `void`, not the bare handler: `generate` is async, and React's
-            // onClick wants void — a returned promise is one nothing awaits and
-            // whose rejection would go nowhere. It cannot reject (the try/catch
-            // is total), and this says so rather than relying on it.
-            onClick={() => void generate()}
-            disabled={drafting || !value.word.trim()}
-            className="min-h-10 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"
-          >
-            {drafting ? t('import.generating') : t('import.generate')}
-          </button>
-          {/* Shown before the button is pressed as well as after, because it is
-              a statement about what the button produces and the reader decides
-              whether to press it. The same warning appears again beside the
-              filled form, where the wrong reading is actually visible. */}
-          <p className="text-[11px] text-muted">{t('import.aiDisclaimer')}</p>
+          {canDraft && (
+            <>
+              <button
+                type="button"
+                // `void`, not the bare handler: `generate` is async, and React's
+                // onClick wants void — a returned promise is one nothing awaits
+                // and whose rejection would go nowhere. It cannot reject (the
+                // try/catch is total), and this says so rather than relying on it.
+                onClick={() => void generate()}
+                disabled={drafting || !value.word.trim()}
+                className="min-h-10 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"
+              >
+                {drafting ? t('import.generating') : t('import.generate')}
+              </button>
+              {/* Shown before the button is pressed as well as after, because it
+                  is a statement about what the button produces and the reader
+                  decides whether to press it. The same warning appears again
+                  beside the filled form, where a wrong reading is visible. */}
+              <p className="text-[11px] text-muted">{t('import.aiDisclaimer')}</p>
+            </>
+          )}
           {aiError && <p className="text-[11px] text-danger">{t(FAILURE_MESSAGE[aiError])}</p>}
         </div>
       )}

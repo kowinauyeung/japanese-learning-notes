@@ -11,6 +11,7 @@ import type {
   UserRepository,
   WordSetRepository,
 } from '@/domain/ports';
+import { EntryDraftingError } from '@/domain/ports';
 import type { EntryProgress, PracticeSession, PracticeSessionDraft } from '@/domain/practice';
 import type { UserProfile, UserProfileDraft } from '@/domain/user';
 import type { WordSet, WordSetDraft } from '@/domain/wordSet';
@@ -591,11 +592,29 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
  * ever stops doing so the fallback below keeps the reply valid and the test
  * fails on the headword, which is the right place for it to fail.
  */
+/**
+ * Set when a seeded `unavailable` has been served, so the port reports itself
+ * unavailable afterwards exactly as the Gemini adapter does.
+ */
+let draftingIsSpent = false;
+
 export const entryDraftingPort: EntryDraftingPort = {
-  available: () => true,
+  available: () => {
+    // The flag's memory is the seed's, not the session's. Every end-to-end page
+    // and every component test installs a fresh seed, and a flag that outlived
+    // one would hide the button in the next test for no reason that test
+    // stated — the kind of cross-contamination that reads as flake.
+    if (seed().entryDrafting !== 'unavailable') draftingIsSpent = false;
+    return !draftingIsSpent;
+  },
   // Not `async`: there is nothing to await, and an async function with no
   // await is a lint error rather than a style. The port is still a promise.
   draft: (prompt) => {
+    const failure = seed().entryDrafting;
+    if (failure) {
+      if (failure === 'unavailable') draftingIsSpent = true;
+      return Promise.reject(new EntryDraftingError(failure));
+    }
     const headword = /^「(.+?)」/.exec(prompt)?.[1] ?? '兆候';
     // Fenced, because a real reply is: the prompt asks for a ```json block and
     // `jsonToDraft` strips one. An unfenced fixture would leave that unexercised.
