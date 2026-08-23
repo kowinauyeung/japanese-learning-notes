@@ -1,6 +1,6 @@
-import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { PitchAccent } from '@/components/PitchAccent';
+import { renderWithI18n as render } from '../helpers/renderWithI18n';
 
 /**
  * The pitch line is drawn with borders on the mora spans, so the assertions

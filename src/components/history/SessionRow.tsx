@@ -1,11 +1,7 @@
 import type { Entry } from '@/domain/entry';
-import type { PracticeMode, PracticeSession } from '@/domain/practice';
+import type { PracticeSession } from '@/domain/practice';
+import { useI18n } from '@/i18n/context';
 import { missedWords, sessionTime } from '@/lib/history';
-
-const MODE_LABEL: Record<PracticeMode, string> = {
-  flashcard: 'フラッシュカード',
-  dictation: '書き取り練習',
-};
 
 /**
  * One finished drill, as it reads weeks later.
@@ -26,6 +22,7 @@ export function SessionRow({
   onOpen: (session: PracticeSession) => void;
 }) {
   const missed = missedWords(session, entries);
+  const { locale, t } = useI18n();
 
   return (
     <li>
@@ -35,18 +32,22 @@ export function SessionRow({
         className="w-full space-y-1 rounded-panel px-2 py-3 text-left transition hover:bg-bg-alt"
       >
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-sm font-semibold">{MODE_LABEL[session.mode]}</span>
+          <span className="text-sm font-semibold">
+            {t(session.mode === 'flashcard' ? 'practice.flashcard' : 'practice.dictation')}
+          </span>
           <span className="font-display text-sm font-bold tabular-nums">
             {session.correct} / {session.total}
           </span>
         </div>
 
         <p className="truncate text-xs text-muted">
-          {sessionTime(session.finishedAt)} · {session.filterLabel}
+          {sessionTime(session.finishedAt, locale)} · {session.filterLabel}
         </p>
 
         {missed.length > 0 && (
-          <p className="text-xs text-danger tabular-nums">間違えた語 {missed.length}</p>
+          <p className="text-xs text-danger tabular-nums">
+            {t('history.missedCount', { count: missed.length })}
+          </p>
         )}
       </button>
     </li>

@@ -10,13 +10,12 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
+      'dist-e2e-pwa/**',
       '.vite/**',
       'coverage/**',
       'playwright-report/**',
       'test-results/**',
       'tests/e2e/__screenshots__/**',
-      'migration/output.json',
-      'migration/review.json',
     ],
   },
 
@@ -202,7 +201,7 @@ export default tseslint.config(
     },
   },
 
-  // Operator and migration scripts written in TypeScript.
+  // Operator scripts written in TypeScript.
   //
   // These were linted by nothing until now. `eslint .` matches no `.ts` file
   // outside the blocks above, and it does not fail on a directory it skips —
@@ -210,13 +209,13 @@ export default tseslint.config(
   // ignored" and exits 2, but `eslint .` stays green. So `yarn lint` passed
   // over a duplicate import in the script that grants production access.
   //
-  // Scoped to the same two folders `tsconfig.scripts.json` includes, so the
-  // lint pass and the typecheck pass cannot disagree about what a script is.
-  // Typed through `project` rather than `projectService`: the service resolves
-  // the nearest `tsconfig.json`, and this repository's root one is a solution
-  // file listing no files of its own.
+  // Scoped to exactly what `tsconfig.scripts.json` includes, so the lint pass
+  // and the typecheck pass cannot disagree about what a script is. Typed
+  // through `project` rather than `projectService`: the service resolves the
+  // nearest `tsconfig.json`, and this repository's root one is a solution file
+  // listing no files of its own.
   {
-    files: ['admin/**/*.ts', 'migration/**/*.ts'],
+    files: ['admin/**/*.ts'],
     extends: [js.configs.recommended, tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       globals: globals.node,
@@ -227,10 +226,10 @@ export default tseslint.config(
     },
   },
 
-  // One-shot migration scripts and this config file. Plain ESM outside any
-  // tsconfig, so they get the untyped ruleset.
+  // This config file. Plain ESM outside any tsconfig, so it gets the untyped
+  // ruleset.
   {
-    files: ['migration/**/*.mjs', 'eslint.config.js'],
+    files: ['eslint.config.js'],
     extends: [js.configs.recommended],
     languageOptions: {
       globals: globals.node,

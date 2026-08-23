@@ -87,11 +87,33 @@ service cloud.firestore {
     // strings can be bounded. Anything relying on per-element limits has to
     // enforce them somewhere that can see them.
     //
-    // Read "bounded" as cardinality, not size. 100 senses of 3,000 characters
+    // That somewhere is `draftSizeProblems` in `src/lib/draft.ts`, which walks
+    // every nested field the schema has. It is the only bound those values get,
+    // and it runs on the client — so it is a product rule the user cannot
+    // usefully break through the app, not a security boundary. The security
+    // boundary for a nested value is Firestore's 1 MiB and nothing else.
+    //
+    // Read "bounded" as cardinality, not size. 30 senses of 3,000 characters
     // each is accepted, measured against the emulator. **The only size bound on
     // a document here is Firestore's own 1 MiB**, which is a ceiling rather
     // than a budget: it stops one document being enormous and says nothing
     // about how many documents there are.
+    //
+    // **These numbers are deliberately looser than `src/domain/limits.ts`, and
+    // the gap is the point.** The client refuses a headword over 20 characters;
+    // this file accepts 100. Pinning the two together would couple a rules
+    // deploy to a client deploy in a repository where they are separate jobs and
+    // `deploy-prod.yml` runs rules first — so every tightening would ship a
+    // window in which the live client's writes are refused by the live rules.
+    // The client answers the product question and can be changed in one deploy;
+    // this file answers the megabyte and changes rarely.
+    //
+    // **What that costs, said plainly:** anything between the two numbers is
+    // reachable by a client this repository did not build — a script holding a
+    // valid token, or a future client shipped before these follow. That is the
+    // accepted state. It is bounded, it is small, and it is not the threat
+    // model: an authenticated account writing 100 characters where the form
+    // allows 20 is not the account writing a megabyte.
     //
     // Deliberately not a full schema, and `get` with a default is what makes
     // that true rather than merely claimed. `d.field` on an absent key is an
@@ -177,6 +199,13 @@ service cloud.firestore {
       ];
     }
 
+    function userFields() {
+      return [
+        'uid', 'nickname', 'language', 'translationLanguage', 'theme',
+        'createdAt', 'updatedAt'
+      ];
+    }
+
     function sessionFields() {
       return [
         'ownerUid', 'mode', 'filterLabel', 'total', 'correct', 'missed',
@@ -214,18 +243,26 @@ service cloud.firestore {
       let d = request.resource.data;
       return ownedBy(uid)
         && d.keys().hasOnly(entryFields())
-        && str(d.headword, 200) && d.headword.size() > 0
+        && str(d.headword, 100) && d.headword.size() > 0
         && str(d.get('reading', ''), 200)
-        && str(d.get('definition', ''), 20000)
-        && str(d.get('definitionSub', ''), 20000)
+        && str(d.get('definition', ''), 4000)
+        && str(d.get('definitionSub', ''), 4000)
         && str(d.get('source', ''), 500)
-        && str(d.get('citationForm', ''), 200)
+        && str(d.get('citationForm', ''), 100)
         && list(d.get('pos', []), 20)
-        && list(d.get('tags', []), 50)
-        && list(d.get('senses', []), 100)
-        && list(d.get('examples', []), 100)
-        && list(d.get('related', []), 100)
-        && (d.get('pitchAccent', null) == null || d.get('pitchAccent', 0) is int)
+        && list(d.get('tags', []), 20)
+        && list(d.get('senses', []), 30)
+        && list(d.get('examples', []), 30)
+        && list(d.get('related', []), 30)
+        // An upper bound as well as a type. A mora index is meaningful only
+        // against the reading it counts into, which rules cannot see -- so this
+        // is the megabyte bound, not the correctness one. `draftError` refuses
+        // anything past the end of the kana, which is the check that means
+        // something and the one that cannot live here.
+        && (d.get('pitchAccent', null) == null
+            || (d.get('pitchAccent', 0) is int
+                && d.get('pitchAccent', 0) >= 0
+                && d.get('pitchAccent', 0) <= 999))
         // Short, closed-vocabulary scalars. Each is one line and each was
         // previously unbounded, which `hasOnly` alone does not change: being on
         // the allowlist is permission to send the field, not a limit on it.
@@ -254,15 +291,27 @@ service cloud.firestore {
         && (d.get('copiedFrom', null) == null || d.get('copiedFrom', {}).size() <= 10);
     }
 
+    function validUser(uid) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(userFields())
+        && d.uid == uid
+        && str(d.nickname, 50) && d.nickname.size() > 0
+        && d.language in ['en', 'ja', 'zh-Hant', 'ko', 'es']
+        && d.translationLanguage in ['en', 'ja', 'zh-Hant', 'yue-Hant', 'ko', 'es']
+        && d.theme in ['light', 'dark', 'system']
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
     function validWordSet(uid) {
       let d = request.resource.data;
       return ownedBy(uid)
         && d.keys().hasOnly(wordSetFields())
         && str(d.name, 200) && d.name.size() > 0
-        && str(d.get('description', ''), 5000)
+        && str(d.get('description', ''), 1000)
         // The one unbounded list in the schema, and the one a set is made of.
-        && list(d.get('entryIds', []), 2000)
-        && list(d.get('topics', []), 50)
+        && list(d.get('entryIds', []), 1000)
+        && list(d.get('topics', []), 20)
         // The rest of what `wordSetFields()` permits. Naming a field and never
         // reading it is the hole `hasOnly` was added to close, and closing it
         // for entries alone left the same megabyte reachable one collection over
@@ -284,9 +333,22 @@ service cloud.firestore {
         && d.get('correct', 0) is int && d.get('correct', 0) >= 0
         && d.get('correct', 0) <= d.get('total', 0)
         && list(d.get('missed', []), 2000)
-        // Same again. `mode` is one of four words and `startedAt` is an ISO
-        // instant the client sends; `finishedAt` comes from the server clock and
-        // is a timestamp or it is not this document.
+        // Same again, and `mode` is bounded by length rather than by value on
+        // purpose. `PRACTICE_MODES` in `src/domain/practice.ts` holds two words
+        // today, and an earlier version of this comment said four — but writing
+        // either number here couples a rules deploy to a client deploy: adding
+        // a third mode would ship a client whose every session write is refused
+        // until the rules follow, and the two go out through separate jobs.
+        //
+        // What rules are for is the megabyte, and 20 characters is the megabyte.
+        // A wrong-but-short `mode` is left to the client, which handles it the
+        // way it must anyway: `MODE_LABEL` is keyed by `PracticeMode`, so a mode
+        // it has never heard of yields `undefined` and renders as a blank label
+        // rather than throwing. Not good, and not a rules problem — a document
+        // written by a newer client reaches an older one the same way.
+        //
+        // `startedAt` is an ISO instant the client sends; `finishedAt` comes
+        // from the server clock and is a timestamp or it is not this document.
         && str(d.get('mode', ''), 20)
         && str(d.get('startedAt', ''), 40)
         && d.finishedAt is timestamp;
@@ -308,23 +370,8 @@ service cloud.firestore {
         return isOwner(uid) && isAllowed();
       }
 
-      // Read and delete only. **Nothing in the application writes this
-      // document** — there is no profile, and no adapter addresses this path —
-      // so the create and update it used to carry described a feature that does
-      // not exist, while permitting any twenty fields of any names. That is the
-      // one place `hasOnly` cannot help, because there is no legitimate field to
-      // allow: the honest allowlist for a document nobody writes is empty.
-      //
-      // Delete stays, and stays split from the rest for the reason
-      // `keepsCreatedAt` documents: `write` covers delete, and on a delete
-      // `request.resource` is null, so reaching into it is an evaluation error.
-      // This document was the one place that kept the combined form, and
-      // deleting it therefore failed with a message about null rather than
-      // about permission — the failure mode account deletion would have hit.
-      //
-      // Adding a profile later means adding `create, update` back **with a
-      // `hasOnly` naming its fields**, not restoring what was here.
       allow read, delete: if mine();
+      allow create, update: if mine() && validUser(uid) && keepsCreatedAt();
 
       match /entries/{entryId} {
         allow read, delete: if mine();

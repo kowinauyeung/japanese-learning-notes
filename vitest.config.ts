@@ -49,6 +49,28 @@ export default defineConfig({
       },
       {
         extends: true,
+        // The same seam vite.config.ts replaces for `--mode e2e`, replaced here
+        // for the same reason. A component that depends on a port pulls
+        // `backend.ts` in with it, and that module names the real adapters —
+        // so `@/infra/firebase/client` initialises, finds no `VITE_FIREBASE_*`
+        // and throws at import, before any test has run. CI has no env file at
+        // all, so this is not a local-setup problem.
+        //
+        // Aliasing rather than mocking is the point. `backend.e2e.ts`
+        // implements the ports `src/domain/ports.ts` already declares, at the
+        // seam the architecture already has; CLAUDE.md allows standing in for a
+        // port and forbids replacing a module with a stub, and this is the
+        // former. It also keeps the fence honest: a component test that reached
+        // `@/infra/*` transitively would break the rule the file states.
+        resolve: {
+          alias: [
+            {
+              find: '@/lib/backend',
+              replacement: fileURLToPath(new URL('./src/lib/backend.e2e.ts', import.meta.url)),
+            },
+            { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+          ],
+        },
         test: {
           name: 'dom',
           environment: 'jsdom',

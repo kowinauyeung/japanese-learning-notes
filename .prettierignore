@@ -1,4 +1,5 @@
 dist/
+dist-e2e-pwa/
 node_modules/
 yarn.lock
 .serena/
@@ -7,6 +8,11 @@ yarn.lock
 # loaded into Firestore, and reformatting them would churn the diff for nothing.
 migration/output.json
 migration/review.json
+
+# Written by `yarn release` from the commit messages, never by hand. Prettier
+# reflows its long reference lines, so leaving it in would fail `format:check`
+# on every release branch and put a formatting commit in front of every tag.
+CHANGELOG.md
 
 # Generated test output.
 coverage/

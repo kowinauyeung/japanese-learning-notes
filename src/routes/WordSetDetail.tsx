@@ -4,8 +4,12 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { MemberList } from '@/components/wordsets/MemberList';
 import { MemberPicker } from '@/components/wordsets/MemberPicker';
 import { PickerToolbar } from '@/components/wordsets/PickerToolbar';
+import { SetDescription } from '@/components/wordsets/SetDescription';
 import { WordSetEditModal } from '@/components/wordsets/WordSetEditModal';
+import { WORD_SET_LIMITS } from '@/domain/limits';
 import type { WordSetDraft } from '@/domain/wordSet';
+import { useI18n } from '@/i18n/context';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import { EMPTY_FILTERS } from '@/lib/filters';
 import type { Filters } from '@/lib/filters';
@@ -42,6 +46,9 @@ export function Component() {
   const navigate = useNavigate();
   const { sets, loading, error, refresh, repository } = useWordSets();
   const { entries, loading: entriesLoading, error: entriesError } = useEntries();
+  const errorMessage = useLoadErrorMessage(error);
+  const entriesErrorMessage = useLoadErrorMessage(entriesError);
+  const { t } = useI18n();
 
   const [busy, setBusy] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
@@ -74,6 +81,22 @@ export function Component() {
 
   const write = async (draft: WordSetDraft): Promise<boolean> => {
     if (!set || busy) return false;
+    /*
+      Every mutation on this page routes through here — add one, add all the
+      filtered candidates, drag to reorder, remove — so this is the only place
+      the size of a set has to be checked. Reordering and removing cannot grow
+      it, which leaves 追加 as the one path that can reach the limit and the one
+      that gets an error worth reading.
+
+      Refusing rather than truncating, unlike `summariseSession`: the order of
+      `entryIds` is the study order, so dropping the tail would silently discard
+      whichever words happened to sort last, and the user asked for all of them.
+    */
+    if (draft.entryIds.length > WORD_SET_LIMITS.entryIds) {
+      setWriteError(t('wordSets.tooManyMembers', { max: WORD_SET_LIMITS.entryIds }));
+      setPending(null);
+      return false;
+    }
     setBusy(true);
     setWriteError(null);
     try {
@@ -82,7 +105,7 @@ export function Component() {
       return true;
     } catch (cause) {
       console.error(cause);
-      setWriteError('保存できませんでした。もう一度お試しください。');
+      setWriteError(t('wordSets.saveError'));
       return false;
     } finally {
       setBusy(false);
@@ -110,7 +133,7 @@ export function Component() {
       void navigate('/wordsets', { replace: true });
     } catch (cause) {
       console.error(cause);
-      setDeleteError('削除できませんでした。もう一度お試しください。');
+      setDeleteError(t('wordSets.deleteError'));
     } finally {
       setBusy(false);
     }
@@ -166,22 +189,24 @@ export function Component() {
   });
 
   if (loading || entriesLoading)
-    return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
+    return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
   /**
    * The notebook's error counts as much as the set's. Every count and every row
    * on this page is derived from `entries` rather than from the set, so a failed
    * notebook load with only `error` surfaced renders a set that looks empty
    * instead of a page that says it could not load.
    */
-  if (error || entriesError)
-    return <p className="py-16 text-center text-sm text-danger">{error ?? entriesError}</p>;
+  if (errorMessage || entriesErrorMessage)
+    return (
+      <p className="py-16 text-center text-sm text-danger">{errorMessage ?? entriesErrorMessage}</p>
+    );
 
   if (!set) {
     return (
       <div className="py-16 text-center">
-        <p className="text-sm text-muted">単語集が見つかりません</p>
+        <p className="text-sm text-muted">{t('wordSets.notFound')}</p>
         <Link to="/wordsets" className="mt-2 inline-block text-sm text-accent underline">
-          単語集一覧へ戻る
+          {t('wordSets.back')}
         </Link>
       </div>
     );
@@ -194,28 +219,26 @@ export function Component() {
   return (
     <div className="space-y-4">
       <Link to="/wordsets" className="inline-block text-sm text-muted hover:text-ink">
-        ← 単語集一覧へ戻る
+        ← {t('wordSets.back')}
       </Link>
 
       <header className="rounded-card bg-card p-5 shadow-panel">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="font-display text-2xl font-bold">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-2xl font-bold [overflow-wrap:anywhere]">
               {set.name}
               <span className="ml-2 text-sm font-normal text-muted tabular-nums">
-                {members.length} 語
+                {t('wordSets.count', { count: members.length })}
               </span>
             </h1>
-            {set.description && (
-              <p className="prose-cjk mt-2 text-sm text-muted">{set.description}</p>
-            )}
+            {set.description && <SetDescription description={set.description} />}
           </div>
           <button
             type="button"
             onClick={() => setEditing(true)}
             className="min-h-9 shrink-0 rounded-pill bg-bg-alt px-4 text-xs font-semibold text-ink"
           >
-            編集
+            {t('common.edit')}
           </button>
         </div>
       </header>
@@ -232,8 +255,8 @@ export function Component() {
         breakpoint they stack, which is why the cap is a fraction of the
         viewport rather than a fixed height: two of them still fit.
       */}
-      <div className="grid gap-4 nav:grid-cols-2">
-        <div className="flex max-h-[46vh] min-h-64 nav:max-h-[62vh]">
+      <div className="grid min-w-0 gap-4 nav:grid-cols-2">
+        <div className="flex max-h-[46vh] min-h-64 min-w-0 nav:max-h-[62vh]">
           <MemberPicker
             shown={candidates.shown}
             total={candidates.total}
@@ -246,7 +269,7 @@ export function Component() {
             }
           />
         </div>
-        <div className="flex max-h-[46vh] min-h-64 nav:max-h-[62vh]">
+        <div className="flex max-h-[46vh] min-h-64 min-w-0 nav:max-h-[62vh]">
           <MemberList
             members={members}
             list={MEMBERS}
@@ -270,7 +293,7 @@ export function Component() {
         onClick={() => setConfirmingDelete(true)}
         className="min-h-10 w-full rounded-pill bg-danger-soft text-sm font-semibold text-danger"
       >
-        この単語集を削除
+        {t('wordSets.deleteSet')}
       </button>
 
       <WordSetEditModal
@@ -288,9 +311,9 @@ export function Component() {
 
       <ConfirmDialog
         open={clearing !== null}
-        title="表示中の単語を削除"
-        message={`この単語集から ${clearing?.length ?? 0} 語を外しますか？\n単語そのものは削除されません。`}
-        confirmLabel="外す"
+        title={t('wordSets.clearTitle')}
+        message={t('wordSets.clearMessage', { count: clearing?.length ?? 0 })}
+        confirmLabel={t('wordSets.remove')}
         busy={busy}
         error={writeError}
         onClose={() => setClearing(null)}
@@ -302,9 +325,9 @@ export function Component() {
 
       <ConfirmDialog
         open={confirmingDelete}
-        title="単語集を削除"
-        message={`「${set.name}」を削除しますか？\n収録されている単語そのものは削除されません。`}
-        confirmLabel="削除する"
+        title={t('wordSets.deleteTitle')}
+        message={t('wordSets.deleteMessage', { name: set.name })}
+        confirmLabel={t('wordSets.deleteConfirm')}
         busy={busy}
         error={deleteError}
         onClose={() => {
@@ -321,7 +344,7 @@ export function Component() {
         <div
           aria-hidden
           style={{ left: drag.point.x, top: drag.point.y }}
-          className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 rounded-pill bg-accent px-3 py-1 font-display text-xs font-bold text-on-accent shadow-panel"
+          className="pointer-events-none fixed z-50 max-w-[min(20rem,calc(100vw-1rem))] -translate-x-1/2 -translate-y-1/2 truncate rounded-pill bg-accent px-3 py-1 font-display text-xs font-bold text-on-accent shadow-panel"
         >
           {entries.find((entry) => entry.id === drag.dragging?.id)?.headword}
         </div>

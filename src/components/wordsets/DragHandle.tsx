@@ -1,4 +1,5 @@
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { useI18n } from '@/i18n/context';
 
 /**
  * The grip on a draggable row — and the keyboard's way to do the same thing.
@@ -26,10 +27,11 @@ export function DragHandle({
   /** Called with -1 or 1 when the arrow keys move the row. Null where the list has no order to change. */
   onMoveBy: ((delta: number) => void) | null;
 }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
-      aria-label={`${label}を並び替え`}
+      aria-label={t('wordSets.reorder', { label })}
       /**
        * `aria-disabled`, not `disabled`. A disabled button drops focus, and
        * every arrow press writes — so the real `disabled` would throw the

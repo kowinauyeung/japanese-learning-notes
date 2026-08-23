@@ -99,6 +99,75 @@
   --shadow-panel: var(--shadow-card);
 }
 
+/*
+ * The strips of the screen a phone does not actually give the page.
+ *
+ * `index.html` has asked for `viewport-fit=cover` since before the manifest,
+ * which lays the document out edge to edge — under the notch, under the status
+ * bar, under the home indicator — instead of inside the safe rectangle. In a
+ * browser tab that is nearly invisible, because Safari's own chrome already
+ * occupies those strips. Installed, with `display: standalone`, there is no
+ * chrome and the app owns the whole screen; nothing here read the insets, so
+ * the header ran under the status bar and the add button sat under the home
+ * indicator, where the swipe that leaves the app starts.
+ *
+ * Padding for the elements whose background has to keep reaching the screen
+ * edge — a header inset by its own margin leaves a strip of page showing above
+ * it, which is the notch drawn in the wrong colour rather than a layout that
+ * respects it. So the box stays full bleed and only its contents move in,
+ * which means the inset belongs on an ancestor that carries no padding of its
+ * own: `px-safe` on `<header>`, `px-4` on the row inside it.
+ *
+ * Margin for the fixed elements, which cannot use padding without changing
+ * their own shape — the add button is a 56px circle and padding would make it
+ * an oval. A fixed box with `bottom` set is displaced by its bottom margin
+ * (CSS 2.1 10.6.4 solves for `top`), so `bottom-5 mb-safe` reads as "five
+ * spacing units above whatever the device takes", which is the intent exactly.
+ *
+ * Two screens deliberately take nothing horizontal: the login card and the
+ * error screen are single boxes centred in both axes and narrower than any
+ * notched viewport — 360px and 448px against 844px in landscape — so no strip
+ * can reach them. They carry the top inset only, for the case where their
+ * content grows tall enough to run to the edges.
+ *
+ * The `0px` fallbacks change nothing today and are kept for the edit that
+ * would need them. Measured in Chromium against a deliberately unknown
+ * keyword: `padding-top: env(unknown, 0px)` and `padding-top: env(unknown)`
+ * both compute to `0px`, because an `env()` the browser cannot resolve is
+ * invalid at computed-value time and the property falls back to its initial
+ * value, which is the same zero. Combined with a design offset it differs —
+ * `calc(20px + env(unknown, 0px))` computes to `20px` and the same without a
+ * fallback to `0px`, losing the offset as well as the inset. Nothing here
+ * combines them, because `bottom-5` and `mb-safe` are separate properties for
+ * exactly that reason, so the fallbacks are insurance against the first person
+ * to write the combined form rather than something holding this layout up.
+ */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility px-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+@utility mb-safe {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility mx-safe {
+  margin-left: env(safe-area-inset-left, 0px);
+  margin-right: env(safe-area-inset-right, 0px);
+}
+
+@utility mr-safe {
+  margin-right: env(safe-area-inset-right, 0px);
+}
+
 html {
   color-scheme: light dark;
 }
@@ -110,10 +179,65 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * A word with no break opportunity in it may break anywhere rather than push
+ * the layout wider than the screen.
+ *
+ * The bug this fixes is not local to the element holding the long word. A
+ * headword of 400 unbroken Latin characters sets the page's scroll width, and a
+ * phone browser answers a document wider than the viewport by zooming out to
+ * fit — so the entire dashboard renders as a narrow column against a field of
+ * white, and every card on it looks broken. The visible symptom is nowhere near
+ * the cause.
+ *
+ * It went unnoticed for as long as it did because Japanese hides it: CJK text
+ * breaks between almost any two characters, so a 200-character definition wraps
+ * without needing this rule at all. Only Latin — a pasted URL, a test string of
+ * repeated letters — has no break opportunity to find.
+ *
+ * `anywhere` and not `break-word`, and the difference is the whole fix: both
+ * break a long word once the box is too narrow, but only `anywhere` lets that
+ * count toward the element's min-content size. `break-word` leaves a grid or
+ * flex track still measuring the unbroken word and sizing itself to fit it,
+ * which is precisely the overflow being removed here.
+ *
+ * On `body` so it is the default and an element opts out, rather than a
+ * utility every new component has to remember. Nothing in the app wants the
+ * other behaviour; `tabular-nums` dates and the heatmap have no long words in
+ * them to break.
+ */
+body {
+  overflow-wrap: anywhere;
+}
+
+/*
+ * iOS Safari zooms the page in whenever a focused form control computes to a
+ * font-size under 16px, and does not reliably zoom back out on blur: the
+ * keyboard changes the layout mid-gesture and the visual viewport keeps the
+ * scale, leaving the page stuck magnified with no API to reset it. The controls
+ * are deliberately sized down for density with text-sm and text-xs, which is
+ * right on a pointer device and is exactly what trips the zoom on a phone, so
+ * on a coarse pointer the threshold wins instead.
+ *
+ * Matching those two utilities by name, rather than every control, is what
+ * keeps this a floor instead of a fixed size: they are the only sizes in use
+ * below the threshold, so a control that asks for more — the dictation answer
+ * field at text-lg — is never selected and keeps what it asked for. Naming
+ * them couples this rule to Tailwind's scale, which is the trade: a control
+ * added with some other small size would go uncovered and zoom, where the
+ * unscoped rule would instead have silently shrunk the next large one.
+ */
+@media (pointer: coarse) {
+  :is(input, textarea, select):is(.text-xs, .text-sm) {
+    font-size: 16px;
+  }
+}
+
 /* Japanese and Cantonese prose needs the extra leading for furigana and wrapping. */
 .prose-cjk {
   font-family: var(--font-cjk);
   line-height: 1.85;
+  overflow-wrap: anywhere;
 }
 
 ruby {

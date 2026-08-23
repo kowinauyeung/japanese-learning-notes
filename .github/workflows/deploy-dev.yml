@@ -55,9 +55,9 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: yarn
@@ -138,12 +138,12 @@ jobs:
             echo '::notice::Deploy skipped: GCP_WORKLOAD_IDENTITY_PROVIDER is not set. See README → Deploy credentials.'
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         if: steps.gate.outputs.configured == 'true'
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         if: steps.gate.outputs.configured == 'true'
         with:
           node-version-file: .nvmrc
@@ -162,10 +162,15 @@ jobs:
           path: dist
 
       - uses: google-github-actions/auth@v3
+        id: auth
         if: steps.gate.outputs.configured == 'true'
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          # firebase-tools finds the credentials file on its own. The bearer
+          # token is for the verification step at the end, which talks to the
+          # Identity Toolkit admin API over plain HTTP.
+          token_format: access_token
 
       # Hosting and rules together, and only from develop. `--project dev` is
       # the .firebaserc alias for goitei-dev; prod is not reachable from this
@@ -199,3 +204,69 @@ jobs:
             "Serves this branch against the **goitei-dev** Firestore — the same data as the dev site, not a copy. Expires in 7 days." \
             > body.md
           gh pr comment "$PR" --body-file body.md --edit-last --create-if-none
+
+      # Google sign-in refuses an origin that is not on Firebase Auth's
+      # authorized domain list, and a channel's hostname carries a hash
+      # generated per channel, so every preview lands on a domain nobody has
+      # ever seen. `firebase hosting:channel:deploy` adds it to the list itself
+      # — `--no-authorized-domains` turns that off, and the step above does not
+      # pass it — and prunes the `goitei-dev--` domains no live channel claims
+      # while it is there.
+      #
+      # That call is also why previews could not sign in for weeks without
+      # anyone finding out. It needs `roles/firebaseauth.admin`, the service
+      # account did not have it, and firebase-tools answers a failure here with
+      # a warning and a successful deploy. `--json` above suppresses even the
+      # warning. The preview deployed, the comment below promised a working
+      # preview, and sign-in was broken on it for the seven days it lived.
+      #
+      # So this asks the question the deploy will not. Two things put the
+      # hostname back out of the list, and neither shows up as a failure:
+      # the role being revoked, and a concurrent channel deploy — the CLI reads
+      # the list, appends to it and writes it back, and the admin API offers no
+      # etag between the read and the write, so the later writer drops the
+      # earlier one's domain.
+      #
+      # Read-only, runs after the comment so a reviewer still gets the link,
+      # and a re-run of the job is the fix in both cases.
+      - name: Verify the preview domain is authorized for Google sign-in
+        if: steps.gate.outputs.configured == 'true' && github.event_name == 'pull_request'
+        env:
+          TOKEN: ${{ steps.auth.outputs.access_token }}
+          URL: ${{ steps.preview.outputs.url }}
+          # The .firebaserc `dev` alias, spelled out: this reads the project's
+          # auth config rather than deploying to it, and takes no alias.
+          PROJECT: goitei-dev
+        run: |
+          set -euo pipefail
+
+          host=${URL#https://}
+          host=${host%%/*}
+          if [ -z "$host" ]; then
+            echo "::error::No preview URL to check."
+            exit 1
+          fi
+
+          # `--fail-with-body` writes the API's own explanation to stdout before
+          # exiting non-zero, and capturing it is what makes that worth having:
+          # piping it into `jq` or to /dev/null hands the explanation to
+          # something that discards it, and leaves the run log holding a bare
+          # `curl: (22) ... 403` that cannot tell a missing
+          # `roles/firebaseauth.admin` apart from a disabled Identity Toolkit
+          # API. The body is echoed on its own line rather than interpolated
+          # into the `::error::`, because a workflow annotation keeps only its
+          # first line and these responses are multi-line JSON.
+          api="https://identitytoolkit.googleapis.com/admin/v2/projects/$PROJECT/config"
+          if ! config=$(curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "$api"); then
+            echo "$config"
+            echo "::error::Could not read the Firebase Auth config for $PROJECT. See the response above."
+            exit 1
+          fi
+
+          if jq -e --arg h "$host" '.authorizedDomains // [] | index($h)' <<<"$config" >/dev/null; then
+            echo "::notice::$host is authorized for Google sign-in."
+            exit 0
+          fi
+
+          echo "::error::$host was deployed but is not on the Firebase Auth authorized domain list, so Google sign-in will fail on this preview. Check that the deploy service account still holds roles/firebaseauth.admin, then re-run this job. See README → Preview sign-in."
+          exit 1

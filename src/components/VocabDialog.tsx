@@ -2,8 +2,12 @@ import { Link } from 'react-router-dom';
 import { Modal } from '@/components/Modal';
 import { PitchAccent } from '@/components/PitchAccent';
 import { Ruby } from '@/components/Ruby';
+import { SpeakButton, SpeechStatusNote } from '@/components/SpeakButton';
+import { useI18n } from '@/i18n/context';
+import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { useEntries } from '@/lib/entries';
 import { accentKana } from '@/lib/mora';
+import { spokenForm, useJapaneseSpeech } from '@/lib/speech';
 import { useVocabDialog } from '@/lib/vocabDialog';
 
 /**
@@ -20,16 +24,21 @@ import { useVocabDialog } from '@/lib/vocabDialog';
  * frame with nothing in it.
  */
 export function VocabDialog() {
+  const { t } = useI18n();
+  const entryLabel = useEntryLabel();
   const { openId, close } = useVocabDialog();
   const { entries } = useEntries();
+  // Above the early return, because hooks are: this component is mounted for
+  // the whole session and renders nothing until a word is asked for.
+  const { status: speechStatus, speak } = useJapaneseSpeech();
 
   if (openId === null) return null;
   const entry = entries.find((item) => item.id === openId);
 
   if (!entry) {
     return (
-      <Modal open title="単語" onClose={close}>
-        <p className="py-6 text-center text-sm text-muted">単語が見つかりません</p>
+      <Modal open title={t('vocabDialog.title')} onClose={close}>
+        <p className="py-6 text-center text-sm text-muted">{t('vocabDialog.notFound')}</p>
       </Modal>
     );
   }
@@ -40,7 +49,7 @@ export function VocabDialog() {
   return (
     <Modal
       open
-      title="単語"
+      title={t('vocabDialog.title')}
       onClose={close}
       footer={
         <Link
@@ -55,17 +64,21 @@ export function VocabDialog() {
           replace
           className="grid min-h-10 w-full place-items-center rounded-pill bg-accent text-sm font-semibold text-on-accent"
         >
-          詳細を見る
+          {t('vocabDialog.viewDetails')}
         </Link>
       }
     >
-      <div className="space-y-4">
-        <div>
-          <Ruby
-            headword={entry.headword}
-            reading={entry.reading}
-            className="has-ruby block font-display text-3xl font-bold"
-          />
+      <div className="min-w-0 space-y-4">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <Ruby
+              headword={entry.headword}
+              reading={entry.reading}
+              className="has-ruby block min-w-0 font-display text-3xl font-bold [overflow-wrap:anywhere]"
+            />
+            <SpeakButton status={speechStatus} onSpeak={() => speak(spokenForm(entry))} />
+          </div>
+          <SpeechStatusNote status={speechStatus} className="mt-2" />
           {entry.pitchAccent !== null && (
             <PitchAccent
               kana={accentKana(entry.headword, entry.reading)}
@@ -79,7 +92,7 @@ export function VocabDialog() {
             </span>
             {entry.pos.map((part) => (
               <span key={part} className="rounded-pill bg-bg-alt px-2.5 py-1 text-muted">
-                {part}
+                {entryLabel(part)}
               </span>
             ))}
             <span className="text-muted tabular-nums">{entry.learnedOn}</span>

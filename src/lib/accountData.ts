@@ -4,6 +4,7 @@ import type {
   Page,
   PageQuery,
   ProgressRepository,
+  UserRepository,
   WordSetRepository,
 } from '@/domain/ports';
 
@@ -15,7 +16,7 @@ import type {
  * means. That rule is the whole difficulty — see `drain`.
  */
 
-export const EXPORT_SCHEMA_VERSION = 1;
+export const EXPORT_SCHEMA_VERSION = 2;
 
 export interface ExportBundle {
   schemaVersion: number;
@@ -84,9 +85,8 @@ export async function exportEverything({
 }: {
   appVersion: string;
   /**
-   * The signed-in identity, passed in rather than read through a port: there is
-   * no `UserRepository` adapter yet, and what a user would expect to find here
-   * is the Google profile the app displays — which the caller already holds.
+   * The signed-in identity and persisted settings. The caller already holds
+   * both, so exporting them does not spend another Firestore read.
    */
   profile: unknown;
   entries: EntryRepository;
@@ -121,11 +121,20 @@ export function exportFilename(now = new Date()): string {
 /**
  * Delete everything this account owns, one document at a time, then the account.
  *
- * **Firestore does not cascade.** Deleting `users/{uid}` leaves every
- * subcollection under it addressable, so the only correct order is bottom-up:
- * the rows first, the parent last. Nothing here is atomic — a failure part way
- * leaves the account partly emptied, which is why it reports what it removed
- * and asks the user to run it again rather than claiming success.
+ * **Firestore does not cascade**, so the parent document is its own step. It
+ * used to be absent on purpose: nothing wrote `users/{uid}`, `UserRepository`
+ * had no adapter, and the rules allowed the client `read, delete` there and
+ * nothing else. User settings ended that — `createUserRepository` writes the
+ * document and `firestore.rules` allows `create, update` on the path — so the
+ * step below is required rather than skipped.
+ *
+ * It goes **after** the subcollections, not before: a parent removed first
+ * leaves every subcollection under it addressable, because removing a document
+ * in Firestore does not remove what is beneath it.
+ *
+ * Nothing here is atomic. A failure part way leaves the account partly emptied,
+ * which is why it reports what it removed and asks the user to run it again
+ * rather than claiming success.
  *
  * **All four collections, and the account.** An earlier version drained words
  * and word sets and stopped, while the button, the dialog and the privacy
@@ -174,11 +183,15 @@ export async function deleteEverything({
   entries,
   wordSets,
   progress,
+  userProfiles,
+  uid,
   auth,
 }: {
   entries: EntryRepository;
   wordSets: WordSetRepository;
   progress: ProgressRepository;
+  userProfiles: UserRepository;
+  uid: string;
   auth: AuthPort;
 }): Promise<{ entries: number; wordSets: number }> {
   // **First, and before anything irreversible.**
@@ -209,6 +222,10 @@ export async function deleteEverything({
   // the map is one document and the sessions are a collection, and neither is
   // something a user thinks of as a row.
   await progress.removeAll();
+
+  // Firestore does not cascade. The parent profile comes after every
+  // subcollection, but before Auth removes the identity needed to retry it.
+  await userProfiles.remove(uid);
 
   // Last, and separately fallible: providers refuse this on a stale session.
   await auth.deleteAccount();

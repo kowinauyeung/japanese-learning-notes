@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SESSION_LIMITS } from '@/domain/limits';
 import type { EntryProgress } from '@/domain/practice';
 import type { WordSet } from '@/domain/wordSet';
 import {
@@ -247,6 +248,19 @@ describe('describeFilters', () => {
     ).toBe('動詞 / 和語 / 〜2026-03-31');
   });
 
+  it('stores localized metadata in a non-Japanese session label', () => {
+    expect(
+      describeFilters({ ...EMPTY_PRACTICE_FILTERS, pos: '動詞', origin: '漢語' }, [], {
+        set: (name) => `Set: ${name}`,
+        metadata: (value) =>
+          (({ 動詞: 'Verb', 漢語: 'Sino-Japanese' }) as Record<string, string>)[value] ?? value,
+        unknown: 'Unknown',
+        weakOnly: 'Weak only',
+        all: 'All words',
+      }),
+    ).toBe('Verb / Sino-Japanese');
+  });
+
   /**
    * By name, because 履歴 is read by a person weeks later. A set deleted in
    * between is named as missing rather than dropped: silently omitting a
@@ -329,6 +343,47 @@ describe('summariseSession', () => {
       missed: ['b', 'c'],
       startedAt: '2026-06-24T09:59:00.000Z',
     });
+  });
+
+  /**
+   * The caption is assembled from set and tag names, and a word set may be
+   * named with an emoji — so the cut can land between the two halves of a
+   * surrogate pair. What that leaves behind is not a character: it renders as
+   * the replacement glyph in the history row, and it is not encodable as UTF-8,
+   * so the value Firestore stores is not the value that was measured here.
+   */
+  it('does not cut an emoji in half when it shortens the caption', () => {
+    // The label is built so that the slice at `filterLabel - 1` falls exactly
+    // between the high and low surrogate of the final 🍣.
+    const label = `${'あ'.repeat(SESSION_LIMITS.filterLabel - 2)}🍣🍣`;
+    expect(label.length).toBeGreaterThan(SESSION_LIMITS.filterLabel);
+
+    const { filterLabel } = summariseSession({
+      mode: 'flashcard',
+      filterLabel: label,
+      answers: [],
+      startedAt: '2026-06-24T09:59:00.000Z',
+    });
+
+    expect(filterLabel.length).toBeLessThanOrEqual(SESSION_LIMITS.filterLabel);
+    expect(filterLabel.endsWith('…')).toBe(true);
+    // No unpaired surrogate anywhere: every code unit in D800-DFFF has to be
+    // half of a pair that `Array.from` can read back as one code point.
+    expect(
+      [...filterLabel].every((char) => char.codePointAt(0)! < 0xd800 || char.length === 2),
+    ).toBe(true);
+  });
+
+  it('leaves a caption inside the limit exactly as it was given', () => {
+    const label = '#仕事 / 🍣';
+    expect(
+      summariseSession({
+        mode: 'flashcard',
+        filterLabel: label,
+        answers: [],
+        startedAt: '2026-06-24T09:59:00.000Z',
+      }).filterLabel,
+    ).toBe(label);
   });
 });
 

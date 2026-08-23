@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Ruby } from '@/components/Ruby';
 import type { Entry } from '@/domain/entry';
+import { useI18n } from '@/i18n/context';
 import { SessionHeader } from './SessionHeader';
 
 const isEditable = (node: unknown): boolean => {
@@ -70,6 +71,7 @@ export function FlashcardSession({
   onAnswer: (correct: boolean) => void;
   onQuit: () => void;
 }) {
+  const { t } = useI18n();
   const [flipped, setFlipped] = useState(false);
 
   const answer = (correct: boolean) => {
@@ -130,13 +132,13 @@ export function FlashcardSession({
 
   return (
     <section className="mx-auto max-w-2xl space-y-4">
-      <SessionHeader title="フラッシュカード" index={index} total={total} onQuit={onQuit} />
+      <SessionHeader title={t('practice.flashcard')} index={index} total={total} onQuit={onQuit} />
 
-      <div className="min-h-64 space-y-5 rounded-card bg-card p-6 text-center shadow-panel">
+      <div className="min-h-64 min-w-0 space-y-5 overflow-hidden rounded-card bg-card p-6 text-center shadow-panel">
         <Ruby
           headword={entry.headword}
           reading={flipped ? entry.reading : ''}
-          className="has-ruby block font-display text-4xl font-bold"
+          className="has-ruby block font-display text-4xl font-bold [overflow-wrap:anywhere]"
         />
 
         {flipped ? (
@@ -149,18 +151,22 @@ export function FlashcardSession({
                 </li>
               ))}
             </ul>
-            {entry.definitionSub && <p className="text-sm text-muted">{entry.definitionSub}</p>}
+            {entry.definitionSub && (
+              <p className="text-sm [overflow-wrap:anywhere] text-muted">{entry.definitionSub}</p>
+            )}
             {example && (
               <div className="rounded-panel bg-bg-alt p-3">
                 <p className="prose-cjk text-sm">{example}</p>
                 {exampleTranslation && (
-                  <p className="mt-1 text-xs text-muted">{exampleTranslation}</p>
+                  <p className="mt-1 text-xs [overflow-wrap:anywhere] text-muted">
+                    {exampleTranslation}
+                  </p>
                 )}
               </div>
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted">意味を思い出してから裏を見てください</p>
+          <p className="text-sm text-muted">{t('practice.recallHint')}</p>
         )}
       </div>
 
@@ -171,7 +177,7 @@ export function FlashcardSession({
             onClick={() => answer(false)}
             className="min-h-12 rounded-pill bg-danger-soft text-sm font-semibold text-danger"
           >
-            もう一度
+            {t('practice.again')}
             <Key>←</Key>
           </button>
           <button
@@ -179,7 +185,7 @@ export function FlashcardSession({
             onClick={() => answer(true)}
             className="min-h-12 rounded-pill bg-accent text-sm font-semibold text-on-accent"
           >
-            わかった
+            {t('practice.gotIt')}
             <Key>→</Key>
           </button>
         </div>
@@ -189,7 +195,7 @@ export function FlashcardSession({
           onClick={() => setFlipped(true)}
           className="min-h-12 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent"
         >
-          裏を見る
+          {t('practice.reveal')}
           <Key>Space</Key>
         </button>
       )}

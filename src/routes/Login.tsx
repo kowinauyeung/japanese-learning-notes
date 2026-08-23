@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Link, Navigate, useLocation } from 'react-router-dom';
 import { LogoMark } from '@/components/Logo';
 import { PublicFooter } from '@/components/PublicLayout';
+import { useI18n } from '@/i18n/context';
 import { useAuth } from '@/lib/auth';
 import { projectId } from '@/lib/env';
 import { safeRedirect } from '@/lib/redirect';
 
 export function Component() {
+  const { t } = useI18n();
   const { user, loading, signIn } = useAuth();
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +17,7 @@ export function Component() {
   if (loading) {
     return (
       <main className="grid min-h-dvh place-items-center bg-bg">
-        <p className="text-sm text-muted">読み込み中…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       </main>
     );
   }
@@ -30,7 +32,7 @@ export function Component() {
       // A closed popup is the user changing their mind, not a failure worth showing.
       const code = (cause as { code?: string }).code;
       if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
-        setError('ログインできませんでした。もう一度お試しください。');
+        setError(t('auth.failed'));
       }
     } finally {
       setBusy(false);
@@ -40,14 +42,28 @@ export function Component() {
   return (
     /* A column with the card centred in the growing part, so the footer sits on
        the bottom edge instead of wherever the card happens to end. */
-    <div className="flex min-h-dvh flex-col bg-bg">
+    <div className="flex min-h-dvh flex-col bg-bg pt-safe">
       <main className="grid flex-1 place-items-center px-4 py-8">
         <div className="w-full max-w-[360px] rounded-card bg-card p-8 shadow-panel">
-          <h1 className="flex flex-col items-center gap-3">
-            <LogoMark className="h-16 w-16" />
-            <span className="font-display text-3xl font-bold text-accent">語彙庭</span>
+          {/*
+            A link, and the only way off this screen that does not require a
+            Google account.
+
+            The manifest asks for `display: standalone`, so an installed app has
+            no browser chrome and no back button. A visitor who opened `/`,
+            read the landing page and tapped through to here had nothing to
+            press: the card offered sign-in, the policies, and nothing else, and
+            the four footer links all lead further away rather than back. The
+            same brand mark is the way home from every other public shell, so
+            it is the one here too.
+          */}
+          <h1>
+            <Link to="/" className="flex flex-col items-center gap-3">
+              <LogoMark className="h-16 w-16" />
+              <span className="font-display text-3xl font-bold text-accent">{t('brand.name')}</span>
+            </Link>
           </h1>
-          <p className="mt-2 text-center text-sm text-muted">ログインして続ける</p>
+          <p className="mt-2 text-center text-sm text-muted">{t('auth.continue')}</p>
 
           <button
             type="button"
@@ -55,7 +71,7 @@ export function Component() {
             disabled={busy}
             className="mt-8 min-h-12 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
           >
-            {busy ? 'ログイン中…' : 'Google でログイン'}
+            {busy ? t('auth.loggingIn') : t('auth.google')}
           </button>
 
           {error && <p className="mt-3 text-center text-sm text-danger">{error}</p>}
@@ -67,15 +83,15 @@ export function Component() {
           {/* The policies are agreed to by signing in, so this is the last
               screen on which they have to be one tap away. */}
           <p className="mt-4 text-center text-xs text-muted">
-            続行すると
+            {t('auth.consentPrefix')}
             <Link to="/terms" className="underline">
-              利用規約
+              {t('public.terms')}
             </Link>
-            と
+            {t('auth.consentJoin')}
             <Link to="/privacy" className="underline">
-              プライバシーポリシー
+              {t('public.privacyPolicy')}
             </Link>
-            に同意したものとみなします。
+            {t('auth.consentSuffix')}
           </p>
         </div>
       </main>

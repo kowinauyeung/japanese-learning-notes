@@ -1,15 +1,21 @@
 import type { Entry, EntryDraft } from '@/domain/entry';
 import type {
+  AppUpdatePort,
   AuthPort,
   AuthUser,
+  EntryDraftingPort,
   EntryRepository,
   Page,
   PageQuery,
   ProgressRepository,
+  UserRepository,
   WordSetRepository,
 } from '@/domain/ports';
+import { EntryDraftingError } from '@/domain/ports';
 import type { EntryProgress, PracticeSession, PracticeSessionDraft } from '@/domain/practice';
+import type { UserProfile, UserProfileDraft } from '@/domain/user';
 import type { WordSet, WordSetDraft } from '@/domain/wordSet';
+import type { E2ESeed } from './e2eSeed';
 import { sanitizeEntry, sanitizeSession, sanitizeWordSet } from './sanitize';
 
 /**
@@ -28,31 +34,30 @@ import { sanitizeEntry, sanitizeSession, sanitizeWordSet } from './sanitize';
  * tests/rules, both against a real emulator, and neither needs a browser.
  */
 
-interface Seed {
-  /** Start already signed in, skipping the login screen. */
-  signedIn?: boolean;
-  /** Raw documents, coerced through the same sanitiser the real read path uses. */
-  entries?: unknown[];
-  /** Entry ids to start marked wrong, so 苦手のみ has something to select. */
-  weak?: string[];
-  /** Raw 単語集 documents. Nothing in the app creates one yet. */
-  wordSets?: unknown[];
-  /** Finished sessions, so 履歴 can be reached without drilling first. */
-  sessions?: unknown[];
-}
-
 declare global {
   interface Window {
-    __GOITEI_E2E__?: Seed;
+    __GOITEI_E2E__?: E2ESeed;
+    __GOITEI_E2E_READS__?: Record<'entries' | 'progress' | 'wordSets', number>;
+    __GOITEI_E2E_RELEASE_SETTINGS_SAVE__?: () => void;
   }
 }
 
-const seed = (): Seed => (typeof window === 'undefined' ? {} : (window.__GOITEI_E2E__ ?? {}));
+const seed = (): E2ESeed => (typeof window === 'undefined' ? {} : (window.__GOITEI_E2E__ ?? {}));
+
+function countRead(store: 'entries' | 'progress' | 'wordSets'): void {
+  if (typeof window === 'undefined') return;
+  const reads = (window.__GOITEI_E2E_READS__ ??= { entries: 0, progress: 0, wordSets: 0 });
+  reads[store] += 1;
+}
 
 const E2E_USER: AuthUser = {
   uid: 'e2e-user',
   email: 'e2e@example.test',
   displayName: 'テスト太郎',
+  // No picture, so the substitute exercises the fallback. A URL here would be
+  // a request to a host Playwright cannot reach, and the visual baselines would
+  // then be a screenshot of a broken image.
+  photoUrl: '',
   emailVerified: true,
 };
 
@@ -95,6 +100,28 @@ const notify = () => {
   for (const listener of listeners) listener(currentUser);
 };
 
+/**
+ * There is no worker in this build — `VitePWA` is disabled under `mode === 'e2e'`
+ * — so there is nothing that could ever be waiting. This is the honest
+ * implementation of that, not a stub standing in for one: a build with no
+ * service worker genuinely never has a new build installed behind it.
+ */
+export const appUpdatePort: AppUpdatePort = {
+  onWaiting(fn) {
+    // A real port, not a stub: it reports a waiting build when the seed says
+    // one is waiting, and reports nothing otherwise. Without it `UpdatePrompt`
+    // can never be on screen in an end-to-end run, and a claim about how it
+    // shares the bottom of the viewport with `OfflineNotice` has nothing to
+    // measure.
+    if (!seed().updateWaiting) return () => {};
+    // Asynchronously, because the real port learns of a waiting build from the
+    // service worker registration and never from the render that subscribed.
+    const timer = setTimeout(fn, 0);
+    return () => clearTimeout(timer);
+  },
+  activate: () => Promise.resolve(),
+};
+
 export const authPort: AuthPort = {
   current: () => currentUser,
   onChange(fn) {
@@ -129,6 +156,105 @@ export const authPort: AuthPort = {
     return Promise.resolve();
   },
 };
+
+// --------------------------------------------------------------- user profile
+
+const profileStores = new Map<string, UserProfile>();
+
+function persistedProfile(uid: string): UserProfile | null {
+  const existing = profileStores.get(uid);
+  if (existing) return existing;
+  const persisted = load<UserProfile | null>(`profile.${uid}`, null);
+  if (persisted) {
+    profileStores.set(uid, persisted);
+    return persisted;
+  }
+  const raw = seed().profile;
+  if (typeof raw !== 'object' || raw === null) return null;
+  const now = new Date().toISOString();
+  const record = raw;
+  const profile: UserProfile = {
+    uid,
+    nickname: typeof record.nickname === 'string' ? record.nickname : '',
+    language: record.language ?? 'en',
+    translationLanguage: record.translationLanguage ?? 'en',
+    theme: record.theme ?? 'system',
+    createdAt: now,
+    updatedAt: now,
+  };
+  profileStores.set(uid, profile);
+  return profile;
+}
+
+/** Set once a save has committed, so the refresh that follows it can be failed. */
+let settingsSaved = false;
+
+export const userRepository: UserRepository = {
+  get(uid): Promise<UserProfile | null> {
+    // Fails only the read that follows a committed save, which is the whole
+    // point: the transaction succeeded and the profile is durable, and the
+    // question is what the interface says about it.
+    if (seed().settingsRefresh === 'fail' && settingsSaved) {
+      return Promise.reject(
+        Object.assign(new Error('Failed to get document because the client is offline.'), {
+          code: 'unavailable',
+        }),
+      );
+    }
+    return Promise.resolve(persistedProfile(uid));
+  },
+  save(uid, draft: UserProfileDraft): Promise<void> {
+    if (seed().settingsSave === 'fail') return Promise.reject(new Error('settings save failed'));
+    // Carries Firestore's own code, because that string is the entire input to
+    // the branch under test. The real save is a `runTransaction`, and a
+    // transaction is the one write that does not survive losing the backend:
+    // measured against the emulator with the socket cut, it rejects with
+    // `unavailable` after six to ten seconds of retries.
+    //
+    // Named for what the client observed rather than for a cause. This seed
+    // sets no browser connectivity state, and it should not: `unavailable`
+    // reaches the application identically whether the device dropped off the
+    // network or the backend did, which is the whole point of the branch it
+    // exercises.
+    if (seed().settingsSave === 'unreachable') {
+      return Promise.reject(
+        Object.assign(new Error('Failed to get document because the client is offline.'), {
+          code: 'unavailable',
+        }),
+      );
+    }
+    if (seed().settingsSave === 'defer') {
+      return new Promise((resolve) => {
+        window.__GOITEI_E2E_RELEASE_SETTINGS_SAVE__ = () => {
+          persistProfile(uid, draft);
+          delete window.__GOITEI_E2E_RELEASE_SETTINGS_SAVE__;
+          resolve();
+        };
+      });
+    }
+    persistProfile(uid, draft);
+    settingsSaved = true;
+    return Promise.resolve();
+  },
+  remove(uid): Promise<void> {
+    profileStores.delete(uid);
+    save(`profile.${uid}`, null);
+    return Promise.resolve();
+  },
+};
+
+function persistProfile(uid: string, draft: UserProfileDraft): void {
+  const existing = persistedProfile(uid);
+  const now = new Date().toISOString();
+  const profile: UserProfile = {
+    ...draft,
+    uid,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+  profileStores.set(uid, profile);
+  save(`profile.${uid}`, profile);
+}
 
 // --------------------------------------------------------------- entry store
 
@@ -188,6 +314,7 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
 
   return {
     list({ limit, cursor }: PageQuery): Promise<Page<Entry>> {
+      countRead('entries');
       const all = [...store.values()].sort(newestFirst);
       const start = cursor ? all.findIndex((entry) => entry.id === cursor) + 1 : 0;
       const items = all.slice(start, start + limit);
@@ -301,6 +428,7 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
 
   return {
     listAll(): Promise<EntryProgress[]> {
+      countRead('progress');
       return Promise.resolve([...progress.values()]);
     },
 
@@ -382,9 +510,16 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
   const persist = () => {
     save(`wordSets.${uid}`, [...store.values()]);
   };
+  const waitForWrite = () => {
+    const milliseconds = seed().wordSetWriteDelayMs ?? 0;
+    return milliseconds > 0
+      ? new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
+      : Promise.resolve();
+  };
 
   return {
     list({ limit, cursor }: PageQuery): Promise<Page<WordSet>> {
+      countRead('wordSets');
       const all = [...store.values()].sort(
         (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
       );
@@ -401,7 +536,8 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
       return Promise.resolve(store.get(id) ?? null);
     },
 
-    create(draft: WordSetDraft): Promise<string> {
+    async create(draft: WordSetDraft): Promise<string> {
+      await waitForWrite();
       const id = `e2e-set-${++setSequence}`;
       const now = stamp();
       store.set(id, {
@@ -416,12 +552,13 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
         updatedAt: now,
       });
       persist();
-      return Promise.resolve(id);
+      return id;
     },
 
-    update(id: string, draft: WordSetDraft): Promise<void> {
+    async update(id: string, draft: WordSetDraft): Promise<void> {
       const existing = store.get(id);
       if (!existing) return Promise.reject(new Error(`no word set ${id}`));
+      await waitForWrite();
       store.set(id, {
         ...existing,
         ...draft,
@@ -429,13 +566,79 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
         updatedAt: stamp(),
       });
       persist();
-      return Promise.resolve();
     },
 
-    remove(id: string): Promise<void> {
+    async remove(id: string): Promise<void> {
+      await waitForWrite();
       store.delete(id);
       persist();
-      return Promise.resolve();
     },
   };
+};
+
+/**
+ * The drafting port, answered from the prompt instead of from a model.
+ *
+ * A stand-in and not a stub: it implements the port the architecture already
+ * defines, exactly as the repositories above do. What it removes from the
+ * end-to-end run is a network call, a quota and a non-deterministic answer —
+ * none of which the thing under test is about. What is under test is that the
+ * button reaches the port, that the reply goes through `jsonToDraft` rather
+ * than around it, and that the form ends up filled.
+ *
+ * The headword is read back out of the prompt so the assertion can be about
+ * *this* word rather than about a fixture that would pass for any of them.
+ * `buildPrompt` opens with 「…」, which is why that is what is matched; if it
+ * ever stops doing so the fallback below keeps the reply valid and the test
+ * fails on the headword, which is the right place for it to fail.
+ */
+/**
+ * Set when a seeded `unavailable` has been served, so the port reports itself
+ * unavailable afterwards exactly as the Gemini adapter does.
+ */
+let draftingIsSpent = false;
+/**
+ * The seed the flag above was set under, compared by identity.
+ *
+ * Comparing the *reason* instead was not enough, and the difference only shows
+ * up in the second test to seed `unavailable`: the flag survives, `available()`
+ * answers false before that test has pressed anything, and the button it needs
+ * is never rendered. One case passes, two cases are order-dependent. Every
+ * end-to-end page and every component test installs a fresh object, so identity
+ * is what actually distinguishes one run from the next.
+ */
+let draftingSeed: E2ESeed | undefined;
+
+export const entryDraftingPort: EntryDraftingPort = {
+  available: () => {
+    // The flag's memory is the seed's, not the session's: a flag that outlived
+    // one run would hide the button in the next for no reason that run stated,
+    // which is the kind of cross-contamination that reads as flake.
+    const current = seed();
+    if (current !== draftingSeed) {
+      draftingSeed = current;
+      draftingIsSpent = false;
+    }
+    return !draftingIsSpent;
+  },
+  // Not `async`: there is nothing to await, and an async function with no
+  // await is a lint error rather than a style. The port is still a promise.
+  draft: (prompt) => {
+    const failure = seed().entryDrafting;
+    if (failure) {
+      if (failure === 'unavailable') draftingIsSpent = true;
+      return Promise.reject(new EntryDraftingError(failure));
+    }
+    const headword = /^「(.+?)」/.exec(prompt)?.[1] ?? '兆候';
+    // Fenced, because a real reply is: the prompt asks for a ```json block and
+    // `jsonToDraft` strips one. An unfenced fixture would leave that unexercised.
+    const entry = {
+      headword,
+      reading: 'ちょうこう',
+      definition: `${headword}の意味`,
+      pos: ['名詞'],
+      jlpt: 'N2',
+    };
+    return Promise.resolve(['```json', JSON.stringify(entry, null, 2), '```'].join('\n'));
+  },
 };

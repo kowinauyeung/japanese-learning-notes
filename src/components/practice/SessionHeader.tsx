@@ -1,3 +1,5 @@
+import { useI18n } from '@/i18n/context';
+
 /** 「3 / 12」 plus the bar, shared by both modes so they stay in step visually. */
 export function SessionHeader({
   title,
@@ -11,16 +13,17 @@ export function SessionHeader({
   total: number;
   onQuit: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-xs font-semibold tracking-wide text-muted">{title}</h1>
         <div className="flex items-center gap-3">
-          <p className="text-xs text-muted tabular-nums" aria-label="進捗">
+          <p className="text-xs text-muted tabular-nums" aria-label={t('practice.progress')}>
             {index + 1} / {total}
           </p>
           <button type="button" onClick={onQuit} className="text-xs text-muted hover:text-ink">
-            中断
+            {t('practice.quitShort')}
           </button>
         </div>
       </div>

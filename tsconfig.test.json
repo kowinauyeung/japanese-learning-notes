@@ -9,7 +9,14 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "types": ["node", "vite/client"],
+    // `vite-plugin-pwa/client` is here and not only in src/vite-env.d.ts,
+    // because `include` below is `tests` alone. A .d.ts that nothing imports is
+    // never loaded, so the triple-slash reference that supplies
+    // `virtual:pwa-register` to the app project never runs for this one — and a
+    // test that reaches `@/lib/backend` pulls `@/infra/pwa/updatePort` in with
+    // it and fails to resolve the module. Stated rather than inherited, since
+    // this project deliberately inherits nothing.
+    "types": ["node", "vite/client", "vite-plugin-pwa/client"],
 
     "strict": true,
     "noUnusedLocals": true,
@@ -25,8 +32,6 @@
     "moduleDetection": "force",
     "noEmit": true,
     "skipLibCheck": true,
-
-    "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["tests"]

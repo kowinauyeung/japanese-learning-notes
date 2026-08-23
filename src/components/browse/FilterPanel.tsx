@@ -1,11 +1,7 @@
 import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
+import { useI18n } from '@/i18n/context';
+import { useEntryLabel } from '@/i18n/useEntryLabel';
 import type { Filters, SortKey } from '@/lib/filters';
-
-const SORTS: { value: SortKey; label: string }[] = [
-  { value: 'new', label: '追加日（新しい順）' },
-  { value: 'old', label: '追加日（古い順）' },
-  { value: 'headword', label: '見出し語順' },
-];
 
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
@@ -28,6 +24,13 @@ export function FilterPanel({
   allTags: string[];
   onChange: (next: Filters) => void;
 }) {
+  const { t } = useI18n();
+  const entryLabel = useEntryLabel();
+  const sorts: { value: SortKey; label: string }[] = [
+    { value: 'new', label: t('vocabulary.sortNewest') },
+    { value: 'old', label: t('vocabulary.sortOldest') },
+    { value: 'headword', label: t('vocabulary.sortHeadword') },
+  ];
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) =>
     onChange({ ...filters, [key]: value });
 
@@ -63,61 +66,61 @@ export function FilterPanel({
 
       <div className="grid gap-2 sm:grid-cols-3">
         <label className="space-y-1">
-          <span className="text-[11px] text-muted">品詞</span>
+          <span className="text-[11px] text-muted">{t('vocabulary.partOfSpeech')}</span>
           <select
             value={filters.pos}
             onChange={(event) => set('pos', event.target.value)}
             className={selectClass}
           >
-            <option value="">すべて</option>
+            <option value="">{t('vocabulary.all')}</option>
             {POS.map((part) => (
               <option key={part} value={part}>
-                {part}
+                {entryLabel(part)}
               </option>
             ))}
           </select>
         </label>
 
         <label className="space-y-1">
-          <span className="text-[11px] text-muted">語種</span>
+          <span className="text-[11px] text-muted">{t('vocabulary.origin')}</span>
           <select
             value={filters.origin}
             onChange={(event) => set('origin', event.target.value)}
             className={selectClass}
           >
-            <option value="">すべて</option>
+            <option value="">{t('vocabulary.all')}</option>
             {WORD_ORIGINS.map((origin) => (
               <option key={origin} value={origin}>
-                {origin}
+                {entryLabel(origin)}
               </option>
             ))}
           </select>
         </label>
 
         <label className="space-y-1">
-          <span className="text-[11px] text-muted">文体</span>
+          <span className="text-[11px] text-muted">{t('vocabulary.style')}</span>
           <select
             value={filters.style}
             onChange={(event) => set('style', event.target.value)}
             className={selectClass}
           >
-            <option value="">すべて</option>
+            <option value="">{t('vocabulary.all')}</option>
             {STYLES.map((style) => (
               <option key={style} value={style}>
-                {style}
+                {entryLabel(style)}
               </option>
             ))}
           </select>
         </label>
 
         <label className="space-y-1">
-          <span className="text-[11px] text-muted">頻度（以上）</span>
+          <span className="text-[11px] text-muted">{t('vocabulary.frequencyAtLeast')}</span>
           <select
             value={filters.minFreq}
             onChange={(event) => set('minFreq', Number(event.target.value))}
             className={selectClass}
           >
-            <option value={0}>すべて</option>
+            <option value={0}>{t('vocabulary.all')}</option>
             {[1, 2, 3, 4, 5].map((value) => (
               <option key={value} value={value}>
                 {'★'.repeat(value)}
@@ -128,7 +131,7 @@ export function FilterPanel({
         </label>
 
         <label className="space-y-1">
-          <span className="text-[11px] text-muted">開始日</span>
+          <span className="text-[11px] text-muted">{t('vocabulary.startDate')}</span>
           <input
             type="date"
             value={filters.from}
@@ -138,7 +141,7 @@ export function FilterPanel({
         </label>
 
         <label className="space-y-1">
-          <span className="text-[11px] text-muted">終了日</span>
+          <span className="text-[11px] text-muted">{t('vocabulary.endDate')}</span>
           <input
             type="date"
             value={filters.to}
@@ -149,13 +152,13 @@ export function FilterPanel({
       </div>
 
       <label className="block space-y-1">
-        <span className="text-[11px] text-muted">並び順</span>
+        <span className="text-[11px] text-muted">{t('vocabulary.sort')}</span>
         <select
           value={filters.sort}
           onChange={(event) => set('sort', event.target.value as SortKey)}
           className={selectClass}
         >
-          {SORTS.map((option) => (
+          {sorts.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>

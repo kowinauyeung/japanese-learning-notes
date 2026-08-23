@@ -1,5 +1,6 @@
 import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+import { getAuth, type UserRecord } from 'firebase-admin/auth';
+import { lookupErrorCode, lookupFailureLines, parseAllowUserArgs } from './allow-user.shared';
 
 /**
  * Grant or revoke access, by custom claim.
@@ -7,6 +8,7 @@ import { getAuth } from 'firebase-admin/auth';
  *   yarn allow you@example.com          # grant on goitei-dev
  *   yarn allow you@example.com --revoke
  *   yarn allow you@example.com prod
+ *   yarn allow you@example.com --project your-project-id
  *
  * The security rules read `request.auth.token.allowed`, so this is the only
  * thing that opens the door. It replaced an `allowedUsers` document that rules
@@ -25,24 +27,15 @@ import { getAuth } from 'firebase-admin/auth';
  * — deleting the offending data is the part that takes effect now.
  */
 
-const [email, ...rest] = process.argv.slice(2);
+const parsed = parseAllowUserArgs(process.argv.slice(2));
 
-// Rejected rather than ignored, because the mistake this catches is silent and
-// natural: `--revoke` is spelled with dashes, so `--prod` is how one reaches
-// for the other — and `rest.includes('prod')` is false for it, so the run would
-// grant access on **dev** and say so only in its last line.
-const unknown = rest.filter((arg) => arg !== 'prod' && arg !== '--revoke');
-
-if (!email || unknown.length > 0) {
-  if (unknown.length > 0) console.error(`unknown argument: ${unknown.join(' ')}`);
-  console.error('usage: allow-user.ts <email> [prod] [--revoke]');
+if (!parsed.ok) {
+  for (const error of parsed.errors) console.error(error);
+  console.error(parsed.usage);
   process.exit(1);
 }
 
-const revoke = rest.includes('--revoke');
-const env = rest.includes('prod') ? 'prod' : 'dev';
-
-const projectId = env === 'prod' ? 'goitei' : 'goitei-dev';
+const { email, revoke, projectId } = parsed;
 
 if (getApps().length === 0) {
   const key = process.env.GOOGLE_APPLICATION_CREDENTIALS;
@@ -54,11 +47,19 @@ if (getApps().length === 0) {
 
 const auth = getAuth();
 
-const user = await auth.getUserByEmail(email).catch(() => null);
-if (!user) {
+let user: UserRecord;
+
+try {
+  user = await auth.getUserByEmail(email);
+} catch (cause) {
   // Deliberately not created here: the uid has to be the one Google issued, so
   // the account must have signed in once before it can be allowed.
-  console.error(`${email} has never signed in to ${projectId}; ask them to try once first.`);
+  for (const line of lookupFailureLines(email, projectId, cause, process.env)) {
+    console.error(line);
+  }
+  if (lookupErrorCode(cause) !== 'auth/user-not-found') {
+    console.error(cause);
+  }
   process.exit(1);
 }
 

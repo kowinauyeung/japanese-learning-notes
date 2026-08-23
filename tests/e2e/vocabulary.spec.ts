@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { INPUT_LIMITS } from '../../src/domain/limits';
 import { seedSignedIn, watchForBlanking } from './fixtures';
 
 /**
@@ -48,6 +49,33 @@ test.describe('browsing', () => {
     await expect(page.getByText('1 語')).toBeVisible();
   });
 
+  test('keeps an unbroken search summary inside the viewport', async ({ page }) => {
+    const search = 'W'.repeat(INPUT_LIMITS.search);
+    await page.goto('/vocabulary');
+    await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill(search);
+
+    await expect(
+      page.getByRole('button', { name: new RegExp(`^「W{${INPUT_LIMITS.search}}」`) }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+      ),
+    ).toBe(true);
+  });
+
+  test('keeps furigana and pitch annotations at their content width', async ({ page }) => {
+    await page.goto('/vocabulary/w-kiriwake');
+    const furigana = page.locator('.has-ruby').first();
+    await expect(furigana).toBeVisible();
+    expect((await furigana.boundingBox())?.width ?? Infinity).toBeLessThan(400);
+
+    await page.goto('/vocabulary/w-choukou');
+    const pitch = page.locator('.has-accent').first();
+    await expect(pitch).toBeVisible();
+    expect((await pitch.boundingBox())?.width ?? Infinity).toBeLessThan(400);
+  });
+
   test('opens a word in a dialog without leaving the list', async ({ page }) => {
     await page.goto('/vocabulary');
     await page.getByRole('link', { name: /兆候/ }).click();
@@ -75,7 +103,7 @@ test.describe('browsing', () => {
     await page.reload();
 
     await expect(page.getByRole('dialog', { name: '単語' })).toBeHidden();
-    await expect(page.getByRole('heading', { name: /MANIFEST/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '概要' })).toBeVisible();
   });
 
   /** Back closes it and leaves you where you were, which is what a dialog owes. */
@@ -96,7 +124,7 @@ test.describe('browsing', () => {
     await page.getByRole('link', { name: /兆候/ }).click();
     await page.getByRole('link', { name: '詳細を見る' }).click();
 
-    await expect(page.getByRole('heading', { name: /MANIFEST/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '概要' })).toBeVisible();
     await expect(page.getByRole('dialog', { name: '単語' })).toBeHidden();
 
     /**
@@ -127,7 +155,7 @@ test.describe('navigation', () => {
     await page.goto('/');
 
     await expect(page.getByRole('navigation').first().getByRole('link')).toHaveText([
-      'ダッシュボード',
+      '学習サマリー',
       '単語',
       '単語集',
       'フラッシュカード',
@@ -165,6 +193,110 @@ test.describe('adding a word', () => {
     await dialog.getByLabel('見出し語').fill('清高');
     await dialog.getByRole('button', { name: '保存する' }).click();
     await expect(dialog.getByText('意味・説明は必須です。')).toBeVisible();
+  });
+
+  /**
+   * The one claim about AI drafting that the component tests cannot make.
+   *
+   * `tests/component/JsonImport.test.tsx` already covers what the button hands
+   * over and that the warning is rendered, and does it in milliseconds — so
+   * this deliberately does not re-check either. What is only observable here is
+   * the span: the reply crosses the port, goes through `jsonToDraft`, moves the
+   * modal to another tab, fills a form nothing typed into, and is then saved
+   * through the repository and counted in the list behind it. Five components
+   * and a provider, none of which a jsdom render of one panel can see.
+   *
+   * The model is `backend.e2e.ts`'s stand-in, which answers from the prompt.
+   * That is what makes 「兆候」 below an assertion about this request rather
+   * than about a fixture that would pass for any word.
+   */
+  test('fills the form from a drafted reply and saves it', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByRole('button', { name: 'JSON' }).click();
+    await dialog.getByLabel('単語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成' }).click();
+
+    // The import moved the modal to 詳細 and filled it. Asserted on the fields
+    // rather than on the tab, because a tab that switched over an empty form is
+    // the failure this is looking for.
+    await expect(dialog.getByLabel('見出し語')).toHaveValue('兆候');
+    await expect(dialog.getByLabel('読み方')).toHaveValue('ちょうこう');
+    await expect(dialog.getByLabel('意味・説明')).toHaveValue('兆候の意味');
+
+    // The warning travels with the draft to the screen the reader is now on.
+    // On the JSON panel it was a statement about a button; here it is about the
+    // twenty fields in front of them, which is where a wrong reading is visible.
+    await expect(
+      dialog.getByText(/AIが書いた内容なので誤りが含まれることがあります/),
+    ).toBeVisible();
+
+    await dialog.getByRole('button', { name: '保存する' }).click();
+    await expect(page.getByText('兆候の意味')).toBeVisible();
+
+    await page.goto('/vocabulary');
+    await expect(page.getByText('4 語')).toBeVisible();
+  });
+
+  /**
+   * The panel's fields keep their value across an import that resolves late.
+   *
+   * `loadJson` reads 出会った文 and 出典 to build the context it hands
+   * `jsonToDraft`, and the paste button calls it after an await — after a
+   * clipboard read that a browser may put its own confirmation in front of, for
+   * as long as the reader takes to answer. Through the closure those two were
+   * whatever they held when the button was pressed, so a 出典 typed during the
+   * wait was dropped from the entry that arrived.
+   *
+   * Only reachable through the clipboard: the drafting button disables these
+   * fields while its request is out, and this one cannot, because the wait is a
+   * dialog the browser owns and may never show.
+   *
+   * Here rather than in tests/component because what is under test is
+   * `loadJson`, which lives in the modal and needs the entries provider behind
+   * it — the reply has to cross the panel, the modal and `jsonToDraft` before
+   * the assertion means anything.
+   */
+  test('keeps a source typed while the clipboard was still being read', async ({ page }) => {
+    // A clipboard the test resolves by hand, so "still being read" is a state
+    // the test controls rather than a race it hopes for.
+    await page.addInitScript(() => {
+      let release: ((text: string) => void) | undefined;
+      (window as unknown as { releaseClipboard: (text: string) => void }).releaseClipboard = (
+        text,
+      ) => release?.(text);
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          readText: () =>
+            new Promise<string>((resolve) => {
+              release = resolve;
+            }),
+        },
+      });
+    });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByRole('button', { name: 'JSON' }).click();
+    await dialog.getByRole('button', { name: 'クリップボードから貼り付け' }).click();
+
+    // Typed after the read started and before it finished.
+    await dialog.getByLabel('出典').fill('会議');
+    await page.evaluate(() =>
+      (window as unknown as { releaseClipboard: (text: string) => void }).releaseClipboard(
+        '{"headword":"兆候","definition":"きざし。"}',
+      ),
+    );
+
+    // The panel is gone by now — the import moved the modal to 詳細 — so this
+    // 出典 is the form's, not the one that was typed into.
+    await expect(dialog.getByLabel('出典')).toHaveValue('会議');
+    await expect(dialog.getByLabel('見出し語')).toHaveValue('兆候');
   });
 
   /**
@@ -229,8 +361,7 @@ test.describe('editing and deleting', () => {
    * input — a cleared field — and that is what is asserted here.
    *
    * The impossible-date rule itself is covered where it is reachable, over
-   * isValidIsoDate in tests/unit/sanitize.test.ts, against the Firestore
-   * documents in tests/unit/migrationOutput.test.ts, and it stays in the form
+   * isValidIsoDate in tests/unit/sanitize.test.ts, and it stays in the form
    * because a stored document is not obliged to have come from this field.
    */
   test('refuses to save with the learning date cleared', async ({ page }) => {
@@ -349,12 +480,21 @@ test.describe('the footer', () => {
       const footer = document.querySelector('footer');
       const main = document.querySelector('main');
       if (!footer || !main) return null;
-      const inner = footer.firstElementChild;
-      if (!inner) return null;
+      // Both measured one level in, because both outer boxes are now full
+      // bleed: they carry the device's safe-area insets so their backgrounds
+      // still reach the screen edge, and the box that carries the gutter and
+      // the measure is the child. Comparing `<main>` itself, which is what this
+      // did while it *was* that box, now compares the viewport to a centred
+      // 1024px column and reports a 128px misalignment that is not there.
+      const innerFooter = footer.firstElementChild;
+      const innerMain = main.firstElementChild;
+      if (!innerFooter || !innerMain) return null;
+      const f = innerFooter.getBoundingClientRect();
+      const m = innerMain.getBoundingClientRect();
       return {
         gapBelow: Math.round(window.innerHeight - footer.getBoundingClientRect().bottom),
-        left: Math.round(inner.getBoundingClientRect().left - main.getBoundingClientRect().left),
-        width: Math.round(inner.getBoundingClientRect().width - main.getBoundingClientRect().width),
+        left: Math.round(f.left - m.left),
+        width: Math.round(f.width - m.width),
       };
     });
 

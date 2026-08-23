@@ -22,6 +22,7 @@ export const router = createBrowserRouter([
       { path: 'vocabulary', lazy: () => import('./routes/Browse') },
       { path: 'vocabulary/:id', lazy: () => import('./routes/EntryDetail') },
       { path: 'account', lazy: () => import('./routes/Account') },
+      { path: 'settings', lazy: () => import('./routes/Settings') },
       // One module for both modes; it rejects anything else in :mode. The nav
       // still links the two concrete paths.
       { path: 'practice/:mode', lazy: () => import('./routes/Practice') },

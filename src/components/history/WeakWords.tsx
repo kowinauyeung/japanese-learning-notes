@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Ruby } from '@/components/Ruby';
 import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
+import { useI18n } from '@/i18n/context';
 import { practiceFiltersToParams } from '@/lib/practice';
 import type { PracticeFilters } from '@/lib/practice';
 
@@ -20,6 +21,7 @@ export function WeakWords({
   words: readonly Entry[];
   filters: PracticeFilters;
 }) {
+  const { t } = useI18n();
   if (words.length === 0) return null;
 
   // `start=1` is what makes it a review rather than a setup screen. It is a
@@ -32,7 +34,7 @@ export function WeakWords({
   return (
     <section className="space-y-3 rounded-card bg-card p-5 shadow-panel">
       <h2 className="text-sm font-semibold">
-        苦手な語
+        {t('history.weakWords')}
         <span className="ml-2 text-xs font-normal text-muted tabular-nums">{words.length}</span>
       </h2>
 
@@ -58,13 +60,13 @@ export function WeakWords({
           to={`/practice/flashcards${review}`}
           className="grid min-h-11 place-items-center rounded-pill bg-bg-alt text-sm font-semibold text-ink"
         >
-          フラッシュカードで復習
+          {t('history.reviewFlashcards')}
         </Link>
         <Link
           to={`/practice/dictation${review}`}
           className="grid min-h-11 place-items-center rounded-pill bg-accent text-sm font-semibold text-on-accent"
         >
-          書き取り練習で復習
+          {t('history.reviewDictation')}
         </Link>
       </div>
     </section>

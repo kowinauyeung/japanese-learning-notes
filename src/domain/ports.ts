@@ -92,6 +92,7 @@ export interface ProgressRepository {
 export interface UserRepository {
   get(uid: string): Promise<UserProfile | null>;
   save(uid: string, draft: UserProfileDraft): Promise<void>;
+  remove(uid: string): Promise<void>;
 }
 
 /**
@@ -123,6 +124,15 @@ export interface AuthUser {
   uid: string;
   email: string;
   displayName: string;
+  /**
+   * The picture the provider has for this account, or empty when it has none.
+   *
+   * A URL rather than an image: every provider hosts these itself, and copying
+   * one into Storage would mean owning a stale copy of a photo the user changes
+   * somewhere else. Empty is the normal case, not an error — an account created
+   * with an email link has no picture at all.
+   */
+  photoUrl: string;
   emailVerified: boolean;
 }
 
@@ -188,4 +198,96 @@ export interface SearchPort {
   sets(q: SearchQuery): Promise<Page<SearchHit<PublicSet>>>;
   /** False means the UI hides that tab rather than showing an empty state. */
   supports(scope: SearchQuery['scope']): boolean;
+}
+
+/**
+ * A new build is waiting to replace the one that is running.
+ *
+ * A port rather than a direct call into Workbox, for the same reason the
+ * repositories above are: the mechanism is a service worker on the web and the
+ * decision it drives — "offer the reader the new version" — is not about
+ * service workers at all. The `e2e` build supplies an implementation that never
+ * reports one, because that build has no worker to report it.
+ */
+export interface AppUpdatePort {
+  /**
+   * Calls `onWaiting` when a build has installed and is waiting for the running
+   * one to step aside. Returns an unsubscribe function, like `AuthPort.onChange`.
+   *
+   * It may never fire. That is the ordinary case, not an error: most sessions
+   * start and end on the same build.
+   */
+  onWaiting(fn: () => void): () => void;
+  /**
+   * Hand the session over to the waiting build.
+   *
+   * Resolves only in the sense that the request was made — the page is expected
+   * to be replaced out from under the caller, so nothing should be sequenced
+   * after this.
+   */
+  activate(): Promise<void>;
+}
+
+/**
+ * Ask a model to draft a vocabulary entry, so the reader does not have to carry
+ * a prompt to a chatbot and the answer back by hand.
+ *
+ * **It returns the model's text, not an `EntryDraft`, and that is deliberate.**
+ * `jsonToDraft` already turns an assistant's reply into a draft or into a named
+ * refusal, and it is the only thing that does. Parsing here would create a
+ * second path into the form — one that a malformed reply could slip through
+ * while the pasted one was refused. A reply that is wrong has to be wrong the
+ * same way whichever route it arrived by, so both routes hand the same string
+ * to the same function.
+ *
+ * A port rather than a call into the AI SDK from a component, for the reason
+ * every other port here exists: the decision is "draft an entry from this
+ * word", and which vendor answers is not part of it. The `e2e` build supplies
+ * one that answers from a fixture, so the form can be exercised end to end
+ * without a network, a key or a quota.
+ */
+export interface EntryDraftingPort {
+  /**
+   * True when this build can ask a model at all.
+   *
+   * Not every build or every reader has the capability: the `e2e` build stands
+   * one in, and the Gemini API is not offered in every country. The caller uses
+   * this to decide whether to show the button, because a button that is always
+   * present and sometimes explains itself away is worse than one that is not
+   * there — the manual prompt below it is the route in either case.
+   */
+  available(): boolean;
+  /**
+   * The model's reply, verbatim, for `jsonToDraft` to accept or refuse.
+   *
+   * Rejects with an `EntryDraftingError` rather than a bare `Error`, because
+   * the four ways this fails need four different things said to the reader and
+   * only one of them is worth a retry.
+   */
+  draft(prompt: string): Promise<string>;
+}
+
+/**
+ * Why a drafting request did not produce text.
+ *
+ * `unavailable` covers the country where the API is not offered and the project
+ * where it was never enabled — both are permanent for that reader, so the
+ * message points at the manual prompt instead of inviting a retry.
+ * `quota` is the allowance, which returns tomorrow. `blocked` is the model
+ * declining to answer, which a different word may not trigger. `failed` is
+ * everything else, including the network.
+ */
+export type EntryDraftingFailure = 'unavailable' | 'quota' | 'blocked' | 'failed';
+
+export class EntryDraftingError extends Error {
+  // Assigned in the body rather than declared as a parameter property, because
+  // `erasableSyntaxOnly` is on: a parameter property is syntax that has to be
+  // compiled away, and this project builds by erasing types and nothing else.
+  readonly reason: EntryDraftingFailure;
+
+  constructor(reason: EntryDraftingFailure) {
+    super(`Entry drafting failed: ${reason}`);
+    this.name = 'EntryDraftingError';
+    this.reason = reason;
+  }
 }

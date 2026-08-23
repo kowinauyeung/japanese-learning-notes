@@ -3,10 +3,10 @@
 A personal web app for recording and reviewing Japanese vocabulary picked up in
 daily life and at work, with Cantonese translations and notes.
 
-This repository began as 67 hand-written Markdown notes. Once they were imported
-into Firestore the tracked Markdown was removed, so Firestore now holds the live
-data. [`migration/README.md`](migration/README.md) documents the committed import
-artefacts and how to replay them.
+This repository began as 67 hand-written Markdown notes. The one-shot migration
+into Firestore has finished, and Firestore now holds the live data. The original
+Markdown, migration tooling and temporary import artefacts are no longer part of
+the working tree.
 
 ## Features
 
@@ -80,14 +80,11 @@ Pointing this at a fresh Firebase project takes a few more steps, in order:
    alias points at your project) or
    `yarn firebase deploy --only firestore:rules --project <your-project-id>`.
 5. Sign in once, then grant yourself access — the rules deny everything until
-   your account carries the `allowed` custom claim. `yarn allow <your-email>`
-   sets it, and the account must have signed in before that, because the claim
-   goes on the uid Google issued and there is nothing to set it on until then.
-   **`yarn allow` is the one step here that cannot be pointed at your project.**
-   `admin/allow-user.ts` names `goitei-dev` and `goitei` directly, never reads
-   `.firebaserc`, and rejects any argument other than `prod` and `--revoke` — so
-   on a fresh project it will tell you the account has never signed in. Set the
-   claim through the Admin SDK yourself; that script is the worked example.
+   your account carries the `allowed` custom claim. `yarn allow <your-email> --project <your-project-id>`
+   sets it, and the account must have signed in
+   before that, because the claim goes on the uid Google issued and there is
+   nothing to set it on until then. The repository shortcuts still work too:
+   omit `--project` for `goitei-dev`, or pass `prod` for `goitei`.
 6. **Sign out and sign back in.** A claim reaches the client only in a freshly
    minted ID token, so the session you granted access to is still denied — for
    up to an hour, until its token expires on its own.
@@ -119,19 +116,17 @@ source tree.
 | `yarn typecheck`                       | The app, then `tsconfig.test.json`                    |
 | `yarn test`                            | Unit, component, rules and adapter tests              |
 | `yarn test:e2e`                        | Playwright: user flows and visual regression          |
+| `yarn release`                         | Bump the version and write `CHANGELOG.md`             |
 | `yarn rules:dev` / `yarn rules:prod`   | Deploy `firestore.rules`                              |
-| `yarn auth:login` / `yarn auth:revoke` | Repo-local Google ADC, used by the migration upload   |
+| `yarn auth:login` / `yarn auth:revoke` | Repo-local Google ADC, used by the operator scripts   |
 
 `yarn auth:login` writes to `.gcloud/` via `CLOUDSDK_CONFIG`, deliberately apart
 from the machine-wide `~/.config/gcloud`. There is no long-lived service-account
 key in this project, and there should not be one.
 
-`migrate:parse` and `migrate:upload` are one-shot migration scripts — see
-[`migration/README.md`](migration/README.md) before running either.
-
 ## Tests
 
-Five layers, split by what each one needs to run rather than by what it covers.
+Six layers, split by what each one needs to run rather than by what it covers.
 [`CLAUDE.md`](CLAUDE.md) has the rules for choosing between them and for writing
 new ones.
 
@@ -139,17 +134,21 @@ new ones.
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `yarn test:unit`          | `tests/unit` — coercion, filters, dates, furigana, import, redirects; `tests/component` — rendered DOM                     | nothing  |
 | `yarn test:emulator`      | `tests/rules` — who may read and write what; `tests/integration` — the Firestore adapter's queries, cursors and timestamps | JDK 21   |
-| `yarn test:e2e`           | `tests/e2e` — sign-in, browse, create, edit, delete; four screenshot baselines                                             | Chromium |
+| `yarn test:e2e`           | `tests/e2e` — sign-in, browse, create, edit, delete; offline navigation; four screenshot baselines                         | Chromium |
 | `yarn test:visual:update` | Regenerates those baselines                                                                                                | Docker   |
 | `yarn coverage`           | Reported, never enforced                                                                                                   | nothing  |
 
-Three things worth knowing before adding to it:
+Four things worth knowing before adding to it:
 
 - **The end-to-end build does not touch Firebase.** `vite build --mode e2e`
   aliases `src/lib/backend.ts` to an in-memory twin, so Playwright is
   deterministic and needs no emulator or Google popup. Firestore is covered
   where it can be asserted precisely instead — `tests/integration` for the
   adapter, `tests/rules` for the boundary.
+- **The service worker has a second build of its own.** `--mode e2e` ships none
+  on purpose, so `vite build --mode e2e-pwa` produces the same in-memory app with
+  the worker left in; `yarn test:e2e` builds and serves both, and
+  `tests/e2e/offline.spec.ts` is the only spec that runs against the second.
 - **Screenshot baselines are Linux-only.** They are generated in the same
   container image CI runs, because macOS renders Japanese glyphs differently.
   The visual specs skip themselves anywhere else and say so.
@@ -210,18 +209,147 @@ signups are closed until an operator grants it. Nothing in front of the site can
 substitute for this: Hosting serves the config that reaches Firestore, so a
 password on the HTML protects the page, not the data.
 
-For the first production import, follow the rules-first order in
-[`migration/README.md`](migration/README.md).
+Rules deploy before anything that writes through them, so a new top-level field
+is allowlisted before any client can send it. A client that ships a new field
+before the rules that name it is denied by `hasOnly` until the rules follow;
+the direction that really stays open is a looser product limit in the deployed
+rules.
+
+### Response headers
+
+`firebase.json` sets two things on every response: the security headers, and a
+caching rule. Two of Hosting's matching semantics decide how they have to be
+written, and both were measured against the Hosting emulator rather than read
+off the documentation.
+
+**Every matching entry applies, and for a repeated key the last one wins.** So
+the `**` block holding the security headers is not shadowed by the narrower
+entries after it — an asset still carries the full set — and `/assets/**` gets
+its `Cache-Control` only because it appears _after_ the `**` rule that sets
+`no-cache`. Move it above and the assets silently fall back to revalidating on
+every load.
+
+**A header rule matches the request path, not the rewritten one.** `**` →
+`/index.html` means `/` and `/browse` are served the index document, but a rule
+whose `source` is `/index.html` reaches neither of them; nobody navigates to
+`/index.html` by name. That is why the `no-cache` default is written against
+`**` rather than against the three files that actually need it.
+
+The result:
+
+| Path            | `Cache-Control`                       | Why                                                                                                                                                                                                            |
+| --------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/assets/**`    | `public, max-age=31536000, immutable` | Vite puts a content hash in the name, so a changed file is a changed URL and the old one is never requested again.                                                                                             |
+| everything else | `no-cache`                            | `index.html`, the manifest, the icons and a future `sw.js` keep their names across deploys, so the only safe answer is to revalidate. `no-cache` stores the response and revalidates it; it is not `no-store`. |
+
+`no-cache` as the default rather than a list of filenames is what makes this
+survive the service worker: `/sw.js` is covered before it exists. Hosting's
+default is `max-age=3600` on everything, which would otherwise pin a controlled
+client to an hour-old app shell — and the scripts a worker `importScripts` come
+from the HTTP cache even though the worker script itself does not.
+
+**A pull request cannot verify this on its own preview.** The deploy job checks
+out the pull request's base, so a preview channel runs the base branch's
+`firebase.json`. Check header changes against the Hosting emulator locally, and
+confirm them on `goitei-dev` after the merge:
+
+```bash
+yarn build:e2e
+yarn firebase emulators:exec --only hosting --project demo-goitei \
+  'curl -sI http://127.0.0.1:5010/ | grep -i cache-control &&
+   curl -sI "http://127.0.0.1:5010/$(cd dist && ls assets/*.js | head -1)" | grep -i cache-control'
+```
+
+`emulators:exec` and not `emulators:start`: the latter runs in the foreground
+until it is interrupted, so anything written after it never runs. Check a file
+under `/assets/**` as well as `/` — that is the pair the ordering rule above
+decides, and checking only one of them would pass with the rules reversed.
+
+The port is pinned in `firebase.json` rather than left to default to 5000, which
+macOS hands to AirPlay Receiver; the emulator then shifts to another port and a
+hardcoded URL in a script fails for a reason that has nothing to do with what it
+is testing.
+
+### The service worker
+
+`vite-plugin-pwa` precaches the built output — the shell, the CSS, the icons,
+the manifest and **every route chunk**. The chunks are not an optimisation here:
+every route in `src/router.tsx` is a `lazy: () => import(...)`, so a shell
+without them reaches no screen at all. `navigateFallback` is `/index.html`,
+matching the rewrite in `firebase.json`; `/__/*` is denied, because Firebase
+serves `signInWithPopup`'s handler from there and answering it with the index
+document would break sign-in with nothing naming the cause.
+
+Settings live in `pwa-config.ts` rather than inline in `vite.config.ts`, so
+`tests/unit/pwaConfig.test.ts` can read them back. Every failure they guard is
+silent — a build succeeds either way.
+
+**It is off under `mode === 'e2e'`.** A worker that precached the previous build
+serves it to Playwright, and the suite then passes against code that is not the
+code under test. That is the one failure here that would make every other test
+in this repository green and meaningless.
+
+**`mode === 'e2e-pwa'` is the deliberate exception**: the same in-memory build
+with the worker left in, so the offline behaviour below can be checked by
+something other than a person. It gets its own output directory, its own preview
+server and its own Playwright project, and one spec runs there. The hazard above
+does not follow it, which was measured rather than assumed — a fresh
+`chromium.launch()` starts from an empty profile, so nothing survives from one
+run to the next.
+
+#### What it changes about deploying
+
+Before the worker, a client running a stale build fixed itself: the next load
+fetched a new `index.html` and the new chunk names came with it. It does not any
+more. A controlled client keeps being served the precached build until it is
+told to take a new one — so **reloading is no longer the fix**, and a support
+reply that says "try reloading" is now advice that cannot work.
+
+What ends it is the prompt. `skipWaiting` and `clientsClaim` are both off, so a
+new build installs and waits rather than replacing the assets under a running
+session — which would hand a page mid-practice a chunk from a bundle its loaded
+code was never compiled against. `UpdatePrompt` offers the swap and the reader
+takes it, or does not. A reader who keeps choosing "Later" stays on the old
+build, deliberately: old and working beats new and halfway.
+
+The consequence for a release is that **the deployed commit and the running
+commit are now different questions**. The footer's build line answers the second
+one, which is the one a bug report is actually about.
+
+#### Checking it
+
+`tests/e2e/offline.spec.ts` does, in the `chromium-pwa` project — `yarn test:e2e`
+runs it with everything else. What it pins, and what is worth knowing before
+reading it:
+
+- `navigator.serviceWorker.ready` resolves with the worker in state
+  `activating`, not `activated`, and the precache is already full at that point;
+- the worker does **not** control the page that installed it. That is
+  `clientsClaim: false` behaving correctly, not a failure — control begins at the
+  next navigation, which is also why an installed window works: the process the
+  reader sees is never the one that installed the worker;
+- with the network off, `/`, `/vocabulary` and a deep route such as
+  `/practice/dictation` all render, and the manifest is still served.
+
+A `fetch` issued from the installing page still goes to the network and fails
+offline. That is not a defect and the spec navigates first for the same reason
+the app does.
+
+Installability is Chrome DevTools → Application → Manifest on a deployed build.
+Headless Chromium does not fire `beforeinstallprompt`, so that half needs a real
+browser against the dev site or a preview channel.
 
 ### Operator runbook
 
 Everything below assumes `GOOGLE_APPLICATION_CREDENTIALS`, or `gcloud auth
 application-default login` against the right project.
 
-**Granting access.** `yarn allow you@example.com prod`. The account must have
-signed in once first — the claim is set on the uid Google issued, so there is
-nothing to set it on before that. Anything other than `prod` or `--revoke` is
-rejected rather than ignored.
+**Granting access.** `yarn allow you@example.com prod` targets the repository
+production project, and `yarn allow you@example.com --project your-project-id`
+targets any other Firebase project. The account must have signed in once first
+— the claim is set on the uid Google issued, so there is nothing to set it on
+before that. Anything other than `prod`, `--project <project-id>` or
+`--revoke` is rejected rather than ignored.
 
 **Revoking it.** `yarn allow you@example.com prod --revoke`. **This lands within
 the hour, not on the keystroke.** The claim lives inside the ID token the client
@@ -230,7 +358,9 @@ until that token expires. Revoking the refresh tokens ends the session at the
 next refresh but does not shorten that window. When responding to abuse, delete
 the data — that part takes effect now.
 
-**Releasing.** Three steps, in this order:
+**Releasing.** Cutting the version — the branch, the changelog and the tag — is
+[docs/releasing.md](docs/releasing.md). What follows is only the access half of
+it, which has an order that matters. Three steps:
 
 1. `yarn allow <email> prod` for every account that must keep working.
 2. Ask each of them to sign out and sign back in. A claim reaches the client
@@ -239,9 +369,9 @@ the data — that part takes effect now.
 3. Run _Deploy (production)_.
 
 The order is not a preference. The workflow deploys rules before hosting on
-purpose — a client briefly older than its rules fails closed, the other way
-round fails open — and the rules being deployed require a claim that no token
-issued before step 1 carries. Reversing steps 1 and 3 locks out everyone who was
+purpose, so a new top-level field is allowlisted before any client can send it
+— and because the rules being deployed require a claim that no token issued
+before step 1 carries. Reversing steps 1 and 3 locks out everyone who was
 already signed in, for up to an hour, including whoever is doing the deploy.
 
 This matters most exactly once: the first production run of that workflow _is_
@@ -275,6 +405,11 @@ hitting it:
   check needs `serviceusage.services.get`. Without it the deploy stops on
   `403 Permission denied to get service [firestore.googleapis.com]`, which reads
   like a Firestore problem and is not one.
+- The service account also needs **Firebase Authentication Admin**
+  (`roles/firebaseauth.admin`), for preview sign-in below. Without it the deploy
+  and the preview both still succeed and only Google sign-in fails, on a domain
+  that exists for a week — the failure that is easiest to mistake for a bug in
+  the branch under review.
 - The provider's attribute condition matches on `assertion.repository` and stops
   there, deliberately. Narrowing it further is the obvious-looking improvement
   that breaks previews — see the trust boundary below before changing it.
@@ -291,10 +426,56 @@ hitting it:
   attribute condition cannot reach production. The procedure is reusable; the
   resources are not.
 
+#### Preview sign-in
+
+A preview channel is served from `goitei-dev--pr-<n>-<hash>.web.app`, and
+Firebase Auth refuses to complete a Google sign-in from an origin that is not on
+its authorized domain list. The hash is generated per channel, so every pull
+request lands on a hostname nobody has authorized, and the list accepts no
+wildcard.
+
+`firebase hosting:channel:deploy` handles both halves of that on its own. It
+adds the new channel's hostname to the list, and it prunes every `goitei-dev--`
+hostname no live channel claims, unless it is asked not to with
+`--no-authorized-domains`. Nothing in this repository reimplements either.
+
+**It needs `roles/firebaseauth.admin` to do it, and says almost nothing when it
+cannot.** Without the role the call fails, firebase-tools logs a warning and
+reports a successful deploy, and `--json` — which `deploy-dev.yml` passes to
+read the channel URL — suppresses the warning too. That is not a hypothetical:
+it is how preview sign-in came to be broken for weeks with every check green,
+and why reviewers were adding hostnames by hand.
+
+So `deploy-dev.yml` ends with a step that reads the authorized domain list back
+and fails the job when the hostname it just deployed is missing. Two things
+cause that, and neither surfaces any other way: the role being revoked, and two
+channel deploys overlapping — the CLI reads the list, appends and writes it
+back, and the admin API has no etag between the read and the write, so the later
+writer drops the earlier one's hostname. A re-run of the job repairs both.
+
+`preview-cleanup.yml` deletes the channel when its pull request closes. The
+hostname goes with it — `hosting:channel:delete` removes it from the authorized
+domain list as part of deleting the channel — and without this the channel would
+linger its full seven days, with the hostname trusted for authentication that
+whole time.
+
+That removal fails the same quiet way the addition does, so the workflow reads
+the list back and fails when a hostname belonging to the closed pull request is
+still on it. It does not remove the hostname itself: a second writer on a list
+whose API has no etag is a way to lose a domain rather than a way to remove one.
+The next preview deploy prunes it, which is what makes a re-run of the job go
+green.
+
+Building previews with `yarn build:e2e` would sidestep all of this — the
+in-memory adapters sign a user in without Google — and it is the wrong trade.
+The preview exists to show the branch against real `goitei-dev` data; a
+Firestore query, index or cursor defect is invisible against fakes, and that is
+the class of defect that has actually reached review here.
+
 #### Trust boundary
 
-The deploy workflow is split into two jobs, and the split is the security
-boundary rather than a build-time optimisation:
+The deploy workflow is split into jobs, and the split is the security boundary
+rather than a build-time optimisation:
 
 - **`build`** runs the pull request's own code. It has `contents: read` and
   nothing else — no `id-token` permission, so `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
@@ -307,7 +488,7 @@ boundary rather than a build-time optimisation:
 A pull request is otherwise a code-execution primitive: `yarn install` runs
 whatever `postinstall` the branch's lockfile asks for, before any file in the
 diff has been read by a human. Keeping that away from the credential is what
-the two jobs buy.
+the split buys.
 
 The six `VITE_FIREBASE_*` values are the exception, and are scoped to the build
 step. They can already be read out of the deployed bundle by anyone, so a build
@@ -369,7 +550,7 @@ rules enforce account access only, never document shape.
 Source code: [MIT](LICENSE).
 
 The Japanese vocabulary entries are **not** covered by it. They are personal
-study notes, committed as `migration/output.json` and `migration/review.json`
-so the Firestore import stays inspectable — see
-[`migration/README.md`](migration/README.md) — and they are reserved. The scope
-note at the bottom of [`LICENSE`](LICENSE) is the authoritative wording.
+study notes and they are reserved. They were used to populate Firestore during
+the completed migration, and the current working tree no longer carries the
+import artefacts. The scope note at the bottom of [`LICENSE`](LICENSE) is the
+authoritative wording.

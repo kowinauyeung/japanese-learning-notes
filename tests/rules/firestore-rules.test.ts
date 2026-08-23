@@ -6,6 +6,8 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+import { TAG_MAX_LENGTH } from '@/domain/common';
+import { ENTRY_LIMITS, SESSION_LIMITS, USER_LIMITS, WORD_SET_LIMITS } from '@/domain/limits';
 import type { PracticeSessionDraft } from '@/domain/practice';
 import { emptyDraft } from '@/lib/draft';
 import { makeWordSet } from '../fixtures/wordSet';
@@ -89,6 +91,17 @@ const session = (ownerUid: string, over: Record<string, unknown> = {}) => ({
   total: 10,
   correct: 8,
   missed: ['e1'],
+  ...over,
+});
+
+const profile = (uid: string, over: Record<string, unknown> = {}) => ({
+  uid,
+  nickname: 'Alice',
+  language: 'en',
+  translationLanguage: 'zh-Hant',
+  theme: 'system',
+  createdAt: new Date('2026-08-13T00:00:00.000Z'),
+  updatedAt: new Date('2026-08-13T00:00:00.000Z'),
   ...over,
 });
 
@@ -320,27 +333,195 @@ describe('bounds on what an owner may write', () => {
     await assertSucceeds(db.doc(`users/${ALICE}/practiceSessions/ok`).set(session(ALICE)));
   });
 
+  /**
+   * **The direction that can actually hurt somebody, asserted once.**
+   *
+   * Every bound above is a ceiling far past what the client permits — rules
+   * answer the megabyte and `src/domain/limits.ts` answers the product, three
+   * to five times tighter, deliberately and for the deploy-ordering reason
+   * recorded there. So a test that a 4,000-character definition is accepted at
+   * exactly 4,000 pins the rules file against itself: nothing the form can
+   * produce comes near that line, and an off-by-one on it is unobservable.
+   *
+   * The reverse is observable and is a support ticket with nothing on screen to
+   * explain it. If a rule is ever written *tighter* than the matching limit —
+   * a typo, a copied line, a limit raised here without the rule being raised
+   * with it — the form accepts the note, the save is refused by the server, and
+   * no field is at fault because none of them is over its stated maximum.
+   *
+   * So this builds every value at exactly the limit the client enforces, from
+   * the same constants the client reads, and requires the write to succeed. It
+   * is one assertion covering every field rather than a boundary case per
+   * field, and it stays correct when a limit moves, because it is computed from
+   * the limit rather than repeating its value.
+   *
+   * It also puts a number on the headroom: the entry below is the largest note
+   * this application can produce, and it is roughly 130 KB against Firestore's
+   * one-megabyte document ceiling.
+   */
+  it('accepts a note built at every maximum the entry form allows', async () => {
+    const db = as(ALICE);
+    const at = ENTRY_LIMITS;
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/entries/max`).set(
+        entry(ALICE, {
+          headword: long(at.headword),
+          reading: long(at.reading),
+          citationForm: long(at.citationForm),
+          definition: long(at.definition),
+          definitionSub: long(at.definitionSub),
+          source: long(at.source),
+          pitchAccent: at.pitchAccent,
+          learnedOn: at.learnedOnFrom,
+          pos: Array.from({ length: at.pos }, () => '名詞'),
+          tags: Array.from({ length: at.tags }, () => long(TAG_MAX_LENGTH)),
+          senses: Array.from({ length: at.senses.count }, () => ({
+            label: long(at.senses.label),
+            description: long(at.senses.description),
+            example: long(at.senses.text),
+            exampleGloss: long(at.senses.text),
+            translation: long(at.senses.text),
+            usage: long(at.senses.text),
+          })),
+          examples: Array.from({ length: at.examples.count }, () => ({
+            ja: long(at.examples.text),
+            translation: long(at.examples.text),
+          })),
+          related: Array.from({ length: at.related.count }, () => ({
+            headword: long(at.related.headword),
+            note: long(at.related.note),
+          })),
+          context: {
+            original: long(at.context),
+            ja: long(at.context),
+            translation: long(at.context),
+          },
+          usage: {
+            when: long(at.usage),
+            translation: long(at.usage),
+            caution: long(at.usage),
+          },
+          posInfo: {
+            title: long(at.posInfo.title),
+            rows: Array.from({ length: at.posInfo.rows }, () => ({
+              label: long(at.posInfo.label),
+              value: long(at.posInfo.value),
+            })),
+          },
+        }),
+      ),
+    );
+  });
+
+  /** The same invariant for the three collections an entry is not in. */
+  it('accepts a word set, a session and a profile built at every maximum', async () => {
+    const db = as(ALICE);
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/max`).set(
+        wordSet(ALICE, {
+          name: long(WORD_SET_LIMITS.name),
+          description: long(WORD_SET_LIMITS.description),
+          entryIds: Array.from({ length: WORD_SET_LIMITS.entryIds }, (_, i) => `e${i}`),
+          topics: Array.from({ length: WORD_SET_LIMITS.topics }, () => '日常'),
+        }),
+      ),
+    );
+
+    await assertSucceeds(
+      db
+        .doc(`users/${ALICE}/practiceSessions/max`)
+        .set(session(ALICE, { filterLabel: long(SESSION_LIMITS.filterLabel) })),
+    );
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}`).set(profile(ALICE, { nickname: long(USER_LIMITS.nickname) })),
+    );
+  });
+
   it('refuses an entry whose text is far past anything a person types', async () => {
     const db = as(ALICE);
     await assertFails(
-      db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { headword: long(201) })),
+      db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { headword: long(101) })),
     );
     await assertFails(
-      db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { definition: long(20001) })),
+      db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { definition: long(4001) })),
     );
   });
 
   it('refuses an entry carrying an unbounded number of rows', async () => {
     const db = as(ALICE);
-    const many = Array.from({ length: 101 }, () => ({ label: 'x' }));
+    const many = Array.from({ length: 31 }, () => ({ label: 'x' }));
     await assertFails(db.doc(`users/${ALICE}/entries/big`).set(entry(ALICE, { senses: many })));
+  });
+
+  /**
+   * A mora index, which had a type and no range. `is int` accepts 2^53, and a
+   * number is not where the megabyte lives — but a field with a type check and
+   * no bound reads as bounded to whoever audits this next, and it was not.
+   *
+   * The bound that means something is elsewhere and cannot be here: `draftError`
+   * refuses an accent past the end of the reading, which rules cannot see.
+   */
+  it('refuses a pitch accent outside any possible mora index', async () => {
+    const db = as(ALICE);
+    await assertFails(
+      db.doc(`users/${ALICE}/entries/x`).set(entry(ALICE, { pitchAccent: 1_000_000 })),
+    );
+    await assertFails(db.doc(`users/${ALICE}/entries/x`).set(entry(ALICE, { pitchAccent: -1 })));
+    await assertSucceeds(db.doc(`users/${ALICE}/entries/x`).set(entry(ALICE, { pitchAccent: 3 })));
   });
 
   /** The one list a word set is made of, and the one that grows without limit. */
   it('refuses a word set holding more ids than a notebook has words', async () => {
     const db = as(ALICE);
-    const ids = Array.from({ length: 2001 }, (_, i) => `e${i}`);
+    const ids = Array.from({ length: 1001 }, (_, i) => `e${i}`);
     await assertFails(db.doc(`users/${ALICE}/wordSets/big`).set(wordSet(ALICE, { entryIds: ids })));
+  });
+
+  /**
+   * **How `size()` counts, measured rather than assumed.**
+   *
+   * The client bounds every field with `String.length`, which counts UTF-16
+   * code units: an emoji outside the BMP is a surrogate pair and costs two. If
+   * `size()` counted anything else — code points, or UTF-8 bytes — the two
+   * layers would disagree about what a character is, and the disagreement would
+   * surface as a save the form accepted and Firestore refused, with no field to
+   * blame and nothing on screen to explain it.
+   *
+   * They agree. Measured against the emulator with all three cases, each
+   * turning over at exactly the same number the client would compute:
+   *
+   *   - ASCII, one unit per character: 100 accepted, 101 refused.
+   *   - かな, one unit and three UTF-8 bytes: 100 accepted, 101 refused — so
+   *     `size()` is not counting bytes.
+   *   - U+1F1EF, two units and four bytes: 50 accepted, 51 refused — so it is
+   *     not counting code points either. `String.length` of 50 of them is 100.
+   *
+   * This test exists to pin somebody else's implementation detail, and that is
+   * the point: nothing else here would notice if `size()` moved to code points
+   * and every note carrying an emoji quietly started saving against a different
+   * limit than the form enforces.
+   */
+  it('counts UTF-16 code units, the same unit String.length counts', async () => {
+    const db = as(ALICE);
+    const at = (headword: string) =>
+      db.doc(`users/${ALICE}/entries/size`).set(entry(ALICE, { headword }));
+
+    // The headword bound is 100. Each case is written so String.length is 100
+    // and 101 -- if the server agreed, every accept and refuse below lines up.
+    await assertSucceeds(at('a'.repeat(100)));
+    await assertFails(at('a'.repeat(101)));
+
+    // Three UTF-8 bytes each: refused at 101 rather than at 34, so not bytes.
+    await assertSucceeds(at('あ'.repeat(100)));
+    await assertFails(at('あ'.repeat(101)));
+
+    // A surrogate pair, two units each: refused at 51 rather than at 101, so
+    // not code points. 50 of them are String.length 100.
+    await assertSucceeds(at('\u{1F1EF}'.repeat(50)));
+    await assertFails(at('\u{1F1EF}'.repeat(51)));
   });
 
   it('refuses a session claiming more correct answers than questions', async () => {
@@ -490,10 +671,14 @@ describe('bounds on what an owner may write', () => {
 
   /**
    * **`migrationKey` is not in the domain `Entry` and is on every migrated
-   * document.** `migration/upload.mjs` writes it as provenance, and an update
-   * sends the merged document — so an allowlist built from the TypeScript type
-   * would refuse every edit to all 67 migrated words. It would pass here, pass
-   * in review, and fail only in production, where the migration has been run.
+   * document.** The import wrote it as provenance, and an update sends the
+   * merged document — so an allowlist built from the TypeScript type would
+   * refuse every edit to all 67 migrated words. It would pass here, pass in
+   * review, and fail only in production, where the import has been run.
+   *
+   * The importer itself is gone. This test is what keeps the field on the
+   * allowlist: nothing in `src` names it, so reading the type is exactly the
+   * mistake that stays available.
    *
    * This is the test that says the list came from what is stored.
    */
@@ -507,15 +692,30 @@ describe('bounds on what an owner may write', () => {
     await assertSucceeds(db.doc(`users/${ALICE}/entries/migrated`).update({ headword: '別の語' }));
   });
 
-  /**
-   * Nothing in the application writes `users/{uid}` itself — there is no
-   * profile and no adapter addresses the path — so the create it used to permit
-   * described a feature that does not exist while accepting any twenty fields
-   * of any names. Deleting stays, because account deletion needs it.
-   */
-  it('refuses to create the user document, which nothing writes', async () => {
+  it('lets the owner create and update only their bounded profile shape', async () => {
     const db = as(ALICE);
-    await assertFails(db.doc(`users/${ALICE}`).set({ displayName: 'x' }));
+    await assertSucceeds(db.doc(`users/${ALICE}`).set(profile(ALICE)));
+    await assertSucceeds(db.doc(`users/${ALICE}`).update({ nickname: 'New name', theme: 'dark' }));
+    await assertSucceeds(
+      db.doc(`users/${ALICE}`).update({ language: 'zh-Hant', translationLanguage: 'yue-Hant' }),
+    );
+    await assertFails(db.doc(`users/${ALICE}`).update({ nickname: '' }));
+    await assertFails(db.doc(`users/${ALICE}`).update({ language: 'yue-Hant' }));
+    await assertFails(db.doc(`users/${ALICE}`).update({ language: 'zh-CN' }));
+    await assertFails(db.doc(`users/${ALICE}`).update({ extra: 'not allowed' }));
+  });
+
+  it('refuses another user and a mismatched uid on the profile document', async () => {
+    await assertFails(as(BOB).doc(`users/${ALICE}`).set(profile(ALICE)));
+    await assertFails(as(ALICE).doc(`users/${ALICE}`).set(profile(BOB)));
+  });
+
+  it('keeps the profile creation timestamp immutable', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(db.doc(`users/${ALICE}`).set(profile(ALICE)));
+    await assertFails(
+      db.doc(`users/${ALICE}`).update({ createdAt: new Date('2027-01-01T00:00:00Z') }),
+    );
   });
 });
 

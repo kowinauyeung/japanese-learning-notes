@@ -1,3 +1,5 @@
+import type { MessageKey } from '@/i18n/messages';
+
 /**
  * What to show when a read fails.
  *
@@ -55,22 +57,126 @@ const DENIED_CODES = new Set(['permission-denied', 'unauthenticated']);
  * inside the app, which a signed-in-but-denied account can still open — the gate
  * that failed is Firestore's, not Firebase Auth's.
  */
+/**
+ * Deliberately says what still works before what does not. A reader who has
+ * just been told 「読み込めませんでした」 has no way of knowing that the words
+ * they already have are still there, and the difference between "the app is
+ * broken" and "this one screen is missing" is the whole reason this message
+ * exists separately from the fallback.
+ *
+ * **It names no cause and makes no promise**, and both omissions were paid
+ * for. It used to open with 「オフラインのため」, which is a claim about the
+ * reader's device that this module cannot support — see `UNREACHABLE_CODES`.
+ * It used to close with 「接続が戻ると表示されます」, which nothing in the
+ * application delivers: there is not one `onSnapshot` in `src/infra`, every
+ * provider loads once from an effect keyed on the repository, and no error
+ * screen offers a retry. The words arrive when the reader reloads, and until
+ * then a sentence saying they will appear on their own is asking someone to
+ * wait for something that is not coming.
+ */
+export const UNREACHABLE_MESSAGE =
+  '接続できないため読み込めませんでした。保存済みの単語はそのまま読めます。';
+
 export const ACCESS_DENIED_MESSAGE =
   'アクセスが許可されていません。一度サインアウトして、サインインし直してください。' +
   '解決しない場合は、サポートページからお問い合わせください。';
 
-export function isAccessDenied(cause: unknown): boolean {
-  if (typeof cause !== 'object' || cause === null) return false;
+function codeOf(cause: unknown): string | null {
+  if (typeof cause !== 'object' || cause === null) return null;
   const code: unknown = (cause as { code?: unknown }).code;
-  return typeof code === 'string' && DENIED_CODES.has(code);
+  return typeof code === 'string' ? code : null;
+}
+
+export function isAccessDenied(cause: unknown): boolean {
+  const code = codeOf(cause);
+  return code !== null && DENIED_CODES.has(code);
+}
+
+/**
+ * `unavailable` is what a read that cannot reach the backend throws. Measured
+ * against the emulator rather than taken from the documentation: with the
+ * network disabled, `getDoc` throws `unavailable` while `getDocs` and
+ * `onSnapshot` succeed with `metadata.fromCache` set. So this branch is
+ * narrower than it looks — most reads with no connection never arrive here at
+ * all, because the cache answers them.
+ *
+ * The ones that do are reads the cache cannot answer: a word opened for the
+ * first time, a screen never visited. Those are exactly the cases where
+ * 単語を読み込めませんでした is the wrong sentence — nothing is wrong with the
+ * word, and nothing is wrong with the read.
+ *
+ * **Unreachable, not offline.** This was called `isOffline` and its message
+ * opened with 「オフラインのため」, which reads `unavailable` as a fact about
+ * the reader's device. It is not one: Firestore documents the code as "the
+ * service is currently unavailable ... most likely a transient condition", so a
+ * backend outage produces it with the network working perfectly. The two then
+ * disagreed on screen — `OfflineNotice` watches `navigator.onLine` and stays
+ * hidden through an outage, while the page under it said the reader was
+ * offline. Naming what is observed, rather than guessing the cause behind it,
+ * is what keeps the two consistent.
+ *
+ * `offline.state` and `offline.detail` keep their name deliberately: those come
+ * from `navigator.onLine`, which really is about the device.
+ */
+const UNREACHABLE_CODES = new Set(['unavailable']);
+
+export function isUnreachable(cause: unknown): boolean {
+  const code = codeOf(cause);
+  return code !== null && UNREACHABLE_CODES.has(code);
 }
 
 /**
  * `fallback` stays subject-specific — 単語, 単語集, 練習の記録, 練習履歴 — because
- * a transient failure really is about the thing being read. Denial is not: it is
- * a fact about the account, identical on every screen, and saying it four
- * different ways would suggest four different problems.
+ * a failure that is genuinely about the thing being read should say which thing.
+ *
+ * Neither of the two branches above is. Denial is a fact about the account,
+ * identical on every screen; being offline is a fact about the device, likewise.
+ * Saying either of them four different ways would suggest four different
+ * problems, which is the mistake this module was written to stop.
  */
-export function loadErrorMessage(cause: unknown, fallback: string): string {
-  return isAccessDenied(cause) ? ACCESS_DENIED_MESSAGE : fallback;
+export function loadErrorMessage(
+  cause: unknown,
+  fallback: string,
+  accessDenied = ACCESS_DENIED_MESSAGE,
+  unreachable = UNREACHABLE_MESSAGE,
+): string {
+  if (isAccessDenied(cause)) return accessDenied;
+  if (isUnreachable(cause)) return unreachable;
+  return fallback;
+}
+
+/**
+ * A failed read before it has been translated.
+ *
+ * Providers keep this descriptor in state instead of a rendered sentence so a
+ * locale change can update the message without becoming a data dependency and
+ * repeating the repository read that failed.
+ */
+export interface LoadFailure {
+  cause: unknown;
+  fallback: MessageKey;
+  /**
+   * Which sentence `unavailable` earns here. Defaulted rather than optional so
+   * the caller that has to think about it is the only one that does, and so
+   * there is no `??` further down the chain deciding it unwitnessed.
+   */
+  unreachable: MessageKey;
+}
+
+/**
+ * `unreachable` defaults to the reading wording because all but one caller is a
+ * read. The exception is `userSettings`, whose save is a `runTransaction`, and
+ * a transaction is the one Firestore write that does not survive being offline
+ * at all — measured against the emulator with the socket actually cut, it
+ * rejects with `unavailable` after retrying for six to ten seconds. The
+ * generic branch above would then answer a failed *save* with
+ * 「読み込めませんでした」, which describes the wrong operation and, worse,
+ * implies waiting is enough when the reader has to try again.
+ */
+export function captureLoadFailure(
+  cause: unknown,
+  fallback: MessageKey,
+  unreachable: MessageKey = 'load.unreachable',
+): LoadFailure {
+  return { cause, fallback, unreachable };
 }

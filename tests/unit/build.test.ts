@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildLine, environmentOf } from '@/lib/build';
+import { buildLine, environmentOf, siteTitle } from '@/lib/build';
 import { buildInfo } from '../../build-info';
 
 /**
@@ -28,20 +28,34 @@ describe('environmentOf', () => {
 });
 
 describe('buildLine', () => {
-  it('reads as version, commit, environment', () => {
-    expect(buildLine('goitei')).toMatch(/^v\d+\.\d+\.\d+ · \w+ · (Production|Development|Local)$/);
+  it('reads as version, commit — no environment, which read as a status label on a screen a signed-in user sees daily', () => {
+    expect(buildLine()).toMatch(/^v\d+\.\d+\.\d+ · \w+$/);
   });
 });
 
 /**
- * The build line renders in the footer, which puts it inside two screenshot
- * baselines — and a commit changes on every commit. Before it was pinned, the
- * baselines differed between the machine that regenerated them and the CI run
- * that checked them, by exactly the width of a seven-character SHA: 314 pixels,
- * identically, on both images.
- *
- * The same reasoning `.env.e2e` is committed for. A baseline cannot contain a
- * value that varies per build.
+ * The substitute for spelling the environment out: a `[DEV]` prefix on the
+ * `<title>` and the installed-app name, rather than a separate
+ * "Production"/"Development" line only the account page carried.
+ */
+describe('siteTitle', () => {
+  it('does not mislabel the production tab title as a dev build', () => {
+    expect(siteTitle('語彙庭', 'goitei', 'production')).toBe('語彙庭');
+  });
+
+  it('flags the dev site’s tab title, even though its build mode reads "production" like a real release', () => {
+    expect(siteTitle('語彙庭', 'goitei-dev', 'production')).toBe('[DEV]語彙庭');
+  });
+
+  it('flags a local dev server’s tab title too, not only the deployed dev site', () => {
+    expect(siteTitle('語彙庭', 'goitei', 'development')).toBe('[DEV]語彙庭');
+  });
+});
+
+/**
+ * The commit no longer renders in the footer — see the account page instead
+ * — but it is still pinned for e2e, and build-info.ts is where that decision
+ * and its history live.
  */
 describe('the end-to-end build identity', () => {
   it('pins the commit, so a screenshot baseline can contain it', () => {

@@ -1,26 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useI18n } from '@/i18n/context';
 import { addDays, dateKey, fullDate } from '@/lib/dates';
-
-const MONTHS = [
-  '1月',
-  '2月',
-  '3月',
-  '4月',
-  '5月',
-  '6月',
-  '7月',
-  '8月',
-  '9月',
-  '10月',
-  '11月',
-  '12月',
-];
-
-/**
- * Row labels, Sunday-first to match the grid. Every other day is left blank:
- * a row is 11px tall, so seven stacked labels would run into each other.
- */
-const WEEKDAYS = ['', '月', '', '水', '', '金', ''];
 
 /** Gap between a cell and its tooltip, and the tooltip's minimum inset from the viewport edge. */
 const TIP_MARGIN = 8;
@@ -40,6 +20,19 @@ export function Heatmap({
   selected: string | null;
   onSelect: (key: string | null) => void;
 }) {
+  const { locale, t } = useI18n();
+  const monthFormatter = useMemo(
+    () => new Intl.DateTimeFormat(locale, { month: 'short' }),
+    [locale],
+  );
+  const weekdays = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(locale, { weekday: 'narrow' });
+    return Array.from({ length: 7 }, (_, index) =>
+      index === 1 || index === 3 || index === 5
+        ? formatter.format(new Date(2026, 7, 2 + index))
+        : '',
+    );
+  }, [locale]);
   /**
    * The tooltip is `fixed` rather than absolute inside the grid: the grid
    * scrolls horizontally, and a container with `overflow-x: auto` clips on the
@@ -52,6 +45,8 @@ export function Heatmap({
   const [tip, setTip] = useState<{ label: string; anchor: HTMLElement } | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const tipRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const pinned = useRef(false);
 
   /** Centre on the cell, clamp to the viewport, and flip below when the space above is short. */
   const place = useCallback(() => {
@@ -98,7 +93,10 @@ export function Heatmap({
   }, [tip, place]);
 
   const showTip = (cell: HTMLElement, day: { key: string; count: number }) => {
-    setTip({ label: `${fullDate(day.key)} ・ ${day.count}語`, anchor: cell });
+    setTip({
+      label: `${fullDate(day.key, locale)} · ${t('dashboard.words', { count: day.count })}`,
+      anchor: cell,
+    });
   };
 
   const weeks = useMemo(() => {
@@ -134,9 +132,28 @@ export function Heatmap({
     return result;
   }, [countsByDay]);
 
+  /**
+   * The year runs oldest to newest, so on a viewport too narrow to show all
+   * fifty-three columns the browser opens on the *oldest* weeks and today sits
+   * off-screen to the right — the one column the dashboard exists to show. Pin
+   * the scroller to its right edge instead.
+   *
+   * Before paint, so the reader never sees last August first. Once per mount:
+   * `weeks` is rebuilt whenever an entry is added, and re-pinning there would
+   * yank someone who had deliberately scrolled back into their history. When
+   * nothing overflows, `scrollLeft` clamps to 0 and this is a no-op.
+   */
+  useLayoutEffect(() => {
+    const node = scrollerRef.current;
+    if (!node || pinned.current) return;
+    if (node.scrollWidth <= node.clientWidth) return;
+    node.scrollLeft = node.scrollWidth;
+    pinned.current = true;
+  }, [weeks]);
+
   return (
     <section className="rounded-card bg-card p-5 shadow-panel">
-      <h2 className="text-xs font-semibold tracking-wide text-muted">直近1年間の追加状況</h2>
+      <h2 className="text-xs font-semibold tracking-wide text-muted">{t('dashboard.heatmap')}</h2>
 
       <div className="mt-4 flex gap-1">
         {/* Outside the scroller, so the labels stay put while the year scrolls
@@ -145,7 +162,7 @@ export function Heatmap({
         <div className="shrink-0 text-[10px] text-muted" aria-hidden="true">
           <div className="mb-1 h-3" />
           <div className="grid grid-rows-7 gap-[2px]">
-            {WEEKDAYS.map((label, index) => (
+            {weekdays.map((label, index) => (
               <span key={index} className="h-[11px] leading-[11px]">
                 {label}
               </span>
@@ -157,7 +174,7 @@ export function Heatmap({
             by default, which would pack the year against the left edge on a wide
             viewport. min-w-0 lets it shrink below content width and scroll on a
             narrow one, which min-width:auto would otherwise prevent. */}
-        <div className="min-w-0 flex-1 overflow-x-auto pb-1">
+        <div ref={scrollerRef} className="min-w-0 flex-1 overflow-x-auto pb-1">
           <div className="min-w-max">
             {/* Month label sits above the week that contains the 1st. */}
             <div className="mb-1 grid grid-flow-col gap-[2px]">
@@ -169,7 +186,7 @@ export function Heatmap({
                     key={week[0]?.key ?? index}
                     className="h-3 w-[11px] text-[10px] leading-3 whitespace-nowrap text-muted"
                   >
-                    {isMonthStart && first ? MONTHS[first.date.getMonth()] : ''}
+                    {isMonthStart && first ? monthFormatter.format(first.date) : ''}
                   </span>
                 );
               })}
@@ -184,7 +201,9 @@ export function Heatmap({
                     <button
                       key={day.key}
                       type="button"
-                      aria-label={`${fullDate(day.key)} ${day.count}語`}
+                      aria-label={`${fullDate(day.key, locale)} ${t('dashboard.words', {
+                        count: day.count,
+                      })}`}
                       onClick={() => onSelect(selected === day.key ? null : day.key)}
                       onMouseEnter={(event) => showTip(event.currentTarget, day)}
                       onFocus={(event) => showTip(event.currentTarget, day)}
@@ -206,7 +225,7 @@ export function Heatmap({
       </div>
 
       <div className="mt-3 flex items-center justify-end gap-1.5 text-[11px] text-muted">
-        <span>少ない</span>
+        <span>{t('dashboard.fewer')}</span>
         {[0, 1, 2, 3, 4].map((step) => (
           <span
             key={step}
@@ -214,7 +233,7 @@ export function Heatmap({
             className="h-[11px] w-[11px] rounded-[2px]"
           />
         ))}
-        <span>多い</span>
+        <span>{t('dashboard.more')}</span>
       </div>
 
       {tip && (

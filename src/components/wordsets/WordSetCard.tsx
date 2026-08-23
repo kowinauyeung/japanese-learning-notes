@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { WordSet } from '@/domain/wordSet';
+import { useI18n } from '@/i18n/context';
 
 /**
  * One 単語集 in the list.
@@ -10,16 +11,22 @@ import type { WordSet } from '@/domain/wordSet';
  * will actually list.
  */
 export function WordSetCard({ set, count }: { set: WordSet; count: number }) {
+  const { t } = useI18n();
   return (
     <Link
       to={`/wordsets/${set.id}`}
-      className="flex flex-col gap-2 rounded-card bg-card p-4 shadow-panel transition hover:-translate-y-0.5"
+      className="flex min-w-0 flex-col gap-2 overflow-hidden rounded-card bg-card p-4 shadow-panel transition hover:-translate-y-0.5"
     >
-      <h2 className="font-display text-lg font-bold">{set.name}</h2>
+      {/* Two lines, not one: a set name is chosen prose rather than a single
+          word, so the second line often carries the half that distinguishes two
+          sets. Unclamped it reached eight lines and set the height of every
+          card in the row — a grid of short sets with a band of empty space
+          through it. */}
+      <h2 className="line-clamp-2 font-display text-lg font-bold">{set.name}</h2>
       {set.description && (
         <p className="prose-cjk line-clamp-2 text-sm text-muted">{set.description}</p>
       )}
-      <p className="mt-auto text-xs text-muted tabular-nums">{count} 語</p>
+      <p className="mt-auto text-xs text-muted tabular-nums">{t('wordSets.count', { count })}</p>
     </Link>
   );
 }

@@ -31,7 +31,14 @@ test.describe('signing in', () => {
    * The half that matters for the data: opening `/` to visitors must not open
    * anything else. Every route holding a notebook still redirects.
    */
-  for (const path of ['/vocabulary', '/wordsets', '/history', '/account', '/practice/flashcards']) {
+  for (const path of [
+    '/vocabulary',
+    '/wordsets',
+    '/history',
+    '/account',
+    '/settings',
+    '/practice/flashcards',
+  ]) {
     test(`still sends an unauthenticated visitor away from ${path}`, async ({ page }) => {
       await seed(page, { entries: WORDS });
       await page.goto(path);

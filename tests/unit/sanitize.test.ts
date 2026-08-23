@@ -267,6 +267,22 @@ describe('sanitizeDraft — scalars', () => {
     expect(sanitizeDraft({ tags: ['x'.repeat(40)] }).tags).toEqual([]);
   });
 
+  /**
+   * The consequence of tightening `TAG_PATTERN` from 32 characters to 10, in
+   * the direction that is easy to miss: the pattern is read on the way *in* as
+   * well as on the way out, so a tag that was legal when it was saved now
+   * disappears from the entry rather than being reported anywhere.
+   *
+   * That is the right degradation — a filter chip no query could match is worse
+   * than no chip — but it is a silent data loss on read and it should be a
+   * decision somebody made, not a surprise somebody finds.
+   */
+  it('drops a stored tag that was legal before the limit was tightened to 10', () => {
+    expect(sanitizeDraft({ tags: ['x'.repeat(10), 'x'.repeat(11)] }).tags).toEqual([
+      'x'.repeat(10),
+    ]);
+  });
+
   it('splits, strips and de-duplicates tags', () => {
     expect(sanitizeDraft({ tags: ['#ニュース', 'ビジネス 会議', null, 'ニュース'] }).tags).toEqual([
       'ニュース',

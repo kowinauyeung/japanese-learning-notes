@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { japaneseVoices, speechCandidates } from '@/lib/speech';
+import { canSpeak, japaneseVoices, spokenForm, speechCandidates } from '@/lib/speech';
 
 /**
  * Choosing a voice, which is the step that decides whether the dictation drill
@@ -84,4 +84,41 @@ describe('speechCandidates', () => {
       null,
     ]);
   });
+});
+
+describe('spokenForm', () => {
+  /**
+   * A TTS voice reading 「辛い」 has no sentence to disambiguate from, so it
+   * guesses — and a guess of からい is the wrong word out loud, which in the
+   * dictation drill also makes つらい unanswerable.
+   */
+  it('speaks the kana reading rather than the kanji it could misread', () => {
+    expect(spokenForm({ headword: '辛い', reading: 'つらい' })).toBe('つらい');
+  });
+
+  it('falls back to the headword when the word is already kana', () => {
+    expect(spokenForm({ headword: 'ちょっと', reading: '' })).toBe('ちょっと');
+  });
+});
+
+/**
+ * Which statuses leave the button pressable. Both entries below are ones where
+ * gating on `ready` alone produces a control that is dead when the reader wants
+ * it: `loading` covers the few hundred milliseconds Chrome takes to populate
+ * the voice list, and `failed` is the state a retry exists to escape.
+ */
+describe('canSpeak', () => {
+  it.each(['ready', 'loading', 'failed'] as const)(
+    'leaves the button pressable on %s',
+    (status) => {
+      expect(canSpeak(status)).toBe(true);
+    },
+  );
+
+  it.each(['unsupported', 'no-japanese-voice'] as const)(
+    'disables the button on %s, where a press could only be silent',
+    (status) => {
+      expect(canSpeak(status)).toBe(false);
+    },
+  );
 });

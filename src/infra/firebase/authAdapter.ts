@@ -12,7 +12,7 @@ import { auth, googleProvider } from './client';
 /**
  * Firebase's `User` carries far more than the app needs and is the type most
  * likely to be missed when swapping providers, so it is narrowed here to the
- * four fields anything above this layer actually reads. Nullable strings become
+ * five fields anything above this layer actually reads. Nullable strings become
  * empty ones: every consumer already falls back on blank.
  */
 const toAuthUser = (user: User | null): AuthUser | null =>
@@ -20,6 +20,7 @@ const toAuthUser = (user: User | null): AuthUser | null =>
     uid: user.uid,
     email: user.email ?? '',
     displayName: user.displayName ?? '',
+    photoUrl: user.photoURL ?? '',
     emailVerified: user.emailVerified,
   };
 

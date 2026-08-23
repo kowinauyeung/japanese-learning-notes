@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { isRouteErrorResponse, Link, useRouteError } from 'react-router-dom';
 import { CopyDiagnostics } from '@/components/CopyDiagnostics';
+import { useI18n } from '@/i18n/context';
 import { newErrorId } from '@/lib/diagnostics';
 import { Component as NotFound } from '@/routes/NotFound';
 
@@ -20,6 +21,7 @@ import { Component as NotFound } from '@/routes/NotFound';
 export function ErrorScreen() {
   const error = useRouteError();
   const errorId = useMemo(() => newErrorId(), []);
+  const { t } = useI18n();
 
   // In an effect, not the render body: StrictMode double-invokes render, so
   // this logged twice per error and again on every re-render.
@@ -48,11 +50,9 @@ export function ErrorScreen() {
   return (
     <main className="grid min-h-dvh place-items-center bg-bg px-4">
       <div className="w-full max-w-md rounded-card bg-card p-8 text-center shadow-panel">
-        <h1 className="font-display text-xl font-bold">問題が発生しました</h1>
-        <p className="mt-3 text-sm text-muted">
-          画面を再読み込みすると直ることがあります。直らないときは、下の診断情報を添えてお知らせください。
-        </p>
-        <p className="mt-2 font-display text-sm tabular-nums">エラー ID: {errorId}</p>
+        <h1 className="font-display text-xl font-bold">{t('error.title')}</h1>
+        <p className="mt-3 text-sm text-muted">{t('error.description')}</p>
+        <p className="mt-2 font-display text-sm tabular-nums">{t('error.id', { id: errorId })}</p>
 
         <div className="mt-6 flex gap-2">
           <button
@@ -60,13 +60,13 @@ export function ErrorScreen() {
             onClick={() => window.location.reload()}
             className="min-h-11 flex-1 rounded-pill bg-accent text-sm font-semibold text-on-accent"
           >
-            再読み込み
+            {t('error.reload')}
           </button>
           <Link
             to="/support"
             className="grid min-h-11 flex-1 place-items-center rounded-pill bg-bg-alt text-sm font-semibold text-ink"
           >
-            報告する
+            {t('error.report')}
           </Link>
         </div>
 

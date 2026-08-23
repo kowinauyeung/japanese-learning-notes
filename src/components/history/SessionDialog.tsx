@@ -1,13 +1,9 @@
 import { Modal } from '@/components/Modal';
 import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
-import type { PracticeMode, PracticeSession } from '@/domain/practice';
+import type { PracticeSession } from '@/domain/practice';
+import { useI18n } from '@/i18n/context';
 import { missedWords, sessionTime } from '@/lib/history';
-
-const MODE_LABEL: Record<PracticeMode, string> = {
-  flashcard: 'フラッシュカード',
-  dictation: '書き取り練習',
-};
 
 /**
  * One session, opened out.
@@ -32,13 +28,18 @@ export function SessionDialog({
   entries: readonly Entry[];
   onClose: () => void;
 }) {
+  const { locale, t } = useI18n();
   if (!session) return null;
 
   const missed = missedWords(session, entries);
   const percent = session.total > 0 ? Math.round((session.correct / session.total) * 100) : 0;
 
   return (
-    <Modal open title={MODE_LABEL[session.mode]} onClose={onClose}>
+    <Modal
+      open
+      title={t(session.mode === 'flashcard' ? 'practice.flashcard' : 'practice.dictation')}
+      onClose={onClose}
+    >
       <div className="space-y-4">
         <div className="flex items-baseline gap-3">
           <p className="font-display text-3xl font-bold tabular-nums">
@@ -49,11 +50,11 @@ export function SessionDialog({
 
         <dl className="space-y-2 text-sm">
           <div className="flex gap-3">
-            <dt className="w-20 shrink-0 text-muted">終了</dt>
-            <dd className="tabular-nums">{sessionTime(session.finishedAt)}</dd>
+            <dt className="w-20 shrink-0 text-muted">{t('history.finished')}</dt>
+            <dd className="tabular-nums">{sessionTime(session.finishedAt, locale)}</dd>
           </div>
           <div className="flex gap-3">
-            <dt className="w-20 shrink-0 text-muted">条件</dt>
+            <dt className="w-20 shrink-0 text-muted">{t('history.filters')}</dt>
             {/* The label stored on the day, not one rebuilt now: a 単語集
                 renamed since would otherwise rewrite what was drilled. */}
             <dd className="prose-cjk min-w-0">{session.filterLabel}</dd>
@@ -61,7 +62,7 @@ export function SessionDialog({
         </dl>
 
         <div>
-          <h3 className="text-xs font-semibold tracking-wide text-muted">間違えた語</h3>
+          <h3 className="text-xs font-semibold tracking-wide text-muted">{t('practice.missed')}</h3>
           {missed.length > 0 ? (
             <ul className="mt-2 divide-y divide-line">
               {missed.map((entry) => (
@@ -86,7 +87,7 @@ export function SessionDialog({
           ) : (
             /* Either a perfect run or every missed word has since been deleted —
                the count above is what distinguishes them. */
-            <p className="mt-2 text-sm text-muted">ありません</p>
+            <p className="mt-2 text-sm text-muted">{t('history.none')}</p>
           )}
         </div>
       </div>

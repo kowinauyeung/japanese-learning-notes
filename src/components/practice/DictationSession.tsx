@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Ruby } from '@/components/Ruby';
+import { SpeechStatusNote } from '@/components/SpeakButton';
 import type { Entry } from '@/domain/entry';
-import { isCorrectAnswer, spokenForm } from '@/lib/dictation';
-import { useJapaneseSpeech } from '@/lib/speech';
+import { INPUT_LIMITS } from '@/domain/limits';
+import { useI18n } from '@/i18n/context';
+import { isCorrectAnswer } from '@/lib/dictation';
+import { canSpeak, spokenForm, useJapaneseSpeech } from '@/lib/speech';
 import { SessionHeader } from './SessionHeader';
 
 /**
@@ -25,6 +28,7 @@ export function DictationSession({
   onAnswer: (correct: boolean) => void;
   onQuit: () => void;
 }) {
+  const { t } = useI18n();
   const [typed, setTyped] = useState('');
   /** Null until 答え合わせ; the answer afterwards. */
   const [result, setResult] = useState<boolean | null>(null);
@@ -102,44 +106,33 @@ export function DictationSession({
     else check();
   };
 
-  const speakable = status === 'ready' || status === 'loading' || status === 'failed';
-
   return (
     <section className="mx-auto max-w-2xl space-y-4">
-      <SessionHeader title="書き取り練習" index={index} total={total} onQuit={onQuit} />
+      <SessionHeader title={t('practice.dictation')} index={index} total={total} onQuit={onQuit} />
 
       <div className="space-y-5 rounded-card bg-card p-6 shadow-panel">
         <div className="text-center">
           <button
             type="button"
             onClick={() => speak(spokenForm(entry))}
-            disabled={!speakable}
+            disabled={!canSpeak(status)}
             className="min-h-12 rounded-pill bg-accent px-6 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
-            🔊 単語を聞く
+            {t('practice.listen')}
           </button>
-          {status === 'unsupported' && (
-            <p className="mt-2 text-xs text-danger">このブラウザは音声読み上げに対応していません</p>
-          )}
-          {status === 'no-japanese-voice' && (
-            <p className="mt-2 text-xs text-danger">
-              日本語の音声が見つかりません。システム設定 → アクセシビリティ → 読み上げコンテンツ →
-              システムの声 から日本語の声を追加してください。
-            </p>
-          )}
-          {status === 'failed' && (
-            <p className="mt-2 text-xs text-danger">
-              音声を再生できませんでした。もう一度お試しください。
-            </p>
-          )}
+          {/* Its own button rather than `SpeakButton`: the drill is the one
+              screen where playing the word *is* the task, so it gets a labelled
+              primary target instead of an icon beside a headword. */}
+          <SpeechStatusNote status={status} className="mt-2" />
         </div>
 
         <label className="block space-y-1">
-          <span className="text-[11px] text-muted">聞こえた語</span>
+          <span className="text-[11px] text-muted">{t('practice.heardWord')}</span>
           <input
             ref={inputRef}
             value={typed}
             readOnly={result !== null}
+            maxLength={INPUT_LIMITS.dictationAnswer}
             onChange={(event) => setTyped(event.target.value)}
             onCompositionStart={() => (composing.current = true)}
             onCompositionEnd={() => (composing.current = false)}
@@ -157,12 +150,12 @@ export function DictationSession({
             className={`space-y-2 rounded-panel p-4 ${result ? 'bg-accent-soft' : 'bg-danger-soft'}`}
           >
             <p className={`text-sm font-semibold ${result ? 'text-accent' : 'text-danger'}`}>
-              {result ? '✅ 正解' : '❌ 不正解'}
+              {result ? t('practice.correct') : t('practice.incorrect')}
             </p>
             <Ruby
               headword={entry.headword}
               reading={entry.reading}
-              className="has-ruby block font-display text-2xl font-bold"
+              className="has-ruby block font-display text-2xl font-bold [overflow-wrap:anywhere]"
             />
             <p className="prose-cjk text-sm">{entry.senses[0]?.description || entry.definition}</p>
           </div>
@@ -175,7 +168,7 @@ export function DictationSession({
           onClick={check}
           className="min-h-12 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent"
         >
-          答え合わせ
+          {t('practice.check')}
         </button>
       ) : (
         <button
@@ -183,7 +176,7 @@ export function DictationSession({
           onClick={next}
           className="min-h-12 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent"
         >
-          次へ
+          {t('practice.next')}
         </button>
       )}
     </section>

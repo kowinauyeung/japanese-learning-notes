@@ -1,7 +1,8 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DictationSession } from '@/components/practice/DictationSession';
 import { makeEntry } from '../fixtures/entry';
+import { renderWithI18n as render } from '../helpers/renderWithI18n';
 
 /**
  * The defect this exists for: Enter is how a Japanese IME accepts a conversion

@@ -1,23 +1,9 @@
-# Original markdown notes, kept locally until the Firestore migration is verified.
-# Every file remains recoverable from git history.
-bak/
-
-# migration/output.json and review.json are deliberately NOT ignored. The
-# markdown notes they were parsed from are gone, and the corrections made during
-# migration were never committed, so this artefact is the only complete record
-# of what was loaded into Firestore — and the only way to roll production out
-# from the repo alone.
-
-# Private AI-agent workspace
-.kowin/
-
-# Agent memory. Local tool state rather than project source, and several of the
-# notes cite paths inside .kowin/ — committing them here would publish exactly
-# what that folder is ignored to keep private.
-.serena/
-
 node_modules/
 dist/
+# The e2e-pwa build cannot share `dist/`: Playwright starts its two web servers
+# in parallel, and whichever `vite build` ran second would empty the other's
+# output from under a server already serving it.
+dist-e2e-pwa/
 *.tsbuildinfo
 
 # Vite's dependency pre-bundling cache. Normally lands in node_modules/.vite,
@@ -31,9 +17,11 @@ dist/
 # Committed on purpose: no credentials, only the mode name for the end-to-end
 # build. See the file itself for why.
 !.env.e2e
+!.env.e2e-pwa
 
-# Service-account private keys used by the upload script — never commit these.
-migration/service-account-*.json
+# Service-account private keys — never commit these. This project deliberately
+# has none; `yarn auth:login` is the supported path.
+service-account-*.json
 .firebase/
 
 # Repo-local gcloud config, so this project's Google identity never touches the
@@ -48,4 +36,7 @@ migration/service-account-*.json
 coverage/
 playwright-report/
 test-results/
-migration/accents.prompt.txt
+
+# Local agent instructions alias. Keep the repo-owned source file (`CLAUDE.md`)
+# tracked, but ignore a workstation-specific `AGENTS.md` symlink beside it.
+/AGENTS.md

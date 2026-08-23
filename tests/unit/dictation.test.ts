@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { acceptedAnswers, isCorrectAnswer, normaliseAnswer, spokenForm } from '@/lib/dictation';
+import { acceptedAnswers, isCorrectAnswer, normaliseAnswer } from '@/lib/dictation';
 
 /**
  * Marking a typed answer. Every case here is one where the screen shows two
@@ -68,19 +68,5 @@ describe('isCorrectAnswer', () => {
   /** The defect `acceptedAnswers` exists to prevent, asserted end to end. */
   it('rejects an empty answer for a kana headword, which has no reading to fall back on', () => {
     expect(isCorrectAnswer('', { headword: 'ちょっと', reading: '' })).toBe(false);
-  });
-});
-
-describe('spokenForm', () => {
-  /**
-   * A TTS voice reading 「辛い」 has no sentence to disambiguate from, so it
-   * guesses — and a guess of からい makes つらい unanswerable.
-   */
-  it('speaks the kana reading rather than the kanji it could misread', () => {
-    expect(spokenForm({ headword: '辛い', reading: 'つらい' })).toBe('つらい');
-  });
-
-  it('falls back to the headword when the word is already kana', () => {
-    expect(spokenForm({ headword: 'ちょっと', reading: '' })).toBe('ちょっと');
   });
 });

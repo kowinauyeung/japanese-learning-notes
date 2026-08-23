@@ -4,7 +4,7 @@ import { GoogleAuthProvider, getAuth } from 'firebase/auth';
 import {
   initializeFirestore,
   persistentLocalCache,
-  persistentSingleTabManager,
+  persistentMultipleTabManager,
 } from 'firebase/firestore';
 
 /**
@@ -48,9 +48,30 @@ export const app = initializeApp(config);
  * with no error pointing at it. Absent key means absent App Check, and the
  * console reports the state either way.
  *
- * Enforcement is a separate switch in the Firebase console and should stay off
- * until its metrics show real traffic attesting successfully. Shipping the
- * client first is what produces those metrics.
+ * **Enforcement is a separate switch in the Firebase console, and production
+ * was enforced from its first deploy.** The usual advice — ship the client,
+ * watch the metrics, enforce once real traffic is attesting successfully — was
+ * not available here, and not by oversight: the production project had never
+ * served a request, so the metrics it asks you to read were empty. Waiting
+ * would have meant waiting for traffic that only arrives once the operator
+ * signs in, which is the same event enforcement is being judged on.
+ *
+ * The cost of that order is worth stating, because whoever hits it will not
+ * recognise it. A client whose App Check token is refused is denied at
+ * Firestore, so the failure arrives as `permission-denied` on every read — and
+ * `loadError.ts` renders that as 「アクセスが許可されていません」, which points
+ * at the claim gate. The gate will be innocent.
+ *
+ * Telling them apart, and the rollback:
+ *
+ * 1. Open the browser console. An App Check failure logs a warning prefixed
+ *    `@firebase/app-check`; a missing claim logs nothing.
+ * 2. If it is App Check, turn enforcement off in the console. It takes effect
+ *    within minutes and needs no deploy.
+ * 3. The App Check metrics page then has what it never had: real requests,
+ *    split into verified and unverified, with a reason against each.
+ *
+ * Enforce again from that page, not from this comment.
  *
  * **v3, not Enterprise**, and that is a plan constraint rather than a
  * preference: reCAPTCHA Enterprise is a Cloud product and its API cannot be
@@ -100,11 +121,41 @@ if (siteKey) {
 
 /**
  * Persistent cache lets a review session keep working on the train and sync
- * when the connection returns. Single-tab manager is enough for one person on
- * one device at a time and avoids the multi-tab coordination overhead.
+ * when the connection returns.
+ *
+ * **Multiple tabs, and #78 is why it changed.** The single-tab manager was
+ * chosen when "one person on one device" meant one tab. It takes exclusive
+ * access to the persistence layer — the SDK's own words are that a second
+ * client must enable "multi-tab synchronization ... in all tabs" to share it —
+ * and an installed app makes a second client ordinary rather than exotic: the
+ * installed window and a browser tab on the same origin are two of them.
+ *
+ * Measured rather than reasoned about, with two tabs against the emulator and
+ * the network then disabled in each, three runs, identical every time:
+ *
+ * | manager  | tab 1 offline read | tab 2 offline read |
+ * | -------- | ------------------ | ------------------ |
+ * | single   | succeeds           | **fails**          |
+ * | multiple | succeeds           | succeeds           |
+ *
+ * So whichever window opened second is the one with no offline data — the
+ * state this whole effort exists to prevent, arriving through the feature meant
+ * to deliver it.
+ *
+ * Worth recording because it cost time: the second tab does **not** announce
+ * this. No error is thrown at startup and nothing is logged there; it looks
+ * identical to the first tab until the network goes away. (`Error using user
+ * provided cache. Falling back to memory cache` does exist, but it is what a
+ * platform with no IndexedDB reports — Node, which is why no test under
+ * `tests/integration` can reach any of this.)
+ *
+ * The cost being accepted: the multi-tab manager elects a primary through a
+ * lease and coordinates across clients, so there is more storage traffic and a
+ * handover whenever the primary closes. That is real, and it is smaller than a
+ * window with no offline data at all.
  */
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentSingleTabManager({}) }),
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
 
 export const auth = getAuth(app);

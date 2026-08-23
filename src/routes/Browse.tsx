@@ -2,6 +2,9 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { EntryCard } from '@/components/browse/EntryCard';
 import { FilterPanel } from '@/components/browse/FilterPanel';
+import { VocabularySearch } from '@/components/browse/VocabularySearch';
+import { useI18n } from '@/i18n/context';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import {
   EMPTY_FILTERS,
@@ -12,19 +15,18 @@ import {
   toSearchParams,
 } from '@/lib/filters';
 import type { Filters } from '@/lib/filters';
+import { recentTags } from '@/lib/tags';
 
 export function Component() {
   const { entries, loading, error } = useEntries();
+  const errorMessage = useLoadErrorMessage(error);
   const [searchParams, setSearchParams] = useSearchParams();
+  const { t } = useI18n();
 
   const filters = useMemo(() => fromSearchParams(searchParams), [searchParams]);
   const update = (next: Filters) => setSearchParams(toSearchParams(next), { replace: true });
 
-  const allTags = useMemo(
-    () =>
-      [...new Set(entries.flatMap((entry) => entry.tags))].sort((a, b) => a.localeCompare(b, 'ja')),
-    [entries],
-  );
+  const visibleTags = useMemo(() => recentTags(entries), [entries]);
 
   const results = useMemo(
     () =>
@@ -35,31 +37,26 @@ export function Component() {
     [entries, filters],
   );
 
-  const active = activeChips(filters);
+  const active = activeChips(filters, (stars) => t('vocabulary.frequencyAtLeastChip', { stars }));
 
-  if (loading) return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
-  if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
+  if (loading)
+    return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
+  if (errorMessage) return <p className="py-16 text-center text-sm text-danger">{errorMessage}</p>;
 
   return (
     <div className="space-y-4">
-      <input
-        type="search"
-        value={filters.q}
-        onChange={(event) => update({ ...filters, q: event.target.value })}
-        placeholder="見出し語・読み方・タグ・意味・例文で検索"
-        className="min-h-12 w-full rounded-pill border border-line bg-card px-5 text-sm text-ink placeholder:text-muted"
-      />
+      <VocabularySearch value={filters.q} onChange={(q) => update({ ...filters, q })} />
 
-      <FilterPanel filters={filters} allTags={allTags} onChange={update} />
+      <FilterPanel filters={filters} allTags={visibleTags} onChange={update} />
 
       {!isDefault(filters) && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {active.map((chip) => (
             <button
               key={chip.key}
               type="button"
               onClick={() => update(chip.clear(filters))}
-              className="rounded-pill bg-accent-soft px-3 py-1 text-xs font-medium text-accent"
+              className="max-w-full rounded-pill bg-accent-soft px-3 py-1 text-left text-xs font-medium [overflow-wrap:anywhere] text-accent"
             >
               {chip.label} ✕
             </button>
@@ -69,12 +66,12 @@ export function Component() {
             onClick={() => update({ ...EMPTY_FILTERS, sort: filters.sort })}
             className="px-2 text-xs text-muted underline hover:text-ink"
           >
-            すべて解除
+            {t('vocabulary.clearFilters')}
           </button>
         </div>
       )}
 
-      <p className="text-xs text-muted">{results.length} 語</p>
+      <p className="text-xs text-muted">{t('vocabulary.resultCount', { count: results.length })}</p>
 
       {results.length ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
@@ -83,14 +80,14 @@ export function Component() {
           ))}
         </div>
       ) : (
-        <p className="py-16 text-center text-sm text-muted">条件に合う単語がありません</p>
+        <p className="py-16 text-center text-sm text-muted">{t('vocabulary.noResults')}</p>
       )}
     </div>
   );
 }
 
 /** Removable summary of what is currently narrowing the list. */
-function activeChips(filters: Filters) {
+function activeChips(filters: Filters, frequencyLabel: (stars: string) => string) {
   const chips: { key: string; label: string; clear: (f: Filters) => Filters }[] = [];
 
   if (filters.q) {
@@ -121,7 +118,7 @@ function activeChips(filters: Filters) {
   if (filters.minFreq) {
     chips.push({
       key: 'freq',
-      label: `${'★'.repeat(filters.minFreq)} 以上`,
+      label: frequencyLabel('★'.repeat(filters.minFreq)),
       clear: (f) => ({ ...f, minFreq: 0 }),
     });
   }

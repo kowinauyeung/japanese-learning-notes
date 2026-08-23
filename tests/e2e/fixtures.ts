@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import type { E2ESeed, SeedEntry, SeedSession, SeedWordSet } from '@/lib/e2eSeed';
 
 /**
  * Shared setup for every end-to-end spec.
@@ -10,17 +11,6 @@ import type { Page } from '@playwright/test';
  * every screenshot overnight).
  */
 
-export interface E2ESeed {
-  /** Start already signed in, skipping the login screen. */
-  signedIn?: boolean;
-  entries?: Record<string, unknown>[];
-  /** Entry ids to start marked wrong, so 苦手のみ has something to select. */
-  weak?: string[];
-  wordSets?: Record<string, unknown>[];
-  /** Finished sessions, so 履歴 can be reached without drilling first. */
-  sessions?: Record<string, unknown>[];
-}
-
 /** Fixed instant every spec runs at. A Wednesday; its ISO week starts on the 22nd. */
 export const NOW = new Date('2026-06-24T10:00:00+09:00');
 
@@ -31,7 +21,7 @@ export const NOW = new Date('2026-06-24T10:00:00+09:00');
  * with no kanji at all. The dates put two in the current ISO week and one
  * earlier in the same year.
  */
-export const WORDS: Record<string, unknown>[] = [
+export const WORDS = [
   {
     id: 'w-kiriwake',
     headword: '切り分け',
@@ -58,6 +48,7 @@ export const WORDS: Record<string, unknown>[] = [
     pitchAccent: 0,
     definition: '何かが起こる前ぶれ。',
     definitionSub: '徵兆',
+    source: 'NHK News',
     pos: ['名詞'],
     jlpt: 'N1',
     origin: '漢語',
@@ -85,7 +76,74 @@ export const WORDS: Record<string, unknown>[] = [
     createdAt: '2026-01-15T01:00:00.000Z',
     updatedAt: '2026-01-15T01:00:00.000Z',
   },
-];
+] satisfies SeedEntry[];
+
+/**
+ * A note whose fields are long enough to break the layout, in the two ways that
+ * actually did.
+ *
+ * **Deliberately not in `WORDS`.** Every committed screenshot is taken against
+ * that array, so adding a fourth entry there would put a red diff on baselines
+ * that have nothing to do with this — and the only way to clear it would be to
+ * regenerate images to make a failing test pass, which is the one thing the
+ * testing rules refuse outright.
+ *
+ * Both headwords are drawn from what a real notebook produced, not invented:
+ *
+ *  - An unbroken run of Latin letters. This is the one that escapes its
+ *    container, because CJK breaks between almost any two characters and Latin
+ *    offers no break opportunity at all — which is why a notebook written in
+ *    Japanese hid the defect until somebody typed `wwww…`.
+ *  - A 60-character Japanese headword, which wraps but does not overflow. It
+ *    grows the card instead: the tallest card in a row sets the height of every
+ *    card beside it, so one long word leaves a grid of otherwise short entries
+ *    with a band of empty space through it.
+ */
+export const OVERSIZE_WORDS = [
+  {
+    id: 'w-latin',
+    headword: 'W'.repeat(200),
+    reading: '',
+    definition: 'W'.repeat(200),
+    pos: ['名詞'],
+    jlpt: 'レベル外',
+    freq: 3,
+    tags: [],
+    learnedOn: '2026-06-23',
+    createdAt: '2026-06-23T01:00:00.000Z',
+    updatedAt: '2026-06-23T01:00:00.000Z',
+  },
+  {
+    id: 'w-longja',
+    headword: '龍の宮の乙姫の元結の上の外し'.repeat(4),
+    reading: '',
+    definition: '長い見出し語がカードの高さを決めてしまう場合。'.repeat(4),
+    pos: ['名詞'],
+    jlpt: 'レベル外',
+    freq: 3,
+    tags: [],
+    learnedOn: '2026-06-23',
+    createdAt: '2026-06-23T02:00:00.000Z',
+    updatedAt: '2026-06-23T02:00:00.000Z',
+  },
+] satisfies SeedEntry[];
+
+/**
+ * A 単語集 whose name is far past its limit, holding the oversize entries.
+ *
+ * Stored data, not typed data: `maxLength` and `wordSetError` between them make
+ * this unreachable through the form now, and every screen that renders a set
+ * still has to survive one — a set written before the limit existed, or by
+ * anything that is not this client.
+ */
+export const OVERSIZE_SET = [
+  {
+    id: 'set-oversize',
+    name: 'W'.repeat(400),
+    description: 'この単語集の説明。'.repeat(40),
+    entryIds: ['w-latin', 'w-longja', 'w-kiriwake'],
+  },
+] satisfies SeedWordSet[];
 
 /**
  * Must be called before the first navigation: `addInitScript` runs ahead of the
@@ -95,7 +153,7 @@ export const WORDS: Record<string, unknown>[] = [
 export async function seed(page: Page, data: E2ESeed = {}): Promise<void> {
   await page.clock.setFixedTime(NOW);
   await page.addInitScript((value) => {
-    (window as unknown as { __GOITEI_E2E__?: unknown }).__GOITEI_E2E__ = value;
+    (window as { __GOITEI_E2E__?: E2ESeed }).__GOITEI_E2E__ = value;
   }, data);
 }
 
@@ -134,9 +192,9 @@ export async function watchForBlanking(page: Page): Promise<() => Promise<boolea
  * the specs about what a set *does* should not each pay for the four clicks
  * that make it. `wordsets.spec.ts` covers those clicks once.
  */
-export const WORD_SETS: Record<string, unknown>[] = [
+export const WORD_SETS = [
   { id: 'set-work', name: '仕事セット', entryIds: ['w-kiriwake', 'w-choukou'] },
-];
+] satisfies SeedWordSet[];
 
 /**
  * One 単語集 holding all three words.
@@ -145,13 +203,13 @@ export const WORD_SETS: Record<string, unknown>[] = [
  * rows it renders — the state in which a visible row index and a stored index
  * stop agreeing, and the only shape that can see it.
  */
-export const FULL_SET: Record<string, unknown>[] = [
+export const FULL_SET = [
   {
     id: 'set-all',
     name: '全部セット',
     entryIds: ['w-kiriwake', 'w-choukou', 'w-chotto'],
   },
-];
+] satisfies SeedWordSet[];
 
 /**
  * Two 単語集 that both claim 兆候.
@@ -160,10 +218,10 @@ export const FULL_SET: Record<string, unknown>[] = [
  * set, and nothing on the entry records which of them claimed it. That is what
  * makes deleting the word a question about several documents at once.
  */
-export const OVERLAPPING_SETS: Record<string, unknown>[] = [
+export const OVERLAPPING_SETS = [
   { id: 'set-work', name: '仕事セット', entryIds: ['w-kiriwake', 'w-choukou'] },
   { id: 'set-news', name: 'ニュースセット', entryIds: ['w-choukou'] },
-];
+] satisfies SeedWordSet[];
 
 /**
  * `count` finished sessions, newest last, an hour apart.
@@ -172,7 +230,7 @@ export const OVERLAPPING_SETS: Record<string, unknown>[] = [
  * than a couple of them is the cursor, and a page boundary needs more rows than
  * anybody wants to read in a fixture.
  */
-export function makeSessions(count: number): Record<string, unknown>[] {
+export function makeSessions(count: number): SeedSession[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `e2e-session-${index + 1}`,
     mode: index % 2 === 0 ? 'flashcard' : 'dictation',
@@ -182,5 +240,5 @@ export function makeSessions(count: number): Record<string, unknown>[] {
     missed: [],
     startedAt: new Date(Date.UTC(2026, 5, 1, index)).toISOString(),
     finishedAt: new Date(Date.UTC(2026, 5, 1, index, 5)).toISOString(),
-  }));
+  })) satisfies SeedSession[];
 }

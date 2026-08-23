@@ -7,6 +7,9 @@ import { PracticeSetup } from '@/components/practice/PracticeSetup';
 import { SessionSummary } from '@/components/practice/SessionSummary';
 import type { Entry } from '@/domain/entry';
 import type { PracticeMode } from '@/domain/practice';
+import { useI18n } from '@/i18n/context';
+import { useEntryLabel } from '@/i18n/useEntryLabel';
+import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
 import { useEntries } from '@/lib/entries';
 import {
   describeFilters,
@@ -19,6 +22,7 @@ import {
 } from '@/lib/practice';
 import type { Answer, PracticeFilters } from '@/lib/practice';
 import { useProgress } from '@/lib/progress';
+import { recentTags } from '@/lib/tags';
 import { membersOf } from '@/lib/wordSetMembers';
 import { useWordSets } from '@/lib/wordSets';
 
@@ -62,6 +66,7 @@ interface Session {
 
 function Practice({ mode }: { mode: PracticeMode }) {
   const { entries, loading, error } = useEntries();
+  const errorMessage = useLoadErrorMessage(error);
   const {
     weakIds,
     loading: progressLoading,
@@ -72,6 +77,18 @@ function Practice({ mode }: { mode: PracticeMode }) {
   const { sets, loading: setsLoading } = useWordSets();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { t } = useI18n();
+  const entryLabel = useEntryLabel();
+  const filterLabels = useMemo(
+    () => ({
+      set: (name: string) => t('practice.filterSet', { name }),
+      metadata: entryLabel,
+      unknown: t('practice.filterUnknown'),
+      weakOnly: t('practice.weakOnly'),
+      all: t('practice.filterAll'),
+    }),
+    [entryLabel, t],
+  );
 
   /**
    * Seeded from the query string, then owned by this screen.
@@ -94,11 +111,7 @@ function Practice({ mode }: { mode: PracticeMode }) {
   // re-render happened to cross midnight.
   const now = useMemo(() => new Date(), []);
 
-  const allTags = useMemo(
-    () =>
-      [...new Set(entries.flatMap((entry) => entry.tags))].sort((a, b) => a.localeCompare(b, 'ja')),
-    [entries],
-  );
+  const visibleTags = useMemo(() => recentTags(entries), [entries]);
 
   /**
    * Counted over the entries in hand, not over progress rows. A word answered
@@ -163,7 +176,8 @@ function Practice({ mode }: { mode: PracticeMode }) {
     if (autoStarted.current || searchParams.get('start') !== '1') return;
     if (loading || progressLoading || setsLoading) return;
     autoStarted.current = true;
-    if (matches.length > 0) start(shuffle(matches, Math.random), describeFilters(filters, sets));
+    if (matches.length > 0)
+      start(shuffle(matches, Math.random), describeFilters(filters, sets, filterLabels));
     // `start` and `filters` are read at the moment this fires and are not what
     // decides whether it should; listing them would re-run it on every edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -187,7 +201,7 @@ function Practice({ mode }: { mode: PracticeMode }) {
         // The score is already on screen and the answers are already in state,
         // so a failed write costs the record, not the session. Saying so beats
         // throwing the result away.
-        setSaveError('練習の記録を保存できませんでした。');
+        setSaveError(t('practice.saveError'));
       })
       .finally(() => {
         setSaving(false);
@@ -208,22 +222,25 @@ function Practice({ mode }: { mode: PracticeMode }) {
     if (answers.length === session.queue.length) finish(session, answers);
   };
 
-  if (loading) return <p className="py-16 text-center text-sm text-muted">読み込み中…</p>;
-  if (error) return <p className="py-16 text-center text-sm text-danger">{error}</p>;
+  if (loading)
+    return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
+  if (errorMessage) return <p className="py-16 text-center text-sm text-danger">{errorMessage}</p>;
 
   if (!session) {
     return (
       <PracticeSetup
         mode={mode}
         filters={filters}
-        allTags={allTags}
+        allTags={visibleTags}
         allSets={setChips}
         now={now}
         matchCount={matches.length}
         weakCount={weakCount}
         weakState={progressError ? 'error' : progressLoading ? 'loading' : 'ready'}
         onChange={setFilters}
-        onStart={() => start(shuffle(matches, Math.random), describeFilters(filters, sets))}
+        onStart={() =>
+          start(shuffle(matches, Math.random), describeFilters(filters, sets, filterLabels))
+        }
         onCancel={() => void navigate('/')}
       />
     );
@@ -250,9 +267,9 @@ function Practice({ mode }: { mode: PracticeMode }) {
             once Escape can trigger it by accident. */}
         <ConfirmDialog
           open={quitting}
-          title="練習を中断しますか？"
-          message={`ここまでの ${session.answers.length} 問は記録されません。`}
-          confirmLabel="中断する"
+          title={t('practice.quitTitle')}
+          message={t('practice.quitMessage', { count: session.answers.length })}
+          confirmLabel={t('practice.quit')}
           onConfirm={() => {
             setQuitting(false);
             setSession(null);
@@ -283,7 +300,9 @@ function Practice({ mode }: { mode: PracticeMode }) {
        * learner did best.
        */
       onRestart={() => start(shuffle(session.queue, Math.random), session.filterLabel)}
-      onRetryMissed={() => start(shuffle(missed, Math.random), `${session.filterLabel} / 復習`)}
+      onRetryMissed={() =>
+        start(shuffle(missed, Math.random), `${session.filterLabel} / ${t('practice.review')}`)
+      }
     />
   );
 }

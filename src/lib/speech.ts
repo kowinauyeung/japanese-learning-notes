@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Entry } from '@/domain/entry';
 
 /**
  * The Web Speech API, which is the one browser capability this app cannot
@@ -65,6 +66,39 @@ export function speechCandidates(
 }
 
 export type SpeechStatus = 'unsupported' | 'loading' | 'no-japanese-voice' | 'ready' | 'failed';
+
+/**
+ * Whether pressing the button can still produce a sound.
+ *
+ * `loading` counts, and that is the point of this being a function rather than
+ * `status === 'ready'`: failure 2 below means the voice list is empty for the
+ * first few hundred milliseconds of every visit, so a button gated on `ready`
+ * is dead on first paint — on a page the reader arrives at already looking at
+ * the word they want to hear.
+ *
+ * `failed` counts because the retry is the whole recovery: a press moves to the
+ * next candidate voice, which is how a machine with a listed-but-undownloaded
+ * voice ever reaches one that plays.
+ *
+ * Written as a list of what may speak rather than of what may not, so a status
+ * added later has to be considered rather than silently inheriting a button.
+ */
+export function canSpeak(status: SpeechStatus): boolean {
+  return status === 'ready' || status === 'loading' || status === 'failed';
+}
+
+/**
+ * What the speech engine is asked to say.
+ *
+ * The kana reading wins over the written form when there is one. A TTS voice
+ * guesses the reading of a kanji compound from context it does not have here —
+ * a single word with no sentence around it — and 「辛い」 read as からい when
+ * the note says つらい is the wrong word out loud, which in the dictation drill
+ * also makes the answer unmarkable.
+ */
+export function spokenForm(entry: Pick<Entry, 'headword' | 'reading'>): string {
+  return entry.reading || entry.headword;
+}
 
 /**
  * How long to wait for `start` before calling it silence.

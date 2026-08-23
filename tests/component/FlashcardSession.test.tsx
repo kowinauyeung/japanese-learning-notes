@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Modal } from '@/components/Modal';
 import { FlashcardSession } from '@/components/practice/FlashcardSession';
 import { makeEntry } from '../fixtures/entry';
+import { renderWithI18n as render } from '../helpers/renderWithI18n';
 
 /**
  * The keyboard shortcuts, which are the only way this card is meant to be
@@ -121,6 +122,37 @@ describe('FlashcardSession — shortcut hints', () => {
   it('leaves 中断 without one', () => {
     setup();
     expect(screen.getByRole('button', { name: '中断' })).toHaveTextContent('中断');
+  });
+});
+
+describe('FlashcardSession — long secondary text', () => {
+  it('hard-wraps the secondary definition and example translation inside the card', () => {
+    const secondary = `secondary-${'W'.repeat(500)}`;
+    const translation = `translation-${'W'.repeat(500)}`;
+
+    setup({
+      entry: makeEntry({
+        id: 'long-secondary',
+        definitionSub: secondary,
+        senses: [
+          {
+            label: 'long example',
+            description: 'meaning',
+            example: '例文',
+            exampleGloss: '例文の意味',
+            translation,
+            usage: 'test',
+          },
+        ],
+      }),
+    });
+
+    press(' ');
+
+    expect(screen.getByText(secondary, { selector: 'p' })).toHaveClass('[overflow-wrap:anywhere]');
+    expect(screen.getByText(translation, { selector: 'p' })).toHaveClass(
+      '[overflow-wrap:anywhere]',
+    );
   });
 });
 
