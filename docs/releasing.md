@@ -108,7 +108,9 @@ yarn release --release-as major   # the flag is for this one release only
 ```
 
 It bumps `package.json`, writes `CHANGELOG.md` and commits both as
-`chore(release): v1.0.0`. It does **not** tag — see step 6.
+`chore(release): 1.0.0` — no `v`, because `.versionrc.json` sets `skip.tag`
+and the commit message template reads the bare version, not a tag. It does
+**not** tag — see step 6.
 
 **3. Read the diff before you push it.** `package.json` and `CHANGELOG.md`, and
 nothing else. The changelog is a public artefact of a public repository.
@@ -132,8 +134,20 @@ each time.
 
 **6. Deploy, then tag.**
 
-Run _Deploy (production)_ and give it the full 40-character SHA of the merge
-commit. If a new account has to work after this release, do the claim steps in
+Run _Deploy (production)_:
+
+- Go to the repository's **Actions** tab on GitHub.
+- Select **Deploy (production)** from the left sidebar.
+- Click **Run workflow**, and select `main` under "Use workflow from".
+
+It asks for the full 40-character SHA of the merge commit from step 5, as
+**"Commit SHA to deploy"**. Get it one of two ways:
+
+- Terminal: `git switch main && git pull`, then `git rev-parse HEAD`.
+- GitHub web UI: open the `main` branch's commit history and copy the full
+  40-character SHA of the merge commit.
+
+If a new account has to work after this release, do the claim steps in
 [README → Operator runbook](../README.md#operator-runbook) **first**; the order
 there is not a preference.
 
@@ -162,8 +176,24 @@ the same footing.
 
 **7. Merge `main` back into `develop`.**
 
+This pull request's only non-merge commit is almost always the release commit
+from step 2 — `main` and `develop` have nothing else between them, because
+nothing but a release branch reaches `main`. `pr-title.yml`'s
+`validateSingleCommit` and `validateSingleCommitMatchesPrTitle` (see "What
+decides the version" above) therefore check this title against that one
+commit too, and a title that merely _describes_ the merge — `chore: merge
+1.0.0 back into develop` — fails it, because it is not that commit's message.
+Title the pull request with that commit's message, verbatim:
+
 ```sh
-gh pr create --base develop --head main --title 'chore: merge 1.0.0 back into develop'
+gh pr create --base develop --head main --title 'chore(release): 1.0.0'
+```
+
+If you are not sure what the release commit's exact message was, read it
+rather than retype it:
+
+```sh
+git log -1 --format=%s "$SHA^2"   # second parent: the release branch tip, $SHA is the merge commit from step 6
 ```
 
 Not bookkeeping. The tag sits on a merge commit on `main`, and that commit is
