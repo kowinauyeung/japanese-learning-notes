@@ -37,4 +37,15 @@ export interface E2ESeed {
   settingsRefresh?: 'fail';
   /** Put a waiting build on screen, so `UpdatePrompt` can be laid out against. */
   updateWaiting?: boolean;
+  /**
+   * Make the drafting port refuse, with the reason it refuses for.
+   *
+   * Four reasons rather than a boolean because the panel says something
+   * different for each, and only one of them is worth a retry.
+   * **`unavailable` also stops the port reporting itself available**, matching
+   * the real adapter: a retired model or a project with the API off fails on
+   * the first call and never succeeds after it, so the button goes rather than
+   * offering to try again forever.
+   */
+  entryDrafting?: 'unavailable' | 'quota' | 'blocked' | 'failed';
 }

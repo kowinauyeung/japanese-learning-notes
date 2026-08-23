@@ -22,6 +22,7 @@ import { swUpdatePort } from '@/infra/pwa/updatePort';
  */
 export {
   authPort,
+  entryDraftingPort,
   entryRepositoryFor,
   progressRepositoryFor,
   userRepository,

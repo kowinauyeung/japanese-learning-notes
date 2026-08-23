@@ -76,12 +76,20 @@ export function Area({
   maxLength,
   rows = 3,
   placeholder,
+  disabled,
 }: {
   value: string;
   onChange: (value: string) => void;
   maxLength: number | 'unbounded';
   rows?: number;
   placeholder?: string;
+  /**
+   * Optional, and every existing caller leaves it out. It exists because the
+   * JSON panel holds fields whose value a request in flight is about to answer
+   * for — editing them mid-request produces a reply to a question that is no
+   * longer on screen.
+   */
+  disabled?: boolean;
 }) {
   return (
     <textarea
@@ -89,8 +97,9 @@ export function Area({
       maxLength={maxLength === 'unbounded' ? undefined : maxLength}
       rows={rows}
       placeholder={placeholder}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
-      className={`${inputClass} prose-cjk py-2 leading-relaxed`}
+      className={`${inputClass} prose-cjk py-2 leading-relaxed disabled:opacity-50`}
     />
   );
 }

@@ -3,6 +3,7 @@ import type {
   AppUpdatePort,
   AuthPort,
   AuthUser,
+  EntryDraftingPort,
   EntryRepository,
   Page,
   PageQuery,
@@ -10,6 +11,7 @@ import type {
   UserRepository,
   WordSetRepository,
 } from '@/domain/ports';
+import { EntryDraftingError } from '@/domain/ports';
 import type { EntryProgress, PracticeSession, PracticeSessionDraft } from '@/domain/practice';
 import type { UserProfile, UserProfileDraft } from '@/domain/user';
 import type { WordSet, WordSetDraft } from '@/domain/wordSet';
@@ -572,4 +574,71 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
       persist();
     },
   };
+};
+
+/**
+ * The drafting port, answered from the prompt instead of from a model.
+ *
+ * A stand-in and not a stub: it implements the port the architecture already
+ * defines, exactly as the repositories above do. What it removes from the
+ * end-to-end run is a network call, a quota and a non-deterministic answer —
+ * none of which the thing under test is about. What is under test is that the
+ * button reaches the port, that the reply goes through `jsonToDraft` rather
+ * than around it, and that the form ends up filled.
+ *
+ * The headword is read back out of the prompt so the assertion can be about
+ * *this* word rather than about a fixture that would pass for any of them.
+ * `buildPrompt` opens with 「…」, which is why that is what is matched; if it
+ * ever stops doing so the fallback below keeps the reply valid and the test
+ * fails on the headword, which is the right place for it to fail.
+ */
+/**
+ * Set when a seeded `unavailable` has been served, so the port reports itself
+ * unavailable afterwards exactly as the Gemini adapter does.
+ */
+let draftingIsSpent = false;
+/**
+ * The seed the flag above was set under, compared by identity.
+ *
+ * Comparing the *reason* instead was not enough, and the difference only shows
+ * up in the second test to seed `unavailable`: the flag survives, `available()`
+ * answers false before that test has pressed anything, and the button it needs
+ * is never rendered. One case passes, two cases are order-dependent. Every
+ * end-to-end page and every component test installs a fresh object, so identity
+ * is what actually distinguishes one run from the next.
+ */
+let draftingSeed: E2ESeed | undefined;
+
+export const entryDraftingPort: EntryDraftingPort = {
+  available: () => {
+    // The flag's memory is the seed's, not the session's: a flag that outlived
+    // one run would hide the button in the next for no reason that run stated,
+    // which is the kind of cross-contamination that reads as flake.
+    const current = seed();
+    if (current !== draftingSeed) {
+      draftingSeed = current;
+      draftingIsSpent = false;
+    }
+    return !draftingIsSpent;
+  },
+  // Not `async`: there is nothing to await, and an async function with no
+  // await is a lint error rather than a style. The port is still a promise.
+  draft: (prompt) => {
+    const failure = seed().entryDrafting;
+    if (failure) {
+      if (failure === 'unavailable') draftingIsSpent = true;
+      return Promise.reject(new EntryDraftingError(failure));
+    }
+    const headword = /^「(.+?)」/.exec(prompt)?.[1] ?? '兆候';
+    // Fenced, because a real reply is: the prompt asks for a ```json block and
+    // `jsonToDraft` strips one. An unfenced fixture would leave that unexercised.
+    const entry = {
+      headword,
+      reading: 'ちょうこう',
+      definition: `${headword}の意味`,
+      pos: ['名詞'],
+      jlpt: 'N2',
+    };
+    return Promise.resolve(['```json', JSON.stringify(entry, null, 2), '```'].join('\n'));
+  },
 };

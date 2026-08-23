@@ -1,9 +1,28 @@
-import { useState } from 'react';
+import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from 'react';
 import { INPUT_LIMITS } from '@/domain/limits';
+import { EntryDraftingError, type EntryDraftingFailure } from '@/domain/ports';
 import type { TranslationLanguage } from '@/domain/user';
 import { useI18n } from '@/i18n/context';
+import type { MessageKey } from '@/i18n/messages';
+import { entryDraftingPort } from '@/lib/backend';
 import { buildPrompt, promptLanguageName, SCHEMA } from '@/lib/jsonImport';
 import { Area, Field, inputClass } from './fields';
+
+/**
+ * What to say for each way the drafting can fail.
+ *
+ * Separated from the call because only one of the four is worth trying again,
+ * and a single "something went wrong" would invite a retry on the three that
+ * cannot succeed. `unavailable` in particular is permanent for this reader —
+ * the API is not offered in every country — so its message points at the manual
+ * prompt below rather than at the button they just pressed.
+ */
+const FAILURE_MESSAGE: Record<EntryDraftingFailure, MessageKey> = {
+  unavailable: 'import.aiUnavailable',
+  quota: 'import.aiQuota',
+  blocked: 'import.aiBlocked',
+  failed: 'import.aiFailed',
+};
 
 /**
  * Everything the tab collects. Held by the modal rather than here, because the
@@ -30,16 +49,100 @@ export const emptyJsonImport = (
 export function JsonImport({
   value,
   onChange,
+  onDrafted,
 }: {
   value: JsonImportState;
-  onChange: (next: JsonImportState) => void;
+  /**
+   * A React setter rather than `(next: JsonImportState) => void`, so the two
+   * asynchronous handlers below can update from the *current* state instead of
+   * the one their closure captured.
+   *
+   * The narrower type was a real defect. `generate` and `pasteJson` both resume
+   * after an await and then wrote `{ ...value, raw }` — `value` as it was when
+   * the button was pressed. Anything typed into 単語, 訳の言語, 出会った文 or
+   * 出典 while the request was in flight was silently reverted by the reply.
+   * The clipboard path made that easy to reach, because a browser may put its
+   * own paste confirmation in front of `readText` and sit there for seconds.
+   */
+  onChange: Dispatch<SetStateAction<JsonImportState>>;
+  /**
+   * Hand the model's reply to the modal, which runs it through the same
+   * `jsonToDraft` a pasted one goes through. Not `onChange`, because filling
+   * the box and importing it are two things and this button does both.
+   */
+  onDrafted: (raw: string) => void;
 }) {
   // Purely local: nothing outside this component acts on it.
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [drafting, setDrafting] = useState(false);
+  const [aiError, setAiError] = useState<EntryDraftingFailure | null>(null);
+  const [pasteFailed, setPasteFailed] = useState(false);
+  const [pasting, setPasting] = useState(false);
+
+  /**
+   * Whether this panel is still the one on screen.
+   *
+   * The modal it lives in **stays mounted when it is closed** — `AppLayout`
+   * renders `<EntryFormModal open={adding}>` unconditionally and only `Modal`
+   * returns null — and it resets its state when `open` turns true again. This
+   * panel does unmount, but a request already in flight still holds `onChange`
+   * and `onDrafted` from the render that started it, and those write to a modal
+   * that is very much alive. So closing the dialog mid-request and reopening it
+   * used to fill the fresh form with the previous word.
+   *
+   * Read after every await. The stale closure reads the *old* instance's ref,
+   * which unmounting set to false, so the reply is dropped rather than applied
+   * to a session that did not ask for it.
+   */
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    [],
+  );
+
+  /**
+   * One import at a time.
+   *
+   * The two buttons are independent requests against the same three setters, so
+   * with both in flight the slower one wins whatever the reader did last —
+   * pasting while a draft is pending was the reachable version, since only the
+   * drafting button disabled itself. Mutual exclusion is the whole fix: there
+   * is no reading of this panel under which two simultaneous imports are what
+   * someone meant.
+   */
+  const busy = drafting || pasting;
   const { t } = useI18n();
 
+  /*
+    Asked once, at render, rather than stored: `available()` is a synchronous
+    read of whether the SDK initialised, and it does not change during a
+    session. Hiding the button outright — rather than showing one that explains
+    itself away when pressed — is deliberate. The manual prompt underneath is
+    the route in either case, and a control that is present but never works is
+    worse than one that was never offered.
+  */
+  const canDraft = entryDraftingPort.available();
+
+  /*
+    Reading the clipboard is a narrower capability than writing to it, and the
+    same contexts that take `writeText` do not necessarily give `readText`: it
+    is absent outside a secure context, absent in several of the in-app webviews
+    a phone opens links in, and gated behind a permission the browser may put
+    its own confirmation in front of. Probed as a function rather than for the
+    property, because a webview stub can define the name and nothing else.
+
+    Feature-detected for the same reason the drafting button is: the box below
+    still takes an ordinary paste from the keyboard or a long press, so a reader
+    without this loses a shortcut rather than the route. Permission is a
+    separate matter and cannot be probed — it is refused at the tap, which is
+    what `pasteFailed` is for.
+  */
+  const canPaste = typeof navigator.clipboard?.readText === 'function';
+
   const set = <K extends keyof JsonImportState>(key: K, next: JsonImportState[K]) =>
-    onChange({ ...value, [key]: next });
+    onChange((prev) => ({ ...prev, [key]: next }));
 
   const prompt = buildPrompt(value.word || '（単語）', value.language, {
     original: value.original,
@@ -95,6 +198,84 @@ export function JsonImport({
       .catch(() => setState('failed'));
   };
 
+  /*
+    Overwrite rather than append: the box holds one JSON document, and appending
+    to a non-empty one produces something that cannot parse — a failure whose
+    message would be about JSON rather than about the paste that caused it.
+
+    Imported in the same breath, like the drafting button, and through the same
+    `onDrafted`. So a reply that does not parse is refused with exactly the
+    words a pasted-and-then-imported one is refused with, and it stays in the
+    box to be corrected. Nothing about the failure path is new here, which is
+    the point.
+  */
+  const pasteJson = () => {
+    setPasteFailed(false);
+    setPasting(true);
+    let read: Promise<string> | undefined;
+    try {
+      read = navigator.clipboard?.readText();
+    } catch {
+      // Present and still throwing before it returns a promise — the same
+      // webview and focus cases `copyPrompt` documents above, in the other
+      // direction.
+      setPasteFailed(true);
+      setPasting(false);
+      return;
+    }
+    if (read === undefined) {
+      setPasteFailed(true);
+      setPasting(false);
+      return;
+    }
+    read
+      .then((text) => {
+        if (!alive.current) return;
+        // An empty clipboard is not a failure of the button and must not be
+        // reported as one; it would also wipe a box the reader had already
+        // filled by hand.
+        if (!text.trim()) return setPasteFailed(true);
+        onChange((prev) => ({ ...prev, raw: text }));
+        onDrafted(text);
+      })
+      .catch(() => {
+        if (alive.current) setPasteFailed(true);
+      })
+      .finally(() => {
+        if (alive.current) setPasting(false);
+      });
+  };
+
+  /*
+    The model's reply is not inspected here. It goes to the modal verbatim and
+    through `jsonToDraft`, which is the same function the paste box's reply goes
+    through — so a malformed answer is refused with the same words whichever
+    route it arrived by. A second parser here is exactly the thing that would
+    let a bad reply through one door while the other refused it.
+
+    The raw box is filled as well as imported. If the import fails on a field
+    that is too long, the reply is then on screen to edit and retry, instead of
+    having been discarded by the button that fetched it.
+  */
+  const generate = async () => {
+    setAiError(null);
+    setDrafting(true);
+    try {
+      const raw = await entryDraftingPort.draft(prompt);
+      if (!alive.current) return;
+      onChange((prev) => ({ ...prev, raw }));
+      onDrafted(raw);
+    } catch (cause) {
+      if (alive.current) {
+        setAiError(cause instanceof EntryDraftingError ? cause.reason : 'failed');
+      }
+    } finally {
+      // In `finally` rather than after the call: an error path that leaves this
+      // true is a button that stays disabled for the rest of the session.
+      if (alive.current) setDrafting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -103,6 +284,7 @@ export function JsonImport({
             type="text"
             value={value.word}
             onChange={(event) => set('word', event.target.value)}
+            disabled={drafting}
             maxLength={INPUT_LIMITS.importWord}
             placeholder="兆候"
             className={inputClass}
@@ -113,6 +295,7 @@ export function JsonImport({
             type="text"
             value={value.language}
             onChange={(event) => set('language', event.target.value)}
+            disabled={drafting}
             maxLength={INPUT_LIMITS.importLanguage}
             className={inputClass}
           />
@@ -123,6 +306,7 @@ export function JsonImport({
         <Area
           value={value.original}
           onChange={(v) => set('original', v)}
+          disabled={drafting}
           maxLength={INPUT_LIMITS.importOriginal}
           rows={2}
           placeholder="あやしい兆候ではあるのだろうけれど"
@@ -134,6 +318,7 @@ export function JsonImport({
           type="text"
           value={value.source}
           onChange={(event) => set('source', event.target.value)}
+          disabled={drafting}
           maxLength={INPUT_LIMITS.importSource}
           placeholder="会議、同僚、小説「海辺のカフカ」…"
           className={inputClass}
@@ -142,10 +327,44 @@ export function JsonImport({
 
       <p className="text-xs text-muted">{t('import.contextHint')}</p>
 
+      {/* The block outlives the button. A permanent failure makes
+          `available()` answer false from then on, so rendering the message
+          inside `canDraft` would take the explanation away in the same paint
+          that removed the control — leaving a button that vanished and nothing
+          saying why. */}
+      {(canDraft || aiError) && (
+        <div className="space-y-2">
+          {canDraft && (
+            <>
+              <button
+                type="button"
+                // `void`, not the bare handler: `generate` is async, and React's
+                // onClick wants void — a returned promise is one nothing awaits
+                // and whose rejection would go nowhere. It cannot reject (the
+                // try/catch is total), and this says so rather than relying on it.
+                onClick={() => void generate()}
+                disabled={busy || !value.word.trim()}
+                className="min-h-10 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"
+              >
+                {drafting ? t('import.generating') : t('import.generate')}
+              </button>
+              {/* Shown before the button is pressed as well as after, because it
+                  is a statement about what the button produces and the reader
+                  decides whether to press it. The same warning appears again
+                  beside the filled form, where a wrong reading is visible. */}
+              <p className="text-[11px] text-muted">{t('import.aiDisclaimer')}</p>
+            </>
+          )}
+          {aiError && <p className="text-[11px] text-danger">{t(FAILURE_MESSAGE[aiError])}</p>}
+        </div>
+      )}
+
       <button
         type="button"
         onClick={copyPrompt}
-        className="min-h-10 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent"
+        className={`min-h-10 w-full rounded-pill text-sm font-semibold ${
+          canDraft ? 'border border-line text-ink' : 'bg-accent text-on-accent'
+        }`}
       >
         {state === 'copied' ? t('import.copied') : t('import.copyPrompt')}
       </button>
@@ -169,6 +388,26 @@ export function JsonImport({
         <pre className="mt-2 overflow-x-auto text-[11px] leading-relaxed">{SCHEMA}</pre>
       </details>
 
+      {/* Outside the `Field` below, not inside it. `Field` renders a <label>
+          around its children, and a <label> names its first labelable
+          descendant — so a button placed in there takes the label meant for the
+          textarea, leaving one control misnamed and the other unnamed. Caught
+          by the component test, which could not find the button by its own
+          text. */}
+      {canPaste && (
+        <div className="space-y-1">
+          <button
+            type="button"
+            onClick={pasteJson}
+            disabled={busy}
+            className="min-h-10 w-full rounded-pill border border-line text-sm font-semibold text-ink disabled:opacity-50"
+          >
+            {t('import.paste')}
+          </button>
+          {pasteFailed && <p className="text-[11px] text-danger">{t('import.pasteError')}</p>}
+        </div>
+      )}
+
       <Field label={t('import.pasteJson')}>
         {/* The one box in the form with no `maxLength`. It is not an oversight
             and it is not laxer: `jsonToDraft` refuses a paste past
@@ -181,7 +420,13 @@ export function JsonImport({
           value={value.raw}
           onChange={(v) => set('raw', v)}
           maxLength="unbounded"
-          rows={10}
+          // Four, not the ten it was. The box stopped being the place the JSON
+          // arrives once the two buttons above could fill it, so its height was
+          // paying for a paste most readers no longer perform by hand. Ten rows
+          // also pushed the schema block and everything under it below the fold
+          // on a phone. It still grows with its content and still accepts a
+          // typed paste, which is what the fallback needs it for.
+          rows={4}
           placeholder="{ …"
         />
       </Field>
