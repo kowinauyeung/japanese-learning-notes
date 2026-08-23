@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useState } from 'react';
+import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from 'react';
 import { INPUT_LIMITS } from '@/domain/limits';
 import { EntryDraftingError, type EntryDraftingFailure } from '@/domain/ports';
 import type { TranslationLanguage } from '@/domain/user';
@@ -77,6 +77,42 @@ export function JsonImport({
   const [drafting, setDrafting] = useState(false);
   const [aiError, setAiError] = useState<EntryDraftingFailure | null>(null);
   const [pasteFailed, setPasteFailed] = useState(false);
+  const [pasting, setPasting] = useState(false);
+
+  /**
+   * Whether this panel is still the one on screen.
+   *
+   * The modal it lives in **stays mounted when it is closed** — `AppLayout`
+   * renders `<EntryFormModal open={adding}>` unconditionally and only `Modal`
+   * returns null — and it resets its state when `open` turns true again. This
+   * panel does unmount, but a request already in flight still holds `onChange`
+   * and `onDrafted` from the render that started it, and those write to a modal
+   * that is very much alive. So closing the dialog mid-request and reopening it
+   * used to fill the fresh form with the previous word.
+   *
+   * Read after every await. The stale closure reads the *old* instance's ref,
+   * which unmounting set to false, so the reply is dropped rather than applied
+   * to a session that did not ask for it.
+   */
+  const alive = useRef(true);
+  useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    [],
+  );
+
+  /**
+   * One import at a time.
+   *
+   * The two buttons are independent requests against the same three setters, so
+   * with both in flight the slower one wins whatever the reader did last —
+   * pasting while a draft is pending was the reachable version, since only the
+   * drafting button disabled itself. Mutual exclusion is the whole fix: there
+   * is no reading of this panel under which two simultaneous imports are what
+   * someone meant.
+   */
+  const busy = drafting || pasting;
   const { t } = useI18n();
 
   /*
@@ -175,6 +211,7 @@ export function JsonImport({
   */
   const pasteJson = () => {
     setPasteFailed(false);
+    setPasting(true);
     let read: Promise<string> | undefined;
     try {
       read = navigator.clipboard?.readText();
@@ -183,14 +220,17 @@ export function JsonImport({
       // webview and focus cases `copyPrompt` documents above, in the other
       // direction.
       setPasteFailed(true);
+      setPasting(false);
       return;
     }
     if (read === undefined) {
       setPasteFailed(true);
+      setPasting(false);
       return;
     }
     read
       .then((text) => {
+        if (!alive.current) return;
         // An empty clipboard is not a failure of the button and must not be
         // reported as one; it would also wipe a box the reader had already
         // filled by hand.
@@ -198,7 +238,12 @@ export function JsonImport({
         onChange((prev) => ({ ...prev, raw: text }));
         onDrafted(text);
       })
-      .catch(() => setPasteFailed(true));
+      .catch(() => {
+        if (alive.current) setPasteFailed(true);
+      })
+      .finally(() => {
+        if (alive.current) setPasting(false);
+      });
   };
 
   /*
@@ -217,14 +262,17 @@ export function JsonImport({
     setDrafting(true);
     try {
       const raw = await entryDraftingPort.draft(prompt);
+      if (!alive.current) return;
       onChange((prev) => ({ ...prev, raw }));
       onDrafted(raw);
     } catch (cause) {
-      setAiError(cause instanceof EntryDraftingError ? cause.reason : 'failed');
+      if (alive.current) {
+        setAiError(cause instanceof EntryDraftingError ? cause.reason : 'failed');
+      }
     } finally {
       // In `finally` rather than after the call: an error path that leaves this
       // true is a button that stays disabled for the rest of the session.
-      setDrafting(false);
+      if (alive.current) setDrafting(false);
     }
   };
 
@@ -295,7 +343,7 @@ export function JsonImport({
                 // and whose rejection would go nowhere. It cannot reject (the
                 // try/catch is total), and this says so rather than relying on it.
                 onClick={() => void generate()}
-                disabled={drafting || !value.word.trim()}
+                disabled={busy || !value.word.trim()}
                 className="min-h-10 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"
               >
                 {drafting ? t('import.generating') : t('import.generate')}
@@ -351,7 +399,8 @@ export function JsonImport({
           <button
             type="button"
             onClick={pasteJson}
-            className="min-h-10 w-full rounded-pill border border-line text-sm font-semibold text-ink"
+            disabled={busy}
+            className="min-h-10 w-full rounded-pill border border-line text-sm font-semibold text-ink disabled:opacity-50"
           >
             {t('import.paste')}
           </button>

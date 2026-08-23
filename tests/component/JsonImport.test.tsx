@@ -6,6 +6,7 @@ import {
   JsonImport,
   type JsonImportState,
 } from '@/components/entry-form/JsonImport';
+import { messages } from '@/i18n/messages';
 import { buildPrompt } from '@/lib/jsonImport';
 import { renderWithI18n as render } from '../helpers/renderWithI18n';
 
@@ -28,6 +29,20 @@ const seedDrafting = (entryDrafting: 'unavailable' | 'quota' | 'blocked' | 'fail
 };
 
 const FAILED = 'コピーできませんでした。下のプロンプトを選択してコピーしてください。';
+
+/**
+ * The Japanese string the panel actually renders for a key, read from the table
+ * the panel reads it from.
+ *
+ * The assertions below could spell these out — `FAILED` above still does, and
+ * predates this — but a literal fails when the copy is reworded, which is a
+ * change to nothing a reader of the test cares about. Going through the key
+ * still catches the two failures worth catching: the panel rendering the wrong
+ * key, and rendering nothing at all.
+ *
+ * `renderWithI18n` mounts in Japanese, so `ja` is what reaches the DOM.
+ */
+const ja = (key: keyof (typeof messages)['ja']) => messages.ja[key];
 
 function Harness({
   initial,
@@ -82,7 +97,7 @@ describe('JsonImport — translation language preference', () => {
  */
 describe('JsonImport — copying the prompt when the clipboard is unavailable', () => {
   const typeWord = () =>
-    fireEvent.change(screen.getByRole('textbox', { name: '単語' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: ja('import.word') }), {
       target: { value: '兆候' },
     });
 
@@ -160,7 +175,7 @@ describe('JsonImport — the paste box', () => {
   it('does not cap the pasted JSON, which would truncate it out of the size check', () => {
     render(<Harness initial={emptyJsonImport('ja')} />);
 
-    const paste = screen.getByRole('textbox', { name: 'AI の返した JSON を貼り付け' });
+    const paste = screen.getByRole('textbox', { name: ja('import.pasteJson') });
     expect(paste).not.toHaveAttribute('maxlength');
   });
 
@@ -193,7 +208,7 @@ describe('JsonImport — drafting with AI', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'AIで作成' }));
+    fireEvent.click(screen.getByRole('button', { name: ja('import.generate') }));
     await waitFor(() => expect(drafted).not.toBe(''));
 
     // Still fenced, and still the word that was asked about: the component
@@ -209,11 +224,7 @@ describe('JsonImport — drafting with AI', () => {
     // before the button is pressed because that is when the reader decides.
     render(<Harness initial={{ ...emptyJsonImport('yue-Hant'), word: '兆候' }} />);
 
-    expect(
-      screen.getByText(
-        'AIが書いた内容なので誤りが含まれることがあります。保存する前に読み・アクセント・レベルを確認してください。',
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText(ja('import.aiDisclaimer'))).toBeInTheDocument();
   });
 
   it('refuses to ask about nothing, which would prompt for （単語）', () => {
@@ -222,7 +233,7 @@ describe('JsonImport — drafting with AI', () => {
     // a word that does not exist, and it is billed like any other.
     render(<Harness initial={emptyJsonImport('yue-Hant')} />);
 
-    expect(screen.getByRole('button', { name: 'AIで作成' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: ja('import.generate') })).toBeDisabled();
   });
 });
 
@@ -250,7 +261,7 @@ describe('JsonImport — pasting from the clipboard', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'クリップボードから貼り付け' }));
+    fireEvent.click(screen.getByRole('button', { name: ja('import.paste') }));
     await waitFor(() => expect(imported).not.toBe(''));
 
     // The box is the assertion that catches an append, not `imported`: what is
@@ -258,7 +269,7 @@ describe('JsonImport — pasting from the clipboard', () => {
     // `raw` and passing the new text on would leave this passing while the box
     // held two JSON documents. Checked by reverting the overwrite and watching
     // it stay green — which is why the box is read here at all.
-    expect(screen.getByRole('textbox', { name: 'AI の返した JSON を貼り付け' })).toHaveValue(
+    expect(screen.getByRole('textbox', { name: ja('import.pasteJson') })).toHaveValue(
       '{"headword":"兆候"}',
     );
     expect(imported).toBe('{"headword":"兆候"}');
@@ -272,9 +283,7 @@ describe('JsonImport — pasting from the clipboard', () => {
     withClipboard({ writeText: () => Promise.resolve() });
     render(<Harness initial={emptyJsonImport('yue-Hant')} />);
 
-    expect(
-      screen.queryByRole('button', { name: 'クリップボードから貼り付け' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: ja('import.paste') })).not.toBeInTheDocument();
   });
 
   it('says a refused clipboard was refused, which is the defect #59 fixed the other way', () => {
@@ -284,11 +293,9 @@ describe('JsonImport — pasting from the clipboard', () => {
     withClipboard({ readText: () => Promise.reject(new Error('denied')) });
     render(<Harness initial={emptyJsonImport('yue-Hant')} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'クリップボードから貼り付け' }));
+    fireEvent.click(screen.getByRole('button', { name: ja('import.paste') }));
 
-    return waitFor(() =>
-      expect(screen.getByText(/クリップボードを読み取れませんでした/)).toBeInTheDocument(),
-    );
+    return waitFor(() => expect(screen.getByText(ja('import.pasteError'))).toBeInTheDocument());
   });
 });
 
@@ -307,12 +314,10 @@ describe('JsonImport — when drafting cannot work again', () => {
     seedDrafting('unavailable');
     render(<Harness initial={{ ...emptyJsonImport('yue-Hant'), word: '兆候' }} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'AIで作成' }));
+    fireEvent.click(screen.getByRole('button', { name: ja('import.generate') }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/ここではAI作成を利用できません/)).toBeInTheDocument(),
-    );
-    expect(screen.queryByRole('button', { name: 'AIで作成' })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(ja('import.aiUnavailable'))).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: ja('import.generate') })).not.toBeInTheDocument();
   });
 
   it('offers a retry for a spent allowance, which is not the same as a dead one', async () => {
@@ -321,10 +326,10 @@ describe('JsonImport — when drafting cannot work again', () => {
     seedDrafting('quota');
     render(<Harness initial={{ ...emptyJsonImport('yue-Hant'), word: '兆候' }} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'AIで作成' }));
+    fireEvent.click(screen.getByRole('button', { name: ja('import.generate') }));
 
-    await waitFor(() => expect(screen.getByText(/本日のAI利用回数の上限/)).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'AIで作成' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(ja('import.aiQuota'))).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: ja('import.generate') })).toBeInTheDocument();
   });
 });
 
@@ -344,18 +349,71 @@ describe('JsonImport — edits made while a request is in flight', () => {
     });
     render(<Harness initial={emptyJsonImport('yue-Hant')} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'クリップボードから貼り付け' }));
-    fireEvent.change(screen.getByRole('textbox', { name: '単語' }), {
+    fireEvent.click(screen.getByRole('button', { name: ja('import.paste') }));
+    fireEvent.change(screen.getByRole('textbox', { name: ja('import.word') }), {
       target: { value: '古い' },
     });
     release('{"headword":"兆候"}');
 
     await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: 'AI の返した JSON を貼り付け' })).toHaveValue(
+      expect(screen.getByRole('textbox', { name: ja('import.pasteJson') })).toHaveValue(
         '{"headword":"兆候"}',
       ),
     );
     // The word typed during the wait survived the reply.
-    expect(screen.getByRole('textbox', { name: '単語' })).toHaveValue('古い');
+    expect(screen.getByRole('textbox', { name: ja('import.word') })).toHaveValue('古い');
+  });
+});
+
+describe('JsonImport — one import at a time, and none from a session that has gone', () => {
+  it('does not let a paste start while a draft is still out', () => {
+    /*
+      The two buttons are independent requests against the same three setters,
+      and only the drafting one used to disable itself — so pasting during a
+      draft left both in flight and whichever finished last decided what the
+      form held. There is no reading of this panel under which two simultaneous
+      imports are what anyone meant.
+    */
+    withClipboard({ readText: () => new Promise<string>(() => {}) });
+    seedDrafting('failed');
+    render(<Harness initial={{ ...emptyJsonImport('yue-Hant'), word: '兆候' }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: ja('import.generate') }));
+
+    expect(screen.getByRole('button', { name: ja('import.paste') })).toBeDisabled();
+  });
+
+  it('drops a reply that arrives after the panel is gone, rather than filling a form nobody asked', async () => {
+    /*
+      `AppLayout` renders `<EntryFormModal open={adding}>` unconditionally and
+      only `Modal` returns null, so the modal keeps its state across a close.
+      This panel unmounts, but a request already out still holds `onChange` and
+      `onDrafted` from the render that started it — and those write to a modal
+      that is very much alive. Closing mid-request and reopening therefore used
+      to fill the fresh form with the previous word.
+
+      Unmounting the panel is what a close does to it, so that is what this
+      does, and `imported` staying empty is the reply being dropped.
+    */
+    let release!: (text: string) => void;
+    let imported = '';
+    withClipboard({
+      readText: () => new Promise<string>((resolve) => (release = resolve)),
+    });
+    const view = render(
+      <Harness
+        initial={emptyJsonImport('yue-Hant')}
+        onDrafted={(raw) => {
+          imported = raw;
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: ja('import.paste') }));
+    view.unmount();
+    release('{"headword":"兆候"}');
+
+    await Promise.resolve();
+    expect(imported).toBe('');
   });
 });
