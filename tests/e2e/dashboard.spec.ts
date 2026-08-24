@@ -43,4 +43,73 @@ test.describe('dashboard', () => {
     expect(cell!.x).toBeGreaterThanOrEqual(box!.x);
     expect(cell!.x + cell!.width).toBeLessThanOrEqual(box!.x + box!.width);
   });
+
+  test('re-pins the heatmap to today when a wide viewport becomes narrow', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await seedSignedIn(page);
+    await page.goto('/');
+
+    const today = page.getByRole('button', { name: /2026年6月24日/ });
+    await expect(today).toBeVisible();
+
+    const scroller = page.locator('section div.overflow-x-auto').first();
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollWidth - node.clientWidth))
+      .toBeLessThanOrEqual(0);
+
+    await page.setViewportSize({ width: 375, height: 667 });
+
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollWidth - node.clientWidth), {
+        message: 'the resize must make the year overflow, or nothing is being tested',
+      })
+      .toBeGreaterThan(0);
+
+    await expect
+      .poll(async () => {
+        const [cell, box] = await Promise.all([today.boundingBox(), scroller.boundingBox()]);
+        if (!cell || !box) return false;
+        return cell.x >= box.x && cell.x + cell.width <= box.x + box.width;
+      })
+      .toBe(true);
+  });
+
+  test('keeps a manually scrolled heatmap on older weeks during later resize', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await seedSignedIn(page);
+    await page.goto('/');
+
+    const today = page.getByRole('button', { name: /2026年6月24日/ });
+    await expect(today).toBeVisible();
+
+    const scroller = page.locator('section div.overflow-x-auto').first();
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollWidth - node.clientWidth))
+      .toBeGreaterThan(0);
+
+    const pinnedOffset = await scroller.evaluate((node) => node.scrollLeft);
+    expect(
+      pinnedOffset,
+      'the narrow viewport must initially pin to the newest week',
+    ).toBeGreaterThan(0);
+
+    await scroller.evaluate((node) => {
+      node.scrollLeft = 0;
+    });
+    await expect.poll(async () => scroller.evaluate((node) => node.scrollLeft)).toBe(0);
+
+    const clientWidth = await scroller.evaluate((node) => node.clientWidth);
+    await scroller.evaluate((node) => {
+      node.style.maxWidth = `${Math.max(1, node.clientWidth - 24)}px`;
+    });
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.clientWidth))
+      .toBeLessThan(clientWidth);
+
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollLeft), {
+        message: "a later reflow must not undo the reader's manual scroll",
+      })
+      .toBe(0);
+  });
 });
