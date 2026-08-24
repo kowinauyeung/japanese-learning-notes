@@ -177,7 +177,7 @@ land through a pull request with a green CI run, and neither accepts a force
 push.
 
 Pushing to `develop` deploys hosting and Firestore rules to `goitei-dev`, and a
-pull request gets its own Hosting preview channel that expires after seven days
+pull request gets its own Hosting preview channel that expires after six days
 — every pull request except one into `main` or a `release/**` branch, which get
 CI and no preview. The deploy job checks out the pull request's base, so it
 needs a base that carries the toolchain, and a release into `main` is the one
@@ -456,7 +456,7 @@ writer drops the earlier one's hostname. A re-run of the job repairs both.
 `preview-cleanup.yml` deletes the channel when its pull request closes. The
 hostname goes with it — `hosting:channel:delete` removes it from the authorized
 domain list as part of deleting the channel — and without this the channel would
-linger its full seven days, with the hostname trusted for authentication that
+linger its full six days, with the hostname trusted for authentication that
 whole time.
 
 That removal fails the same quiet way the addition does, so the workflow reads
@@ -471,6 +471,56 @@ in-memory adapters sign a user in without Google — and it is the wrong trade.
 The preview exists to show the branch against real `goitei-dev` data; a
 Firestore query, index or cursor defect is invisible against fakes, and that is
 the class of defect that has actually reached review here.
+
+#### Preview App Check
+
+A preview channel cannot pass reCAPTCHA v3 attestation, which is a different
+problem from the sign-in one above even though both come from the same hashed,
+per-pull-request hostname. reCAPTCHA v3 site keys are registered against
+specific domains in the reCAPTCHA admin console — not Firebase's authorized
+domain list, and not anything `firebase hosting:channel:deploy` touches — so
+nobody has ever added a preview's hostname there. If App Check enforcement is
+on for Firestore, Authentication or Firebase AI Logic, every request from a
+preview is refused.
+
+That refusal is silent in the same shape the sign-in failure would have been:
+the app loads, every Firestore read comes back `permission-denied`, and
+nothing on screen says why. `src/infra/firebase/client.ts` documents the two
+tells — an App Check failure logs a warning prefixed `@firebase/app-check` in
+the browser console; a missing claim logs nothing — because a reader who does
+not already know App Check exists has no reason to suspect it.
+
+`admin/mint-preview-app-check-token.ts` works around this from the trusted
+side instead. During `deploy-dev.yml`'s preview deploy, after
+`google-github-actions/auth` and before `firebase hosting:channel:deploy`
+uploads `dist/`, it uses the Admin SDK to mint a real App Check token for the
+web app and stamps it into the built `index.html` as
+`window.__APP_CHECK_PREVIEW_TOKEN__`. The Admin SDK needs no attestation of
+its own — holding Google credentials for the project is already what
+reCAPTCHA exists to prove — so this sidesteps the domain problem instead of
+solving it. `client.ts` reads that value before any module script runs and
+uses it through a `CustomProvider`, ahead of the ordinary reCAPTCHA path.
+
+**Needs `roles/firebaseappcheck.admin`** (or an equivalent role) on the
+deploying service account, the same shape of requirement `roles/firebaseauth.admin`
+is above. This has not been exercised against a live project as of this
+mechanism's introduction. If it is missing, `createToken` fails and the step
+fails the job — deliberately not a warning-and-succeed, because a preview that
+looks deployed and cannot attest is a worse outcome than a red check, which is
+the exact lesson the sign-in incident above already paid for.
+
+The token is public from the moment the preview is live — it sits in the page
+source anyone loading the channel can read — which is the same exposure the
+`yarn dev` debug token already accepts, just no longer confined to one
+developer's machine. It defaults to the Admin SDK's own 7-day maximum TTL —
+the channel itself expires a day sooner, at `--expires 6d`, so the channel is
+always what runs out first — and `preview-cleanup.yml` deleting the channel
+does not revoke a token
+already handed out; it stays valid for whoever has it until it expires on its
+own. Accepted because App Check is additive bot/abuse protection here, not the
+authorization boundary — Firestore security rules are, per this repository's
+testing rules — and because it is scoped to a pull request preview against
+`goitei-dev`, never production.
 
 #### Trust boundary
 

@@ -31,6 +31,7 @@
     "auth:login": "CLOUDSDK_CONFIG=.gcloud gcloud auth application-default login",
     "auth:revoke": "CLOUDSDK_CONFIG=.gcloud gcloud auth application-default revoke",
     "allow": "vite-node admin/allow-user.ts --",
+    "mint-preview-appcheck-token": "vite-node admin/mint-preview-app-check-token.ts --",
     "icons": "vite-node scripts/icons.ts",
     "manifest:screenshots": "vite-node scripts/manifest-screenshots.ts",
     "rules:dev": "firebase deploy --only firestore:rules --project dev",
