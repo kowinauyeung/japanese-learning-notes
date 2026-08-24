@@ -18,20 +18,21 @@ export type ParsedMintPreviewTokenArgs =
       usage: string;
     };
 
-const USAGE =
-  'usage: mint-preview-app-check-token.ts --app-id <id> --project <id> --dist <path/to/index.html> [--ttl-days <1-7>]';
-
 /** Matches AppCheckTokenOptions.ttlMillis — "between 30 minutes and 7 days, inclusive". */
 const MIN_TTL_DAYS = 1 / 48;
 const MAX_TTL_DAYS = 7;
 const DEFAULT_TTL_DAYS = 7;
+
+const USAGE =
+  `usage: mint-preview-app-check-token.ts --app-id <id> --project <id> --dist <path/to/index.html> ` +
+  `[--ttl-days <${MIN_TTL_DAYS.toFixed(4)}-${MAX_TTL_DAYS}, default ${DEFAULT_TTL_DAYS}>]`;
 
 export function parseMintPreviewTokenArgs(args: string[]): ParsedMintPreviewTokenArgs {
   const errors: string[] = [];
   let appId: string | null = null;
   let projectId: string | null = null;
   let distIndexPath: string | null = null;
-  let ttlDays = DEFAULT_TTL_DAYS;
+  let ttlDays: number | null = null;
 
   const takeValue = (name: string, index: number): string | undefined => {
     const value = args[index + 1];
@@ -42,36 +43,52 @@ export function parseMintPreviewTokenArgs(args: string[]): ParsedMintPreviewToke
     return value;
   };
 
+  // A repeated flag silently taking the last value is how `--project a
+  // --project b` on this repository's other admin CLI (`allow-user.ts`) used
+  // to run against whichever project came last with no sign the first one was
+  // ignored. Rejecting it here is that same fix applied before it is needed.
+  const takeOnce = <T>(
+    name: string,
+    index: number,
+    current: T | null,
+    parse: (raw: string) => T | undefined,
+  ): T | null => {
+    const value = takeValue(name, index);
+    if (value === undefined) return current;
+    if (current !== null) {
+      errors.push(`${name} specified multiple times`);
+      return current;
+    }
+    const parsed = parse(value);
+    return parsed === undefined ? current : parsed;
+  };
+
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--app-id') {
-      const value = takeValue('--app-id', index);
-      if (value) appId = value;
+      appId = takeOnce('--app-id', index, appId, (v) => v);
       index += 1;
       continue;
     }
     if (arg === '--project') {
-      const value = takeValue('--project', index);
-      if (value) projectId = value;
+      projectId = takeOnce('--project', index, projectId, (v) => v);
       index += 1;
       continue;
     }
     if (arg === '--dist') {
-      const value = takeValue('--dist', index);
-      if (value) distIndexPath = value;
+      distIndexPath = takeOnce('--dist', index, distIndexPath, (v) => v);
       index += 1;
       continue;
     }
     if (arg === '--ttl-days') {
-      const value = takeValue('--ttl-days', index);
-      if (value) {
-        const parsed = Number(value);
+      ttlDays = takeOnce('--ttl-days', index, ttlDays, (raw) => {
+        const parsed = Number(raw);
         if (!Number.isFinite(parsed) || parsed < MIN_TTL_DAYS || parsed > MAX_TTL_DAYS) {
           errors.push(`--ttl-days must be between ${MIN_TTL_DAYS} and ${MAX_TTL_DAYS}`);
-        } else {
-          ttlDays = parsed;
+          return undefined;
         }
-      }
+        return parsed;
+      });
       index += 1;
       continue;
     }
@@ -91,7 +108,7 @@ export function parseMintPreviewTokenArgs(args: string[]): ParsedMintPreviewToke
     appId,
     projectId,
     distIndexPath,
-    ttlMillis: Math.round(ttlDays * 24 * 60 * 60 * 1000),
+    ttlMillis: Math.round((ttlDays ?? DEFAULT_TTL_DAYS) * 24 * 60 * 60 * 1000),
   };
 }
 

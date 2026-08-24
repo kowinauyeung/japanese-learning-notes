@@ -1,6 +1,8 @@
 name: Preview cleanup
 
-# A preview channel lives for seven days after its last deploy, and its hostname
+# A preview channel lives for six days after its last deploy — shortened from
+# Firebase's own default of seven, see `deploy-dev.yml`'s `--expires 6d` — and
+# its hostname
 # sits on Firebase Auth's authorized domain list for as long as the channel
 # exists — an origin trusted for authentication, on a site nobody is reading any
 # more. Closing the pull request is the moment we know the preview is finished

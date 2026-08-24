@@ -177,7 +177,7 @@ land through a pull request with a green CI run, and neither accepts a force
 push.
 
 Pushing to `develop` deploys hosting and Firestore rules to `goitei-dev`, and a
-pull request gets its own Hosting preview channel that expires after seven days
+pull request gets its own Hosting preview channel that expires after six days
 — every pull request except one into `main` or a `release/**` branch, which get
 CI and no preview. The deploy job checks out the pull request's base, so it
 needs a base that carries the toolchain, and a release into `main` is the one
@@ -456,7 +456,7 @@ writer drops the earlier one's hostname. A re-run of the job repairs both.
 `preview-cleanup.yml` deletes the channel when its pull request closes. The
 hostname goes with it — `hosting:channel:delete` removes it from the authorized
 domain list as part of deleting the channel — and without this the channel would
-linger its full seven days, with the hostname trusted for authentication that
+linger its full six days, with the hostname trusted for authentication that
 whole time.
 
 That removal fails the same quiet way the addition does, so the workflow reads
@@ -512,8 +512,10 @@ the exact lesson the sign-in incident above already paid for.
 The token is public from the moment the preview is live — it sits in the page
 source anyone loading the channel can read — which is the same exposure the
 `yarn dev` debug token already accepts, just no longer confined to one
-developer's machine. `--ttl-days` bounds it to the channel's own `--expires
-7d`, and `preview-cleanup.yml` deleting the channel does not revoke a token
+developer's machine. It defaults to the Admin SDK's own 7-day maximum TTL —
+the channel itself expires a day sooner, at `--expires 6d`, so the channel is
+always what runs out first — and `preview-cleanup.yml` deleting the channel
+does not revoke a token
 already handed out; it stays valid for whoever has it until it expires on its
 own. Accepted because App Check is additive bot/abuse protection here, not the
 authorization boundary — Firestore security rules are, per this repository's

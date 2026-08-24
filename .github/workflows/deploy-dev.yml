@@ -219,9 +219,18 @@ jobs:
         if: steps.gate.outputs.configured == 'true' && github.event_name == 'pull_request'
         env:
           PR: ${{ github.event.pull_request.number }}
+        # `--expires 6d`, not 7: the token above is minted with the Admin
+        # SDK's own maximum TTL — 7 days, fixed, not something this
+        # repository chose — and its clock starts at mint time, a little
+        # before this step's clock starts. A channel that also ran the full
+        # 7 days would let the last sliver of its life outlive the token
+        # minted for it. Shortening the channel by a day costs a day of
+        # review time and buys a preview that expires quietly with
+        # everything else, rather than one whose token quietly expires
+        # first while the channel looks alive.
         run: |
           ./node_modules/.bin/firebase hosting:channel:deploy "pr-$PR" \
-            --project dev --expires 7d --non-interactive --json > channel.json
+            --project dev --expires 6d --non-interactive --json > channel.json
           echo "url=$(jq -r '.result | to_entries[0].value.url' channel.json)" >> "$GITHUB_OUTPUT"
 
       - name: Comment the preview URL
@@ -233,7 +242,7 @@ jobs:
         run: |
           printf '%s\n\n%s\n' \
             "Preview: $URL" \
-            "Serves this branch against the **goitei-dev** Firestore — the same data as the dev site, not a copy. Expires in 7 days." \
+            "Serves this branch against the **goitei-dev** Firestore — the same data as the dev site, not a copy. Expires in 6 days." \
             > body.md
           gh pr comment "$PR" --body-file body.md --edit-last --create-if-none
 

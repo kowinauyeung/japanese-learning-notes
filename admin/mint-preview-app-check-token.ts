@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
+import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getAppCheck } from 'firebase-admin/app-check';
 import {
   injectPreviewToken,
@@ -41,11 +41,13 @@ if (!parsed.ok) {
 const { appId, projectId, distIndexPath, ttlMillis } = parsed;
 
 if (getApps().length === 0) {
-  const key = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  initializeApp({
-    credential: key ? cert(key) : applicationDefault(),
-    projectId,
-  });
+  // `applicationDefault()` unconditionally, unlike `allow-user.ts`'s
+  // cert-or-default choice: this script only ever runs in `deploy-dev.yml`,
+  // where `google-github-actions/auth` sets `GOOGLE_APPLICATION_CREDENTIALS`
+  // to a generated Workload Identity Federation config, not a service-account
+  // key JSON. `cert()` accepts only the latter and throws on the former;
+  // `applicationDefault()` reads either correctly, which is what it is for.
+  initializeApp({ credential: applicationDefault(), projectId });
 }
 
 let minted: { token: string; ttlMillis: number };

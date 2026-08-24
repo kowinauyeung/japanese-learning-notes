@@ -129,8 +129,10 @@ const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
  * preview can read it out of the page source — which is the same exposure
  * the `yarn dev` debug token already accepts, just no longer confined to a
  * developer's own machine. `mint-preview-app-check-token.ts` bounds the
- * blast radius with a TTL matching the channel's own `--expires 7d`, and
- * `preview-cleanup.yml` deletes the channel — but not the token, which stays
+ * blast radius with a TTL at the Admin SDK's own 7-day maximum — the channel
+ * itself expires a day sooner, at `--expires 6d`, precisely so the token
+ * cannot outlive it — and `preview-cleanup.yml` deletes the channel — but not
+ * the token, which stays
  * valid for whoever already has it until it expires on its own. Acceptable
  * because App Check is additive bot/abuse protection here, not the
  * authorization boundary — Firestore security rules are, per this
