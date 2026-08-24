@@ -47,6 +47,19 @@ describe('defaultUserProfile', () => {
       USER_LIMITS.nickname,
     );
   });
+
+  /**
+   * A provider display name that ends in an emoji can have that emoji straddle
+   * the truncation boundary. `slice` counts UTF-16 code units, so cutting
+   * inside the pair leaves a lone high surrogate — not a character, and not
+   * encodable as UTF-8 — as the last unit of a name shown right after sign-in.
+   */
+  it('drops a trailing lone high surrogate instead of splitting an astral display name', () => {
+    const straddling = `${'ゆ'.repeat(USER_LIMITS.nickname - 1)}😀`;
+    expect(defaultUserProfile('u1', straddling, ['ja'], null).nickname).toBe(
+      'ゆ'.repeat(USER_LIMITS.nickname - 1),
+    );
+  });
 });
 
 describe('sanitizeUserProfile', () => {
@@ -85,6 +98,19 @@ describe('sanitizeUserProfile', () => {
     const stored = 'ゆ'.repeat(USER_LIMITS.nickname + 15);
     expect(sanitizeUserProfile('u1', { nickname: stored }).nickname).toBe(
       stored.slice(0, USER_LIMITS.nickname),
+    );
+  });
+
+  /**
+   * Same hazard as `defaultUserProfile`, reached through the persisted path
+   * instead of the provider display name: a stored nickname ending in an emoji
+   * that straddles the product limit must not come back with a lone high
+   * surrogate as its last unit.
+   */
+  it('drops a trailing lone high surrogate instead of splitting an astral nickname', () => {
+    const straddling = `${'ゆ'.repeat(USER_LIMITS.nickname - 1)}😀`;
+    expect(sanitizeUserProfile('u1', { nickname: straddling }).nickname).toBe(
+      'ゆ'.repeat(USER_LIMITS.nickname - 1),
     );
   });
 
