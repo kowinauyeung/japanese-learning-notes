@@ -47,7 +47,12 @@ export function Component() {
     <div className="space-y-4">
       <VocabularySearch value={filters.q} onChange={(q) => update({ ...filters, q })} />
 
-      <FilterPanel filters={filters} allTags={visibleTags} onChange={update} />
+      <FilterPanel
+        filters={filters}
+        tags={visibleTags}
+        tagsLabel={t('vocabulary.recentTags')}
+        onChange={update}
+      />
 
       {!isDefault(filters) && (
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">

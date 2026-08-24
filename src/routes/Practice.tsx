@@ -231,7 +231,7 @@ function Practice({ mode }: { mode: PracticeMode }) {
       <PracticeSetup
         mode={mode}
         filters={filters}
-        allTags={visibleTags}
+        recentTags={visibleTags}
         allSets={setChips}
         now={now}
         matchCount={matches.length}

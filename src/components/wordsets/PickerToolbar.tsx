@@ -64,7 +64,7 @@ export function PickerToolbar({
         </button>
       </div>
 
-      {open && <FilterPanel filters={filters} allTags={allTags} onChange={onChange} />}
+      {open && <FilterPanel filters={filters} tags={allTags} onChange={onChange} />}
     </section>
   );
 }
