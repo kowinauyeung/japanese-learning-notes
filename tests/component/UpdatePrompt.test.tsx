@@ -2,6 +2,7 @@ import { act, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
 import type { AppUpdatePort } from '@/domain/ports';
+import { messages } from '@/i18n/messages';
 import { AppUpdateProvider } from '@/lib/appUpdate';
 import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
@@ -94,7 +95,9 @@ const mount = (port: AppUpdatePort) =>
   );
 
 const updateButton = () => screen.getByRole('button', { name: '今すぐ更新' });
-const FAILED = '自動更新に失敗しました。ページを再読み込みして新しいバージョンを取得してください。';
+// From the catalogue rather than spelled out, so a reworded translation moves
+// this test with it instead of failing it over copy nobody here changed.
+const FAILED = messages.ja['update.failed'];
 
 describe('UpdatePrompt', () => {
   it('says nothing until a build is actually waiting, so nobody is offered the build they are already on', () => {
