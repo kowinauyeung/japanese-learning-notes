@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { PitchAccent } from '@/components/PitchAccent';
 import { Ruby } from '@/components/Ruby';
@@ -28,7 +29,7 @@ export function EntryHeadline({
   entry: Entry;
   /** Dialog scale: a smaller headword and tighter spacing. */
   compact?: boolean;
-  actions?: React.ReactNode;
+  actions?: ReactNode;
 }) {
   const { t } = useI18n();
   const entryLabel = useEntryLabel();
