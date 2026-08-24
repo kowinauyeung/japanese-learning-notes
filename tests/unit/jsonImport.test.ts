@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { INPUT_LIMITS } from '@/domain/limits';
 import { buildPrompt, jsonToDraft, promptLanguageName, SCHEMA } from '@/lib/jsonImport';
 
@@ -212,6 +212,41 @@ describe('jsonToDraft — required fields', () => {
       related: [],
       tags: [],
     });
+  });
+});
+
+/**
+ * Nothing in `buildPrompt` tells the assistant today's date, so `learnedOn`
+ * in its reply is a guess dressed up as an answer: sometimes today, sometimes
+ * an empty string, sometimes a well-formed date that is neither — all three
+ * observed from real replies to the same prompt. `isoDate` in `sanitize.ts`
+ * only catches the malformed case; a syntactically valid but invented date
+ * passed straight through and was imported as if the reader had typed it.
+ * The reader cannot tell the difference on screen, and the field drives the
+ * dashboard's contribution heatmap, so a wrong value there is silent.
+ */
+describe('jsonToDraft — learnedOn', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 24));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('defaults to today when the assistant omits learnedOn', () => {
+    expect(jsonToDraft(JSON.stringify(minimal)).draft?.learnedOn).toBe('2026-08-24');
+  });
+
+  it('defaults to today when the assistant sends an empty learnedOn', () => {
+    const raw = JSON.stringify({ ...minimal, learnedOn: '' });
+    expect(jsonToDraft(raw).draft?.learnedOn).toBe('2026-08-24');
+  });
+
+  it('defaults to today rather than trusting a well-formed but invented learnedOn', () => {
+    const raw = JSON.stringify({ ...minimal, learnedOn: '2019-03-14' });
+    expect(jsonToDraft(raw).draft?.learnedOn).toBe('2026-08-24');
   });
 });
 

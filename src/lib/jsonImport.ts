@@ -1,7 +1,7 @@
 import type { EntryDraft } from '@/domain/entry';
 import { INPUT_LIMITS } from '@/domain/limits';
 import type { TranslationLanguage } from '@/domain/user';
-import { describeSizeProblem, draftSizeProblems } from './draft';
+import { describeSizeProblem, draftSizeProblems, emptyDraft } from './draft';
 import { sanitizeDraft } from './sanitize';
 
 const PROMPT_LANGUAGE_NAMES = {
@@ -228,6 +228,18 @@ export function jsonToDraft(
   // enum values, wrong types, or nulls inside arrays — all of which would
   // otherwise reach the form and Firestore intact.
   const draft: EntryDraft = sanitizeDraft(parsed);
+
+  // `sanitizeDraft`'s `isoDate` only rejects a `learnedOn` that fails to
+  // parse — it has no way to tell a real date from an invented one, and
+  // nothing in `buildPrompt` tells the assistant what today is. The result
+  // over real replies is not a fallback the reader can rely on: sometimes
+  // today, sometimes an empty string, sometimes a well-formed date that is
+  // neither. The reader cannot see the difference on screen, and the field
+  // drives the dashboard heatmap, so a wrong value is silent. Today is
+  // always what a freshly imported note should start from — the same
+  // default `emptyDraft` gives a note started by hand — and the field
+  // stays user-editable in the form afterwards.
+  draft.learnedOn = emptyDraft().learnedOn;
 
   if (context.original?.trim()) draft.context.original = context.original.trim();
   if (context.source?.trim()) draft.source = context.source.trim();
