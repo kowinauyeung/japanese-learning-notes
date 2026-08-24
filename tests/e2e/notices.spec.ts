@@ -74,16 +74,15 @@ test.describe('the bottom of the viewport', () => {
 
       for (const width of WIDTHS) {
         await page.setViewportSize({ width, height: 900 });
+        const expectedPanels = [
+          'notice',
+          ...(updateWaiting ? ['prompt'] : []),
+          ...(width < 700 ? ['add'] : []),
+        ].sort();
+        await expect
+          .poll(async () => (await boxesOf(panels)).map(([name]) => name).sort())
+          .toEqual(expectedPanels);
         const boxes = await boxesOf(panels);
-
-        // Guards the measurement itself. Every assertion below passes
-        // vacuously against an empty list, and an empty list is exactly what a
-        // renamed string or a seed that stopped working would produce — the
-        // pill hid the add button for as long as it did partly because nothing
-        // had ever looked at the two together.
-        expect(boxes.map(([name]) => name)).toContain('notice');
-        if (updateWaiting) expect(boxes.map(([name]) => name)).toContain('prompt');
-        if (width < 700) expect(boxes.map(([name]) => name)).toContain('add');
 
         for (let i = 0; i < boxes.length; i++) {
           for (let j = i + 1; j < boxes.length; j++) {
