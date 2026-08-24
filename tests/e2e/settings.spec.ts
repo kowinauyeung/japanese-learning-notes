@@ -32,6 +32,10 @@ test('saves user settings across a reload and applies the durable theme', async 
   await page.getByRole('button', { name: '儲存設定' }).click();
 
   await expect(page.getByText('已儲存。')).toBeVisible();
+  // `data-theme` on `<html>` is what `src/index.css` keys its custom
+  // properties on (`:root[data-theme='dark']`), and every Tailwind colour
+  // utility reads from those — so this is the one attribute the dark palette
+  // actually depends on reaching the DOM.
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(page.getByRole('link', { name: '學習總覽' })).toBeVisible();
 

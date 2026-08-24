@@ -1,7 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Distribution } from '@/components/dashboard/Distribution';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 /**
  * jsdom applies no CSS, so the `sm:flex` half of the responsive class the

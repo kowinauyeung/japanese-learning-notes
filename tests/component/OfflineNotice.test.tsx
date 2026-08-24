@@ -1,7 +1,7 @@
 import { act, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { OfflineNotice } from '@/components/OfflineNotice';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 /**
  * `navigator.onLine` is a browser-owned getter, so the browser is what has to

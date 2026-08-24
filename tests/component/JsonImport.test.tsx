@@ -8,7 +8,7 @@ import {
 } from '@/components/entry-form/JsonImport';
 import { messages } from '@/i18n/messages';
 import { buildPrompt } from '@/lib/jsonImport';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 const withClipboard = (clipboard: unknown) => {
   Object.defineProperty(navigator, 'clipboard', {
@@ -179,7 +179,17 @@ describe('JsonImport — the paste box', () => {
     expect(paste).not.toHaveAttribute('maxlength');
   });
 
-  /** The fields beside it are bounded, so the absence above is a decision. */
+  /**
+   * The fields beside it are bounded, so the absence above is a decision.
+   *
+   * This field has no size check anywhere else: `jsonToDraft` validates the
+   * paste, not what the user typed into `訳の言語` by hand, and
+   * `INPUT_LIMITS.importLanguage` is enforced only through the field's
+   * `maxLength` prop. Unlike the paste box, a regression here has no
+   * later stage that catches it — the field would silently accept a value past
+   * `importLanguage`, with no truncation and no error, because nothing else in
+   * the form is checking it.
+   */
   it('still caps the short fields the user types by hand', () => {
     render(<Harness initial={emptyJsonImport('ja')} />);
 

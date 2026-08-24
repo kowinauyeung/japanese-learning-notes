@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Modal } from '@/components/Modal';
 import { FlashcardSession } from '@/components/practice/FlashcardSession';
 import { makeEntry } from '../fixtures/entry';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 /**
  * The keyboard shortcuts, which are the only way this card is meant to be
