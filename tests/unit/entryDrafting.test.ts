@@ -37,9 +37,13 @@ beforeEach(() => {
   vi.stubEnv('VITE_FIREBASE_MESSAGING_SENDER_ID', 'test');
   vi.stubEnv('VITE_FIREBASE_APP_ID', 'test');
   vi.stubEnv('VITE_RECAPTCHA_SITE_KEY', '');
+  vi.stubGlobal('window', {});
 });
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
 
 describe('geminiEntryDrafting', () => {
   it('becomes unavailable after a constructed model reports a permanent 404', async () => {
