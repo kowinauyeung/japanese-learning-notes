@@ -79,6 +79,9 @@ test.describe('the bottom of the viewport', () => {
           ...(updateWaiting ? ['prompt'] : []),
           ...(width < 700 ? ['add'] : []),
         ].sort();
+        // Wait until each visible UI panel can be measured; otherwise the
+        // overlap checks can run before the offline notice, update prompt, or
+        // mobile add button has rendered.
         await expect
           .poll(async () => (await boxesOf(panels)).map(([name]) => name).sort())
           .toEqual(expectedPanels);
