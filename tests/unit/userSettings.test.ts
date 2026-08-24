@@ -83,8 +83,8 @@ describe('sanitizeUserProfile', () => {
    */
   it('brings a stored nickname the rules still allow down to the product limit', () => {
     const stored = 'ゆ'.repeat(USER_LIMITS.nickname + 15);
-    expect(sanitizeUserProfile('u1', { nickname: stored }).nickname).toHaveLength(
-      USER_LIMITS.nickname,
+    expect(sanitizeUserProfile('u1', { nickname: stored }).nickname).toBe(
+      stored.slice(0, USER_LIMITS.nickname),
     );
   });
 
