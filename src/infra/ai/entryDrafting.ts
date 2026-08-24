@@ -58,7 +58,8 @@ let model: GenerativeModel | undefined;
 let unavailable = false;
 
 function ensureModel(): GenerativeModel | undefined {
-  if (model || unavailable) return model;
+  if (unavailable) return undefined;
+  if (model) return model;
   try {
     model = getGenerativeModel(getAI(app, { backend: new GoogleAIBackend() }), { model: MODEL });
   } catch {
@@ -162,7 +163,13 @@ export const geminiEntryDrafting: EntryDraftingPort = {
       // a project whose API is off both fail *here* instead, on the first call
       // — and the button stayed, offering to try again forever. That is how
       // `gemini-2.5-flash`'s retirement presented.
-      if (failure.reason === 'unavailable') unavailable = true;
+      if (failure.reason === 'unavailable') {
+        // A model can be constructed for one that the service has retired. Do
+        // not retain it after that permanent response: `available()` must stop
+        // offering a control that can only repeat the same failure.
+        model = undefined;
+        unavailable = true;
+      }
       throw failure;
     }
 
