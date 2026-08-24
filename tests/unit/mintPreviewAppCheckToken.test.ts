@@ -75,7 +75,8 @@ describe('parseMintPreviewTokenArgs', () => {
     expect(result).toEqual({
       ok: false,
       errors: ['--project specified multiple times'],
-      usage: expect.any(String),
+      usage:
+        'usage: mint-preview-app-check-token.ts --app-id <id> --project <id> --dist <path/to/index.html> [--ttl-days <0.0208-7, default 7>]',
     });
   });
 });
