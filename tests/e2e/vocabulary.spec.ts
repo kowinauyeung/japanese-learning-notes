@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { INPUT_LIMITS } from '../../src/domain/limits';
-import { seedSignedIn, watchForBlanking } from './fixtures';
+import { DETAILED_WORD, seed, seedSignedIn, watchForBlanking } from './fixtures';
 
 /**
  * The notebook's whole reason to exist: find a word, read it, add one, change
@@ -25,6 +25,12 @@ test.beforeEach(async ({ page }) => {
  */
 const addDialog = (page: Page) => page.getByRole('dialog', { name: '単語を追加' });
 const editDialog = (page: Page) => page.getByRole('dialog', { name: '単語を編集' });
+/**
+ * `exact`, unlike the two above. Playwright matches an accessible name by
+ * substring, so a bare 「単語」 also matches 「単語を編集」 — and an assertion
+ * that the preview is showing would then pass while the edit form is on screen.
+ */
+const previewDialog = (page: Page) => page.getByRole('dialog', { name: '単語', exact: true });
 
 test.describe('browsing', () => {
   test('lists every word, then narrows on a substring', async ({ page }) => {
@@ -136,6 +142,90 @@ test.describe('browsing', () => {
     await page.goBack();
     await expect(page).toHaveURL(/\/vocabulary$/);
     await expect(page.getByText('3 語')).toBeVisible();
+  });
+
+  /**
+   * What the dialog is *for*, seeded against a note that has more than a
+   * definition in it.
+   *
+   * The dialog used to render its own summary — the sense descriptions, one
+   * example, and nothing else — so a word opened from a list dropped the
+   * sentence it was met in, its second meaning, its usage notes and its related
+   * words, all without saying anything was missing. Against `WORDS`, which
+   * record a definition and no more, a summary and the whole note look the
+   * same; `DETAILED_WORD` is what tells them apart.
+   */
+  test('shows the whole note in the dialog, not a summary of it', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: [DETAILED_WORD] });
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+
+    const dialog = previewDialog(page);
+    await expect(dialog.getByRole('heading', { name: '概要' })).toBeVisible();
+    // The sentence the word was met in, which the summary had no place for.
+    await expect(dialog.getByText('景気回復の兆候が見えてきた。')).toBeVisible();
+    // The *second* sense and the second example: the summary showed one of each.
+    await expect(dialog.getByText('病気のはじまりを示すしるし。')).toBeVisible();
+    await expect(dialog.getByText('春の兆候を感じる。')).toBeVisible();
+    await expect(dialog.getByText('「症状」とは違い、病気そのものを指さない。')).toBeVisible();
+    // `exact`, or it also matches 「意味：捕捉地震的前兆」 in the sense above it.
+    await expect(dialog.getByText('前兆', { exact: true })).toBeVisible();
+
+    // Still a dialog over the list, not a navigation to the page.
+    await expect(page.getByText('1 語')).toBeVisible();
+    await expect(page).toHaveURL(/\/vocabulary\/w-choukou$/);
+  });
+
+  /**
+   * Editing was deliberately absent here on the grounds that a write would
+   * leave the page underneath stale. It does not: both screens read the same
+   * `EntriesProvider`, and every save ends in its `refresh()`. This is that
+   * claim, measured — the list behind the dialog counts the change without
+   * being navigated to.
+   */
+  test('edits the word from the dialog and the list behind it agrees', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+    await previewDialog(page).getByRole('button', { name: '編集' }).click();
+
+    const form = editDialog(page);
+    // One dialog at a time: the form replaces the preview rather than stacking
+    // a second focus trap and a second Escape listener on top of it.
+    await expect(previewDialog(page)).toBeHidden();
+    await form.getByLabel('意味・説明').fill('起こる前のしるし。');
+    await form.getByRole('button', { name: '保存する' }).click();
+
+    // Back to the preview, reading the entry the save refreshed.
+    await expect(previewDialog(page).getByText('起こる前のしるし。')).toBeVisible();
+
+    // And the list underneath, which was never navigated away from.
+    await page.keyboard.press('Escape');
+    await expect(previewDialog(page)).toBeHidden();
+    await expect(page.getByText('起こる前のしるし。')).toBeVisible();
+    await expect(page.getByText('何かが起こる前ぶれ。')).toBeHidden();
+  });
+
+  /**
+   * Whether the form is open is a fact about *which word* it was opened for,
+   * not a flag. Held as a boolean it survives the dialog closing, and the next
+   * word opened from any list arrives already inside a form nobody asked for.
+   */
+  test('opening another word after leaving the form lands on the preview', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+    await previewDialog(page).getByRole('button', { name: '編集' }).click();
+    await expect(editDialog(page)).toBeVisible();
+
+    // Away from the word entirely, without cancelling the form first.
+    await page.goBack();
+    await expect(editDialog(page)).toBeHidden();
+
+    // ちょっと and not 切り分け: a card's accessible name interleaves the ruby
+    // reading with the word, so 切り分け reads as 「切きりり分わけ」 and no
+    // regex over the headword alone matches it.
+    await page.getByRole('link', { name: /ちょっと/ }).click();
+    await expect(previewDialog(page)).toBeVisible();
+    await expect(editDialog(page)).toBeHidden();
   });
 
   test('says so plainly when nothing matches', async ({ page }) => {

@@ -1,22 +1,30 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { EntryBody } from '@/components/detail/EntryBody';
+import { EntryHeadline } from '@/components/detail/EntryHeadline';
+import { EntryFormModal } from '@/components/entry-form/EntryFormModal';
 import { Modal } from '@/components/Modal';
-import { PitchAccent } from '@/components/PitchAccent';
-import { Ruby } from '@/components/Ruby';
 import { SpeakButton, SpeechStatusNote } from '@/components/SpeakButton';
 import { useI18n } from '@/i18n/context';
-import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { useEntries } from '@/lib/entries';
-import { accentKana } from '@/lib/mora';
 import { spokenForm, useJapaneseSpeech } from '@/lib/speech';
 import { useVocabDialog } from '@/lib/vocabDialog';
 
 /**
  * A word, looked at without leaving the page that mentioned it.
  *
- * A peek, not the detail page: meaning, the senses and one example, and a way
- * through to everything else. Editing and deleting are deliberately absent —
- * they change what other screens are showing, and the page underneath this one
- * has no idea it happened.
+ * The whole note, not a summary of it: `EntryHeadline` and `EntryBody` are the
+ * same two components the detail page renders, so a word opened from a list and
+ * the same word opened by its address say the same things in the same order.
+ * The only difference is `surface="panel"` — the dialog body is already
+ * `bg-card`, so the sections are separated by a border instead of by a card.
+ *
+ * Editing is here and deleting is not, and the two are not the same call.
+ * Both write through `EntriesProvider`, which every screen reads from, so a
+ * saved edit reaches the page underneath on the next render rather than leaving
+ * it stale. A delete would leave this dialog sitting over a word that no longer
+ * exists, showing 「単語が見つかりません」 above the list it was deleted from;
+ * that belongs on the detail page, which can navigate away afterwards.
  *
  * Read out of `EntriesProvider` rather than fetched, because every screen that
  * can open this already holds the whole notebook. A word that is not there is
@@ -25,12 +33,20 @@ import { useVocabDialog } from '@/lib/vocabDialog';
  */
 export function VocabDialog() {
   const { t } = useI18n();
-  const entryLabel = useEntryLabel();
   const { openId, close } = useVocabDialog();
   const { entries } = useEntries();
   // Above the early return, because hooks are: this component is mounted for
   // the whole session and renders nothing until a word is asked for.
   const { status: speechStatus, speak } = useJapaneseSpeech();
+  /**
+   * Which word the edit form is open for, rather than whether it is open.
+   *
+   * A boolean survives the dialog being closed with the form up, and the next
+   * word opened from any list would then arrive already in a form nobody asked
+   * to fill in. Comparing against `openId` makes a stale value inert without an
+   * effect having to reset it.
+   */
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   if (openId === null) return null;
   const entry = entries.find((item) => item.id === openId);
@@ -43,8 +59,18 @@ export function VocabDialog() {
     );
   }
 
-  const meanings = entry.senses.map((sense) => sense.description).filter(Boolean);
-  const example = entry.senses.find((sense) => sense.example)?.example ?? entry.examples[0]?.ja;
+  /**
+   * The form replaces the preview rather than opening on top of it.
+   *
+   * Two `Modal`s open at once are two focus traps and two Escape listeners
+   * competing over the same keystroke, and the second one also re-runs the
+   * `inert` bookkeeping the first is relying on. Swapping keeps one dialog on
+   * screen at a time; closing the form returns to the preview, which by then is
+   * reading the entry the save refreshed.
+   */
+  if (editingId === entry.id) {
+    return <EntryFormModal open entry={entry} onClose={() => setEditingId(null)} />;
+  }
 
   return (
     <Modal
@@ -69,58 +95,25 @@ export function VocabDialog() {
       }
     >
       <div className="min-w-0 space-y-4">
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-3">
-            <Ruby
-              headword={entry.headword}
-              reading={entry.reading}
-              className="has-ruby block min-w-0 font-display text-3xl font-bold [overflow-wrap:anywhere]"
-            />
-            <SpeakButton status={speechStatus} onSpeak={() => speak(spokenForm(entry))} />
-          </div>
-          <SpeechStatusNote status={speechStatus} className="mt-2" />
-          {entry.pitchAccent !== null && (
-            <PitchAccent
-              kana={accentKana(entry.headword, entry.reading)}
-              pitchAccent={entry.pitchAccent}
-              className="mt-2 block font-display text-base"
-            />
-          )}
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-            <span className="rounded-pill bg-accent-soft px-2.5 py-1 font-semibold text-accent">
-              {entry.jlpt}
-            </span>
-            {entry.pos.map((part) => (
-              <span key={part} className="rounded-pill bg-bg-alt px-2.5 py-1 text-muted">
-                {entryLabel(part)}
-              </span>
-            ))}
-            <span className="text-muted tabular-nums">{entry.learnedOn}</span>
-          </div>
-        </div>
+        <EntryHeadline
+          entry={entry}
+          compact
+          actions={
+            <>
+              <SpeakButton status={speechStatus} onSpeak={() => speak(spokenForm(entry))} />
+              <button
+                type="button"
+                onClick={() => setEditingId(entry.id)}
+                className="min-h-9 rounded-pill bg-bg-alt px-4 text-xs font-semibold text-ink"
+              >
+                {t('common.edit')}
+              </button>
+            </>
+          }
+        />
+        <SpeechStatusNote status={speechStatus} />
 
-        {(meanings.length > 0 || entry.definition) && (
-          <ul className="prose-cjk space-y-1 text-sm">
-            {(meanings.length ? meanings : [entry.definition]).map((meaning, position) => (
-              <li key={position} className="flex gap-2">
-                <span className="text-muted">・</span>
-                <span>{meaning}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {example && <p className="prose-cjk rounded-panel bg-bg-alt p-3 text-sm">{example}</p>}
-
-        {entry.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {entry.tags.map((tag) => (
-              <span key={tag} className="text-xs text-accent">
-                #{tag}
-              </span>
-            ))}
-          </div>
-        )}
+        <EntryBody entry={entry} surface="panel" />
       </div>
     </Modal>
   );

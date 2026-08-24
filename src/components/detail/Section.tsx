@@ -1,20 +1,40 @@
 import type { ReactNode } from 'react';
 
 /**
+ * Where a section is being rendered, which decides how it is separated from
+ * what is around it.
+ *
+ * `card` is the page: a raised card on the page background. `panel` is the
+ * dialog, whose body is already `bg-card` — a second card on top of it has no
+ * edge at all, so the boundary is drawn with a border instead. The background
+ * stays transparent either way, so the `bg-bg-alt` blockquotes inside keep the
+ * contrast they were chosen for.
+ */
+export type SectionSurface = 'card' | 'panel';
+
+/**
  * The emoji headers mirror the original markdown notes (📋🔧📌🌐📝🗣️🔗) and are
  * kept deliberately — they are how these notes have always been scanned.
  */
 export function Section({
   emoji,
   title,
+  surface = 'card',
   children,
 }: {
   emoji: string;
   title: string;
+  surface?: SectionSurface;
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-card bg-card p-5 shadow-panel sm:p-6">
+    <section
+      className={
+        surface === 'panel'
+          ? 'rounded-panel border border-line p-4'
+          : 'rounded-card bg-card p-5 shadow-panel sm:p-6'
+      }
+    >
       <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold">
         <span aria-hidden>{emoji}</span>
         {title}
