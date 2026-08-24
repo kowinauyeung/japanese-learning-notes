@@ -1,6 +1,7 @@
 import type { EntryDraft } from '@/domain/entry';
 import { INPUT_LIMITS } from '@/domain/limits';
 import type { TranslationLanguage } from '@/domain/user';
+import { dateKey } from './dates';
 import { describeSizeProblem, draftSizeProblems } from './draft';
 import { sanitizeDraft } from './sanitize';
 
@@ -197,6 +198,7 @@ function delimiterMayStandAt(text: string, from: number): boolean {
 export function jsonToDraft(
   raw: string,
   context: PromptContext = {},
+  now: Date = new Date(),
 ): { draft?: EntryDraft; error?: string; oversize?: string[] } {
   // Before the parse, not after: `JSON.parse` on a multi-megabyte paste blocks
   // the main thread long enough to read as a hung tab, and every check below
@@ -228,6 +230,21 @@ export function jsonToDraft(
   // enum values, wrong types, or nulls inside arrays — all of which would
   // otherwise reach the form and Firestore intact.
   const draft: EntryDraft = sanitizeDraft(parsed);
+
+  // `sanitizeDraft`'s `isoDate` only rejects a `learnedOn` that fails to
+  // parse — it has no way to tell a real date from an invented one, and
+  // nothing in `buildPrompt` tells the assistant what today is. The result
+  // over real replies is not a fallback the reader can rely on: sometimes
+  // today, sometimes an empty string, sometimes a well-formed date that is
+  // neither. The reader cannot see the difference on screen, and the field
+  // drives the dashboard heatmap, so a wrong value is silent. Today is
+  // always what a freshly imported note should start from — the same
+  // default `emptyDraft` gives a note started by hand — and the field
+  // stays user-editable in the form afterwards. `now` is taken as an
+  // argument rather than read here, so the clock is read once at the call
+  // boundary instead of a second time on top of the one `sanitizeDraft`'s
+  // own `emptyDraft()` fallback already did.
+  draft.learnedOn = dateKey(now);
 
   if (context.original?.trim()) draft.context.original = context.original.trim();
   if (context.source?.trim()) draft.source = context.source.trim();

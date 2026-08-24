@@ -216,6 +216,34 @@ describe('jsonToDraft — required fields', () => {
 });
 
 /**
+ * Nothing in `buildPrompt` tells the assistant today's date, so `learnedOn`
+ * in its reply is a guess dressed up as an answer: sometimes today, sometimes
+ * an empty string, sometimes a well-formed date that is neither — all three
+ * observed from real replies to the same prompt. `isoDate` in `sanitize.ts`
+ * only catches the malformed case; a syntactically valid but invented date
+ * passed straight through and was imported as if the reader had typed it.
+ * The reader cannot tell the difference on screen, and the field drives the
+ * dashboard's contribution heatmap, so a wrong value there is silent.
+ */
+describe('jsonToDraft — learnedOn', () => {
+  const now = new Date(2026, 7, 24);
+
+  it('defaults to today when the assistant omits learnedOn', () => {
+    expect(jsonToDraft(JSON.stringify(minimal), {}, now).draft?.learnedOn).toBe('2026-08-24');
+  });
+
+  it('defaults to today when the assistant sends an empty learnedOn', () => {
+    const raw = JSON.stringify({ ...minimal, learnedOn: '' });
+    expect(jsonToDraft(raw, {}, now).draft?.learnedOn).toBe('2026-08-24');
+  });
+
+  it('defaults to today rather than trusting a well-formed but invented learnedOn', () => {
+    const raw = JSON.stringify({ ...minimal, learnedOn: '2019-03-14' });
+    expect(jsonToDraft(raw, {}, now).draft?.learnedOn).toBe('2026-08-24');
+  });
+});
+
+/**
  * The size checks, which are the import path's own and not the form's.
  *
  * The form has `maxLength` on every field and this path has none: it builds a
