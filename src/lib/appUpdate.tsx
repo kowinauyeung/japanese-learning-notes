@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { AppUpdatePort } from '@/domain/ports';
 import { AppUpdateContext } from './appUpdateContext';
 
@@ -34,6 +34,12 @@ export function AppUpdateProvider({
 }) {
   const [updateReady, setUpdateReady] = useState(false);
   const [activateFailed, setActivateFailed] = useState(false);
+  // The button is not disabled between clicks, so a second attempt can start
+  // before the first has settled — and, being a `Promise`, has no guarantee of
+  // settling in the order the attempts were made. A late rejection from a
+  // superseded attempt must not overwrite the outcome of a later one, so each
+  // attempt is tagged and a rejection only counts if its tag is still current.
+  const activationAttempt = useRef(0);
 
   useEffect(() => {
     // `onWaiting` replays a build that was already waiting when this mounted,
@@ -42,10 +48,12 @@ export function AppUpdateProvider({
   }, [port]);
 
   const activate = useCallback(() => {
+    const attempt = ++activationAttempt.current;
     // Cleared up front rather than only on success, so a second click retries
     // cleanly instead of a transient failure staying on screen forever.
     setActivateFailed(false);
     port.activate().catch((error: unknown) => {
+      if (attempt !== activationAttempt.current) return;
       // The page was never replaced, so this is the one place a failed
       // activation is observable at all — nothing else logs it.
       console.error('AppUpdateProvider: activation failed', error);

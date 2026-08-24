@@ -54,6 +54,38 @@ function unreliablePort(failuresBeforeSuccess: number) {
   return { port, announceWaitingBuild: () => act(() => listeners.forEach((fn) => fn())) };
 }
 
+/**
+ * A worker whose `activate()` never settles on its own — the caller settles
+ * each call in turn, in whatever order the test needs.
+ */
+function deferredPort() {
+  const listeners = new Set<() => void>();
+  const pending: { resolve: () => void; reject: (error: Error) => void }[] = [];
+  const port: AppUpdatePort = {
+    onWaiting(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    activate() {
+      return new Promise<void>((resolve, reject) => {
+        pending.push({ resolve, reject });
+      });
+    },
+  };
+  return { port, pending, announceWaitingBuild: () => act(() => listeners.forEach((fn) => fn())) };
+}
+
+/**
+ * `noUncheckedIndexedAccess` makes `pending[i]` possibly `undefined`. A silent
+ * `?.` would let the test pass vacuously if a click somehow failed to reach
+ * the port, so this throws instead of hiding that.
+ */
+function nth<T>(items: readonly T[], index: number): T {
+  const item = items[index];
+  if (!item) throw new Error(`expected an item at index ${index}, got ${items.length} total`);
+  return item;
+}
+
 const mount = (port: AppUpdatePort) =>
   render(
     <AppUpdateProvider port={port}>
@@ -169,6 +201,34 @@ describe('UpdatePrompt', () => {
     act(() => updateButton().click());
 
     await waitFor(() => expect(screen.queryByText(FAILED)).not.toBeInTheDocument());
+  });
+
+  /**
+   * The button is not disabled between clicks, so a reader who clicks twice
+   * starts a second attempt before the first has settled — and a `Promise`
+   * carries no guarantee it settles in the order it was created. A late
+   * rejection from the first click must not overwrite the outcome of the
+   * second, already-successful one.
+   */
+  it('ignores a stale rejection from an attempt a later one has already superseded', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const worker = deferredPort();
+    mount(worker.port);
+    worker.announceWaitingBuild();
+
+    act(() => updateButton().click());
+    act(() => updateButton().click());
+
+    await act(async () => {
+      nth(worker.pending, 1).resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      nth(worker.pending, 0).reject(new Error('stale, superseded activation'));
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText(FAILED)).not.toBeInTheDocument();
   });
 
   // Restores unconditionally, so a failed assertion above can't leak the
