@@ -33,6 +33,7 @@ export function AppUpdateProvider({
   children: ReactNode;
 }) {
   const [updateReady, setUpdateReady] = useState(false);
+  const [activateFailed, setActivateFailed] = useState(false);
 
   useEffect(() => {
     // `onWaiting` replays a build that was already waiting when this mounted,
@@ -41,11 +42,19 @@ export function AppUpdateProvider({
   }, [port]);
 
   const activate = useCallback(() => {
-    void port.activate();
+    // Cleared up front rather than only on success, so a second click retries
+    // cleanly instead of a transient failure staying on screen forever.
+    setActivateFailed(false);
+    port.activate().catch((error: unknown) => {
+      // The page was never replaced, so this is the one place a failed
+      // activation is observable at all — nothing else logs it.
+      console.error('AppUpdateProvider: activation failed', error);
+      setActivateFailed(true);
+    });
   }, [port]);
 
   return (
-    <AppUpdateContext.Provider value={{ updateReady, activate }}>
+    <AppUpdateContext.Provider value={{ updateReady, activate, activateFailed }}>
       {children}
     </AppUpdateContext.Provider>
   );

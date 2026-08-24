@@ -1,5 +1,5 @@
-import { act, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
 import type { AppUpdatePort } from '@/domain/ports';
 import { AppUpdateProvider } from '@/lib/appUpdate';
@@ -32,6 +32,28 @@ function testPort() {
   };
 }
 
+/**
+ * A worker whose `activate()` rejects a fixed number of times before
+ * succeeding — 0 for "always succeeds", `Infinity` for "always fails".
+ */
+function unreliablePort(failuresBeforeSuccess: number) {
+  const listeners = new Set<() => void>();
+  let attempts = 0;
+  const port: AppUpdatePort = {
+    onWaiting(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    activate() {
+      attempts += 1;
+      return attempts <= failuresBeforeSuccess
+        ? Promise.reject(new Error('activation failed'))
+        : Promise.resolve();
+    },
+  };
+  return { port, announceWaitingBuild: () => act(() => listeners.forEach((fn) => fn())) };
+}
+
 const mount = (port: AppUpdatePort) =>
   render(
     <AppUpdateProvider port={port}>
@@ -40,6 +62,7 @@ const mount = (port: AppUpdatePort) =>
   );
 
 const updateButton = () => screen.getByRole('button', { name: '今すぐ更新' });
+const FAILED = '自動更新に失敗しました。ページを再読み込みして新しいバージョンを取得してください。';
 
 describe('UpdatePrompt', () => {
   it('says nothing until a build is actually waiting, so nobody is offered the build they are already on', () => {
@@ -110,5 +133,47 @@ describe('UpdatePrompt', () => {
     // if someone reaches for `alert` — cuts into the dictation answer being
     // typed, which is the one moment this can arrive.
     expect(screen.getByRole('status')).toHaveTextContent('新しいバージョンがあります');
+  });
+
+  /**
+   * `activate()` never replaces the page on this path — the rejection is the
+   * only thing that happened — so a reader who clicked and got nothing back
+   * needs the banner itself to say so, or the click reads as having done
+   * nothing at all.
+   */
+  it('tells the reader activation failed instead of leaving the button looking inert', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const worker = unreliablePort(Infinity);
+    mount(worker.port);
+    worker.announceWaitingBuild();
+
+    act(() => updateButton().click());
+
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+  });
+
+  /**
+   * The failure is cleared at the start of the next attempt, not only on
+   * success, so a reader who retries and this time gets through is not left
+   * looking at an error banner above a page that is about to reload anyway.
+   */
+  it('clears the failure message on the next attempt', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const worker = unreliablePort(1);
+    mount(worker.port);
+    worker.announceWaitingBuild();
+
+    act(() => updateButton().click());
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+
+    act(() => updateButton().click());
+
+    await waitFor(() => expect(screen.queryByText(FAILED)).not.toBeInTheDocument());
+  });
+
+  // Restores unconditionally, so a failed assertion above can't leak the
+  // `console.error` mock into whichever test runs next.
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 });

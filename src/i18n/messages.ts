@@ -63,6 +63,7 @@ const en = {
   'update.hint': 'Updating reloads the app, so finish anything you are typing first.',
   'update.action': 'Update now',
   'update.later': 'Later',
+  'update.failed': 'Could not update automatically. Reload the page to get the new version.',
 } as const;
 
 type BaseMessageKey = keyof typeof en;
@@ -126,6 +127,8 @@ const ja: Messages = {
   'update.hint': '更新するとアプリを読み込み直します。入力中の内容は先に保存してください。',
   'update.action': '今すぐ更新',
   'update.later': 'あとで',
+  'update.failed':
+    '自動更新に失敗しました。ページを再読み込みして新しいバージョンを取得してください。',
 };
 
 const zhHant: Messages = {
@@ -185,6 +188,7 @@ const zhHant: Messages = {
   'update.hint': '更新會重新載入應用程式，請先完成正在輸入的內容。',
   'update.action': '立即更新',
   'update.later': '稍後',
+  'update.failed': '無法自動更新，請重新載入頁面以取得新版本。',
 };
 
 const ko: Messages = {
@@ -245,6 +249,7 @@ const ko: Messages = {
   'update.hint': '업데이트하면 앱을 다시 불러옵니다. 입력 중인 내용을 먼저 저장하세요.',
   'update.action': '지금 업데이트',
   'update.later': '나중에',
+  'update.failed': '자동 업데이트에 실패했습니다. 페이지를 새로고침하여 새 버전을 받아오세요.',
 };
 
 const es: Messages = {
@@ -305,6 +310,8 @@ const es: Messages = {
   'update.hint': 'Al actualizar se recarga la aplicación. Termina antes lo que estés escribiendo.',
   'update.action': 'Actualizar ahora',
   'update.later': 'Más tarde',
+  'update.failed':
+    'No se pudo actualizar automáticamente. Recarga la página para obtener la nueva versión.',
 };
 
 const allMessages = {
