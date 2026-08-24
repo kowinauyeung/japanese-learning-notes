@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { ReCaptchaV3Provider, initializeAppCheck } from 'firebase/app-check';
+import { CustomProvider, ReCaptchaV3Provider, initializeAppCheck } from 'firebase/app-check';
 import { GoogleAuthProvider, getAuth } from 'firebase/auth';
 import {
   initializeFirestore,
@@ -102,7 +102,68 @@ export const app = initializeApp(config);
  */
 const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 
-if (siteKey) {
+/**
+ * A preview channel cannot pass reCAPTCHA v3 attestation at all, regardless of
+ * the debug-token story above: v3 site keys are registered against specific
+ * domains in the reCAPTCHA admin console, not Firebase's own authorized-domain
+ * list, and a channel's hostname carries a hash generated per pull request —
+ * see `deploy-dev.yml` and README → Preview sign-in for the *other* dynamic
+ * hostname problem previews have, which this is not. Nobody registers a new
+ * domain there on every pull request, so `ReCaptchaV3Provider` fails
+ * attestation on every preview, silently, in exactly the shape the big
+ * comment below already warns about: the app works, every Firestore read
+ * comes back `permission-denied`, and nothing points at App Check as the
+ * cause.
+ *
+ * `admin/mint-preview-app-check-token.ts` works around this from the trusted
+ * side instead of the client side: it mints a real App Check token with the
+ * Admin SDK — which needs no attestation, because holding Google credentials
+ * for the project already proves what reCAPTCHA exists to prove — during
+ * `deploy-dev.yml`'s preview deploy, and stamps it into the built
+ * `index.html` as `window.__APP_CHECK_PREVIEW_TOKEN__`, read here before any
+ * module script runs. It is a `CustomProvider` rather than another debug
+ * token so the value can be a short-lived, per-deploy credential instead of
+ * one shared secret registered once and trusted forever.
+ *
+ * The token is public the moment it is deployed — anyone who loads the
+ * preview can read it out of the page source — which is the same exposure
+ * the `yarn dev` debug token already accepts, just no longer confined to a
+ * developer's own machine. `mint-preview-app-check-token.ts` bounds the
+ * blast radius with a TTL matching the channel's own `--expires 7d`, and
+ * `preview-cleanup.yml` deletes the channel — but not the token, which stays
+ * valid for whoever already has it until it expires on its own. Acceptable
+ * because App Check is additive bot/abuse protection here, not the
+ * authorization boundary — Firestore security rules are, per this
+ * repository's testing rules — and because the channel it is scoped to is a
+ * pull request preview against `goitei-dev`, never production.
+ */
+function readPreviewAppCheckToken(): { token: string; expireTimeMillis: number } | undefined {
+  const minted = (
+    window as unknown as {
+      __APP_CHECK_PREVIEW_TOKEN__?: { token: string; expireTimeMillis: number };
+    }
+  ).__APP_CHECK_PREVIEW_TOKEN__;
+  if (!minted || typeof minted.token !== 'string' || typeof minted.expireTimeMillis !== 'number') {
+    return undefined;
+  }
+  // Expired rather than absent is the one case worth falling through on: a
+  // preview reopened after its token outlived its usefulness should still get
+  // whatever the reCAPTCHA path below can offer, rather than attesting with a
+  // token App Check will refuse anyway.
+  return minted.expireTimeMillis > Date.now() ? minted : undefined;
+}
+
+const previewToken = readPreviewAppCheckToken();
+
+if (previewToken) {
+  initializeAppCheck(app, {
+    provider: new CustomProvider({ getToken: () => Promise.resolve(previewToken) }),
+    // There is nothing to refresh to — the token is fixed at deploy time —
+    // and asking anyway would just call this same closure again for the same
+    // answer until it expires, which is what letting it expire already does.
+    isTokenAutoRefreshEnabled: false,
+  });
+} else if (siteKey) {
   if (import.meta.env.DEV) {
     // Registered per browser in the console; without it a local build fails
     // attestation against a key bound to the deployed domain.

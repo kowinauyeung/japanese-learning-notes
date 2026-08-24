@@ -472,6 +472,54 @@ The preview exists to show the branch against real `goitei-dev` data; a
 Firestore query, index or cursor defect is invisible against fakes, and that is
 the class of defect that has actually reached review here.
 
+#### Preview App Check
+
+A preview channel cannot pass reCAPTCHA v3 attestation, which is a different
+problem from the sign-in one above even though both come from the same hashed,
+per-pull-request hostname. reCAPTCHA v3 site keys are registered against
+specific domains in the reCAPTCHA admin console — not Firebase's authorized
+domain list, and not anything `firebase hosting:channel:deploy` touches — so
+nobody has ever added a preview's hostname there. If App Check enforcement is
+on for Firestore, Authentication or Firebase AI Logic, every request from a
+preview is refused.
+
+That refusal is silent in the same shape the sign-in failure would have been:
+the app loads, every Firestore read comes back `permission-denied`, and
+nothing on screen says why. `src/infra/firebase/client.ts` documents the two
+tells — an App Check failure logs a warning prefixed `@firebase/app-check` in
+the browser console; a missing claim logs nothing — because a reader who does
+not already know App Check exists has no reason to suspect it.
+
+`admin/mint-preview-app-check-token.ts` works around this from the trusted
+side instead. During `deploy-dev.yml`'s preview deploy, after
+`google-github-actions/auth` and before `firebase hosting:channel:deploy`
+uploads `dist/`, it uses the Admin SDK to mint a real App Check token for the
+web app and stamps it into the built `index.html` as
+`window.__APP_CHECK_PREVIEW_TOKEN__`. The Admin SDK needs no attestation of
+its own — holding Google credentials for the project is already what
+reCAPTCHA exists to prove — so this sidesteps the domain problem instead of
+solving it. `client.ts` reads that value before any module script runs and
+uses it through a `CustomProvider`, ahead of the ordinary reCAPTCHA path.
+
+**Needs `roles/firebaseappcheck.admin`** (or an equivalent role) on the
+deploying service account, the same shape of requirement `roles/firebaseauth.admin`
+is above. This has not been exercised against a live project as of this
+mechanism's introduction. If it is missing, `createToken` fails and the step
+fails the job — deliberately not a warning-and-succeed, because a preview that
+looks deployed and cannot attest is a worse outcome than a red check, which is
+the exact lesson the sign-in incident above already paid for.
+
+The token is public from the moment the preview is live — it sits in the page
+source anyone loading the channel can read — which is the same exposure the
+`yarn dev` debug token already accepts, just no longer confined to one
+developer's machine. `--ttl-days` bounds it to the channel's own `--expires
+7d`, and `preview-cleanup.yml` deleting the channel does not revoke a token
+already handed out; it stays valid for whoever has it until it expires on its
+own. Accepted because App Check is additive bot/abuse protection here, not the
+authorization boundary — Firestore security rules are, per this repository's
+testing rules — and because it is scoped to a pull request preview against
+`goitei-dev`, never production.
+
 #### Trust boundary
 
 The deploy workflow is split into jobs, and the split is the security boundary
