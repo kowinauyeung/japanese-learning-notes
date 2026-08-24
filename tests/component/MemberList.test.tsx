@@ -6,7 +6,7 @@ import type { ListDrag } from '@/lib/listDrag';
 import { VocabDialogProvider } from '@/lib/vocabDialog';
 import { idleDrag } from '../fixtures/drag';
 import { makeEntry } from '../fixtures/entry';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 const MEMBERS = [
   makeEntry({ id: 'w1', headword: '切り分け', reading: 'きりわけ' }),

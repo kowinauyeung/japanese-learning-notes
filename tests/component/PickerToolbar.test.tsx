@@ -2,7 +2,7 @@ import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PickerToolbar } from '@/components/wordsets/PickerToolbar';
 import { EMPTY_FILTERS } from '@/lib/filters';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 describe('PickerToolbar', () => {
   /**

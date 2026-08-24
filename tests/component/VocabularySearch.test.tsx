@@ -2,7 +2,7 @@ import { fireEvent, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { VocabularySearch } from '@/components/browse/VocabularySearch';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 const placeholder = '見出し語・読み方・タグ・意味・例文で検索';
 

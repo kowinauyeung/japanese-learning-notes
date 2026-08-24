@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
 import type { AppUpdatePort } from '@/domain/ports';
 import { AppUpdateProvider } from '@/lib/appUpdate';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 /**
  * The port is implemented here rather than substituted for. `AppUpdatePort` is

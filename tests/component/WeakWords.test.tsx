@@ -6,7 +6,7 @@ import { EMPTY_PRACTICE_FILTERS } from '@/lib/practice';
 import type { PracticeFilters } from '@/lib/practice';
 import { VocabDialogProvider } from '@/lib/vocabDialog';
 import { makeEntry } from '../fixtures/entry';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 const WORDS = [makeEntry({ id: 'w1', headword: '切り分け' })];
 

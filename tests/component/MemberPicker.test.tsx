@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MemberPicker } from '@/components/wordsets/MemberPicker';
 import { idleDrag } from '../fixtures/drag';
 import { makeEntry } from '../fixtures/entry';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 const SHOWN = [
   makeEntry({ id: 'w1', headword: '切り分け', reading: 'きりわけ' }),

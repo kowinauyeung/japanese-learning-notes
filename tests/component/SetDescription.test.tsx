@@ -1,7 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SetDescription } from '@/components/wordsets/SetDescription';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 /**
  * jsdom lays nothing out: every element reports a height of zero, so the

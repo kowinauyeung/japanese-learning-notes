@@ -2,8 +2,8 @@ import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { WordSetEditModal } from '@/components/wordsets/WordSetEditModal';
 import { WORD_SET_LIMITS } from '@/domain/limits';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 import { makeWordSet } from '../fixtures/wordSet';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
 
 const set = makeWordSet({ name: '仕事の語', description: '会議で出てきた語' });
 
