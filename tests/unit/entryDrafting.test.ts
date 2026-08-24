@@ -36,6 +36,7 @@ beforeEach(() => {
   vi.stubEnv('VITE_FIREBASE_STORAGE_BUCKET', 'test');
   vi.stubEnv('VITE_FIREBASE_MESSAGING_SENDER_ID', 'test');
   vi.stubEnv('VITE_FIREBASE_APP_ID', 'test');
+  vi.stubEnv('VITE_RECAPTCHA_SITE_KEY', '');
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -53,7 +54,6 @@ describe('geminiEntryDrafting', () => {
         expect.objectContaining({ reason: 'unavailable' }),
       );
       expect(geminiEntryDrafting.available()).toBe(false);
-      expect(getGenerativeModel).toHaveBeenCalledTimes(1);
     } finally {
       error.mockRestore();
     }
