@@ -11,6 +11,7 @@ import type {
   Sense,
   UsageNotes,
 } from '@/domain/entry';
+import { USER_LIMITS } from '@/domain/limits';
 import { PRACTICE_MODES } from '@/domain/practice';
 import type { EntryProgress, PracticeSession } from '@/domain/practice';
 import { THEME_PREFERENCES, TRANSLATION_LANGUAGES, UI_LANGUAGES } from '@/domain/user';
@@ -252,7 +253,19 @@ export function sanitizeUserProfile(uid: string, data: unknown): UserProfile {
   const raw = record(data);
   return {
     uid,
-    nickname: str(raw.nickname).trim().slice(0, 50),
+    // The rules bound this at 50, deliberately wider than the product's own
+    // limit, so a longer value can already be stored. Everything downstream —
+    // the avatar initial, the header, the settings field — assumes the product
+    // limit, so this is where the two have to agree.
+    //
+    // The slice is by UTF-16 code unit, same as the limit, so a cut landing
+    // inside a surrogate pair leaves a lone high surrogate — not a character,
+    // and unencodable as UTF-8 — as the last unit. `ellipsise` in practice.ts
+    // drops the same orphan for the same reason.
+    nickname: str(raw.nickname)
+      .trim()
+      .slice(0, USER_LIMITS.nickname)
+      .replace(/[\uD800-\uDBFF]$/u, ''),
     language: oneOf(raw.language, UI_LANGUAGES, 'en'),
     translationLanguage: oneOf(raw.translationLanguage, TRANSLATION_LANGUAGES, 'en'),
     theme: oneOf(raw.theme, THEME_PREFERENCES, 'system'),

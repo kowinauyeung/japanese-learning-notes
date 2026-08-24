@@ -45,8 +45,14 @@ export function defaultUserProfile(
       before the user has opened the form. Truncated rather than refused,
       because refusing would mean an account that cannot be created over a name
       the user did not choose and is free to change.
+      A provider display name can end in an emoji outside the BMP, so the slice
+      below drops a trailing lone high surrogate the same way `sanitizeUserProfile`
+      does, rather than leaving one behind at the cut.
     */
-    nickname: nickname.trim().slice(0, USER_LIMITS.nickname),
+    nickname: nickname
+      .trim()
+      .slice(0, USER_LIMITS.nickname)
+      .replace(/[\uD800-\uDBFF]$/u, ''),
     language,
     translationLanguage: language,
     theme,

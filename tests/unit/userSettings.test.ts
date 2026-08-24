@@ -47,6 +47,19 @@ describe('defaultUserProfile', () => {
       USER_LIMITS.nickname,
     );
   });
+
+  /**
+   * A provider display name that ends in an emoji can have that emoji straddle
+   * the truncation boundary. `slice` counts UTF-16 code units, so cutting
+   * inside the pair leaves a lone high surrogate — not a character, and not
+   * encodable as UTF-8 — as the last unit of a name shown right after sign-in.
+   */
+  it('drops a trailing lone high surrogate instead of splitting an astral display name', () => {
+    const straddling = `${'ゆ'.repeat(USER_LIMITS.nickname - 1)}😀`;
+    expect(defaultUserProfile('u1', straddling, ['ja'], null).nickname).toBe(
+      'ゆ'.repeat(USER_LIMITS.nickname - 1),
+    );
+  });
 });
 
 describe('sanitizeUserProfile', () => {
@@ -70,6 +83,35 @@ describe('sanitizeUserProfile', () => {
         theme: 'system',
       }),
     ).toMatchObject({ language: 'en', translationLanguage: 'yue-Hant' });
+  });
+
+  /**
+   * `firestore.rules` bounds a nickname at 50 characters, deliberately wider
+   * than the product's own 30, so a 31-50 character value can already be in
+   * the database — written before this limit existed, or by any path that is
+   * not the settings form. Reading one back has to bring it down to the limit
+   * every other part of the app assumes, or the avatar initial, the header and
+   * the settings field are all working from a ceiling the sanitizer does not
+   * actually hold.
+   */
+  it('brings a stored nickname the rules still allow down to the product limit', () => {
+    const stored = 'ゆ'.repeat(USER_LIMITS.nickname + 15);
+    expect(sanitizeUserProfile('u1', { nickname: stored }).nickname).toBe(
+      stored.slice(0, USER_LIMITS.nickname),
+    );
+  });
+
+  /**
+   * Same hazard as `defaultUserProfile`, reached through the persisted path
+   * instead of the provider display name: a stored nickname ending in an emoji
+   * that straddles the product limit must not come back with a lone high
+   * surrogate as its last unit.
+   */
+  it('drops a trailing lone high surrogate instead of splitting an astral nickname', () => {
+    const straddling = `${'ゆ'.repeat(USER_LIMITS.nickname - 1)}😀`;
+    expect(sanitizeUserProfile('u1', { nickname: straddling }).nickname).toBe(
+      'ゆ'.repeat(USER_LIMITS.nickname - 1),
+    );
   });
 
   it('coerces stale or unsupported settings without admitting Simplified Chinese', () => {
