@@ -72,6 +72,22 @@ describe('sanitizeUserProfile', () => {
     ).toMatchObject({ language: 'en', translationLanguage: 'yue-Hant' });
   });
 
+  /**
+   * `firestore.rules` bounds a nickname at 50 characters, deliberately wider
+   * than the product's own 30, so a 31-50 character value can already be in
+   * the database — written before this limit existed, or by any path that is
+   * not the settings form. Reading one back has to bring it down to the limit
+   * every other part of the app assumes, or the avatar initial, the header and
+   * the settings field are all working from a ceiling the sanitizer does not
+   * actually hold.
+   */
+  it('brings a stored nickname the rules still allow down to the product limit', () => {
+    const stored = 'ゆ'.repeat(USER_LIMITS.nickname + 15);
+    expect(sanitizeUserProfile('u1', { nickname: stored }).nickname).toHaveLength(
+      USER_LIMITS.nickname,
+    );
+  });
+
   it('coerces stale or unsupported settings without admitting Simplified Chinese', () => {
     expect(
       sanitizeUserProfile('u1', {

@@ -11,6 +11,7 @@ import type {
   Sense,
   UsageNotes,
 } from '@/domain/entry';
+import { USER_LIMITS } from '@/domain/limits';
 import { PRACTICE_MODES } from '@/domain/practice';
 import type { EntryProgress, PracticeSession } from '@/domain/practice';
 import { THEME_PREFERENCES, TRANSLATION_LANGUAGES, UI_LANGUAGES } from '@/domain/user';
@@ -252,7 +253,11 @@ export function sanitizeUserProfile(uid: string, data: unknown): UserProfile {
   const raw = record(data);
   return {
     uid,
-    nickname: str(raw.nickname).trim().slice(0, 50),
+    // The rules bound this at 50, deliberately wider than the product's own
+    // limit, so a longer value can already be stored. Everything downstream —
+    // the avatar initial, the header, the settings field — assumes the product
+    // limit, so this is where the two have to agree.
+    nickname: str(raw.nickname).trim().slice(0, USER_LIMITS.nickname),
     language: oneOf(raw.language, UI_LANGUAGES, 'en'),
     translationLanguage: oneOf(raw.translationLanguage, TRANSLATION_LANGUAGES, 'en'),
     theme: oneOf(raw.theme, THEME_PREFERENCES, 'system'),
