@@ -67,12 +67,22 @@ describe('font loading against the self-only policy', () => {
   it('does not load Google Fonts, which the policy forbids and the worker cannot precache', () => {
     const source = `${indexHtml}\n${indexCss}`;
 
+    // A remote stylesheet would be blocked by `style-src 'self'` and leave the app on fallback fonts online.
     expect(source).not.toContain('fonts.googleapis.com');
+    // Remote font binaries cannot be precached by the worker, so an installed app would lose the chosen faces offline.
     expect(source).not.toContain('fonts.gstatic.com');
   });
 
   it('does not declare an unused 900 display font that would be precached offline', () => {
+    // Shipping an unused display weight makes every offline install download a large font that no visible text needs.
     expect(indexCss).not.toContain('zen-maru-gothic-japanese-900-normal');
+  });
+
+  it('keeps Latin display glyphs in the same self-hosted face as Japanese headwords', () => {
+    // Mixed-script headwords and display labels should not fall back to platform sans for Latin letters or digits.
+    expect(indexCss).toContain('zen-maru-gothic-latin-500-normal.woff2');
+    // Bold display text such as stats and error headings uses the same family across Japanese and Latin glyphs.
+    expect(indexCss).toContain('zen-maru-gothic-latin-700-normal.woff2');
   });
 });
 
