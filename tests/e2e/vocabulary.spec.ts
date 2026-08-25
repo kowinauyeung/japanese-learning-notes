@@ -445,6 +445,14 @@ test.describe('editing and deleting', () => {
       ),
     ).toBeVisible();
     await expect(dialog.getByText('保存できませんでした。', { exact: true })).toBeHidden();
+
+    // Not only the message: the denial is rejected before the in-memory store
+    // is touched (`entryRepositoryFor.update` in `src/lib/backend.e2e.ts`
+    // checks `entrySave` first), so the stored entry must still read the way
+    // it did before this attempt.
+    await page.reload();
+    await expect(page.getByText('何かが起こる前ぶれ。')).toBeVisible();
+    await expect(page.getByText('起こる前のしるし。')).toBeHidden();
   });
 
   /**
