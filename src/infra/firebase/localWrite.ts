@@ -47,8 +47,8 @@ export class LocalWriteTracker {
  * The grace period keeps the normal online path on the server acknowledgement,
  * so serverTimestamp fields are still resolved before the repository reports
  * success and avoids installing per-write listeners for fast writes. Only a
- * write that is both unacknowledged after the grace period and then observed in
- * the local cache is treated as saved locally.
+ * write that is both unacknowledged after the grace period and then observed as
+ * pending or deleted in the local cache is treated as saved locally.
  */
 export function waitForLocalWrite(
   ref: DocumentReference,
@@ -80,7 +80,7 @@ export function waitForLocalWrite(
           ref,
           { includeMetadataChanges: true },
           (snapshot) => {
-            if (snapshot.metadata.hasPendingWrites) finish(resolve);
+            if (snapshot.metadata.hasPendingWrites || !snapshot.exists()) finish(resolve);
           },
           (cause) => finish(() => reject(rejection(cause))),
         );

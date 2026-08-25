@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocalWriteTracker, waitForLocalWrite } from '@/infra/firebase/localWrite';
 
-type Snapshot = { metadata: { hasPendingWrites: boolean } };
+type Snapshot = { exists: () => boolean; metadata: { hasPendingWrites: boolean } };
 
 const firestore = vi.hoisted(() => ({
   onSnapshot: vi.fn(),
@@ -32,7 +32,7 @@ describe('waitForLocalWrite', () => {
     vi.clearAllMocks();
     firestore.onSnapshot.mockImplementation(
       (_ref: unknown, _options: unknown, onNext: (snapshot: Snapshot) => void) => {
-        setTimeout(() => onNext({ metadata: { hasPendingWrites: true } }), 0);
+        setTimeout(() => onNext({ exists: () => true, metadata: { hasPendingWrites: true } }), 0);
         return vi.fn();
       },
     );
@@ -59,6 +59,20 @@ describe('waitForLocalWrite', () => {
 
     await sleep(2);
     expect(firestore.onSnapshot).toHaveBeenCalled();
+    await expect(saved).resolves.toBeUndefined();
+  });
+
+  it('waitForLocalWrite resolves delayed local deletes from the cached missing document', async () => {
+    firestore.onSnapshot.mockImplementation(
+      (_ref: unknown, _options: unknown, onNext: (snapshot: Snapshot) => void) => {
+        setTimeout(() => onNext({ exists: () => false, metadata: { hasPendingWrites: false } }), 0);
+        return vi.fn();
+      },
+    );
+    const saved = waitForLocalWrite(ref, () => never, { fallbackMs: shortFallbackMs });
+
+    await sleep(shortFallbackMs + 1);
+
     await expect(saved).resolves.toBeUndefined();
   });
 
