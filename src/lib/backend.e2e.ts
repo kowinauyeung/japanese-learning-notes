@@ -62,6 +62,11 @@ function unreachableError(): Error {
   });
 }
 
+/** Backs `failWhileOffline` — see its doc comment on `E2ESeed`. */
+function offlineRead(store: 'entries' | 'progress' | 'wordSets' | 'settings'): boolean {
+  return (seed().failWhileOffline ?? []).includes(store) && !navigator.onLine;
+}
+
 const E2E_USER: AuthUser = {
   uid: 'e2e-user',
   email: 'e2e@example.test',
@@ -203,6 +208,7 @@ let settingsSaved = false;
 
 export const userRepository: UserRepository = {
   get(uid): Promise<UserProfile | null> {
+    if (offlineRead('settings')) return Promise.reject(unreachableError());
     // Fails only the read that follows a committed save, which is the whole
     // point: the transaction succeeded and the profile is durable, and the
     // question is what the interface says about it.
@@ -323,24 +329,33 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
   const persist = () => {
     save(`entries.${uid}`, [...store.values()]);
   };
+  /** Backs `entriesReadDelayMs` — only the read that is actually going to succeed. */
+  const waitForRead = () => {
+    const milliseconds = seed().entriesReadDelayMs ?? 0;
+    return milliseconds > 0
+      ? new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
+      : Promise.resolve();
+  };
 
   return {
-    list({ limit, cursor }: PageQuery): Promise<Page<Entry>> {
+    async list({ limit, cursor }: PageQuery): Promise<Page<Entry>> {
       // Gates the export walk, not the initial notebook load: `Account.tsx`
       // drains this same method directly, and nothing on that page renders
       // `EntriesProvider`'s own read of it, so failing both is unobservable
       // except through the one path #23 is about.
       if (seed().accountExport === 'denied') return Promise.reject(deniedError());
       if (seed().accountExport === 'unreachable') return Promise.reject(unreachableError());
+      if (offlineRead('entries')) return Promise.reject(unreachableError());
+      await waitForRead();
       countRead('entries');
       const all = [...store.values()].sort(newestFirst);
       const start = cursor ? all.findIndex((entry) => entry.id === cursor) + 1 : 0;
       const items = all.slice(start, start + limit);
       const more = start + items.length < all.length;
-      return Promise.resolve({
+      return {
         items,
         cursor: more ? (items[items.length - 1]?.id ?? null) : null,
-      });
+      };
     },
 
     get(id: string): Promise<Entry | null> {
@@ -456,6 +471,7 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
     listAll(): Promise<EntryProgress[]> {
       if (seed().progressLoad === 'denied') return Promise.reject(deniedError());
       if (seed().progressLoad === 'unreachable') return Promise.reject(unreachableError());
+      if (offlineRead('progress')) return Promise.reject(unreachableError());
       countRead('progress');
       return Promise.resolve([...progress.values()]);
     },
@@ -560,6 +576,7 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
 
   return {
     list({ limit, cursor }: PageQuery): Promise<Page<WordSet>> {
+      if (offlineRead('wordSets')) return Promise.reject(unreachableError());
       countRead('wordSets');
       const all = [...store.values()].sort(
         (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),

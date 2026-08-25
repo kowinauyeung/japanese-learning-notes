@@ -1,11 +1,20 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 import type { ProgressRepository } from '@/domain/ports';
 import type { EntryProgress, PracticeSessionDraft } from '@/domain/practice';
 import { progressRepositoryFor } from '@/lib/backend';
-import { captureLoadFailure } from '@/lib/loadError';
+import { captureLoadFailure, isUnreachable } from '@/lib/loadError';
 import type { LoadFailure } from '@/lib/loadError';
 import { weakIdsOf } from '@/lib/practice';
+import { useRetryOnReconnect } from '@/lib/retryOnReconnect';
 
 interface ProgressValue {
   progress: EntryProgress[];
@@ -48,26 +57,34 @@ export function ProgressProvider({ uid, children }: { uid: string; children: Rea
 
   const repository = useMemo(() => progressRepositoryFor(uid), [uid]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    repository
-      .listAll()
-      .then((rows) => {
-        if (!cancelled) setProgress(rows);
-      })
-      .catch((cause: unknown) => {
-        console.error(cause);
-        if (!cancelled) setError(captureLoadFailure(cause, 'load.progress'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+  /** Which walk is allowed to publish its result — see `EntriesProvider`'s. */
+  const walk = useRef(0);
+
+  /** Re-read progress. Deliberately does not raise `loading` — see the effect below. */
+  const refresh = useCallback(async () => {
+    const mine = (walk.current += 1);
+    try {
+      const rows = await repository.listAll();
+      // Cleared here, not eagerly — see the same comment on `EntriesProvider`.
+      if (walk.current === mine) {
+        setProgress(rows);
+        setError(null);
+      }
+    } catch (cause) {
+      console.error(cause);
+      if (walk.current === mine) setError(captureLoadFailure(cause, 'load.progress'));
+    } finally {
+      if (walk.current === mine) setLoading(false);
+    }
   }, [repository]);
+
+  useEffect(() => {
+    setLoading(true);
+    void refresh();
+  }, [refresh]);
+
+  /** Denial is not cleared by reconnecting — see `EntriesProvider`'s same guard. */
+  useRetryOnReconnect(error !== null && isUnreachable(error.cause), refresh);
 
   const record = useCallback(
     async (session: PracticeSessionDraft, rows: EntryProgress[]) => {

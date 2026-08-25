@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { UserProfileDraft } from '@/domain/user';
 import { userRepository } from '@/lib/backend';
-import { captureLoadFailure } from '@/lib/loadError';
+import { captureLoadFailure, isUnreachable } from '@/lib/loadError';
 import type { LoadFailure } from '@/lib/loadError';
+import { useRetryOnReconnect } from '@/lib/retryOnReconnect';
 import { applyThemePreference } from '@/lib/theme';
 import { defaultUserProfile } from '@/lib/userPreferences';
 import { UserSettingsContext } from '@/lib/userSettingsContext';
@@ -53,12 +54,19 @@ function UserSettingsState({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<LoadFailure | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    void userRepository
-      .get(uid)
-      .then(async (stored) => {
-        if (stored) return stored;
+  /** Which walk is allowed to publish its result — see `EntriesProvider`'s. */
+  const walk = useRef(0);
+
+  /**
+   * Re-read the profile, creating it on first sign-in if `get` finds nothing.
+   * Deliberately does not raise `loading` — see the effect below.
+   */
+  const refresh = useCallback(async () => {
+    const mine = (walk.current += 1);
+    try {
+      const stored = await userRepository.get(uid);
+      let next = stored;
+      if (!next) {
         const draft: UserProfileDraft = {
           nickname: defaults.nickname,
           language: defaults.language,
@@ -66,22 +74,38 @@ function UserSettingsState({
           theme: defaults.theme,
         };
         await userRepository.save(uid, draft);
-        return (await userRepository.get(uid)) ?? defaults;
-      })
-      .then((next) => {
-        if (!cancelled) setStoredProfile(next);
-      })
-      .catch((cause: unknown) => {
-        console.error(cause);
-        if (!cancelled) setError(captureLoadFailure(cause, 'load.settings'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+        next = (await userRepository.get(uid)) ?? defaults;
+      }
+      // Cleared here, not eagerly — see the same comment on `EntriesProvider`.
+      if (walk.current === mine) {
+        setStoredProfile(next);
+        setError(null);
+      }
+    } catch (cause) {
+      console.error(cause);
+      if (walk.current === mine) setError(captureLoadFailure(cause, 'load.settings'));
+    } finally {
+      if (walk.current === mine) setLoading(false);
+    }
   }, [uid, defaults]);
+
+  useEffect(() => {
+    setLoading(true);
+    void refresh();
+  }, [refresh]);
+
+  /**
+   * Gated on `load.settings` specifically, not just "an error exists": `error`
+   * also carries a failed `save` (`load.settingsSave`/`load.unreachableSave`),
+   * and `refresh()` would silently clear that banner on the next reconnect —
+   * telling the reader nothing is wrong when their edit was never committed.
+   * Denial is excluded for the same reason as `EntriesProvider`'s guard: not
+   * cleared by reconnecting.
+   */
+  useRetryOnReconnect(
+    error !== null && error.fallback === 'load.settings' && isUnreachable(error.cause),
+    refresh,
+  );
 
   useEffect(() => {
     const profile = previewDraft ? { ...storedProfile, ...previewDraft } : storedProfile;
