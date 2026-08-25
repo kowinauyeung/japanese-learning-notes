@@ -100,6 +100,19 @@ export interface UserRepository {
   get(uid: string): Promise<UserProfile | null>;
   save(uid: string, draft: UserProfileDraft): Promise<void>;
   remove(uid: string): Promise<void>;
+  /**
+   * Record that this account is gone, before anything is removed.
+   *
+   * Deleting the Auth user does not invalidate the ID tokens already minted for
+   * it, and Firestore rules have no revocation check — so a second tab signed
+   * in as the same uid keeps writing for up to an hour after the account and
+   * its data are gone, and what it writes lands under a uid nothing will ever
+   * issue a token for again. This is the one thing rules can see that the token
+   * cannot carry.
+   *
+   * Must be safe to call twice: deletion is retried and is not atomic.
+   */
+  markDeleted(uid: string): Promise<void>;
 }
 
 /**

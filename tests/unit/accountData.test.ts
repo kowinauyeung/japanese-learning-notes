@@ -44,6 +44,7 @@ const ports = (entryCount: number, setCount: number, sessionCount: number) => {
   };
   const userProfiles = {
     remove: vi.fn(() => Promise.resolve()),
+    markDeleted: vi.fn(() => Promise.resolve()),
   };
   // Only the methods under test are implemented; the ports are wider.
   return {
@@ -207,6 +208,77 @@ describe('deleteEverything', () => {
 
     expect((p.userProfiles.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     expect((p.auth.deleteAccount as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+  });
+
+  /**
+   * The window the tombstone exists to close, and why it is written where it is.
+   *
+   * Deleting the Auth user does not invalidate ID tokens already minted for it,
+   * so a second tab signed in as the same uid keeps writing for up to an hour
+   * after this function returns. Firestore rules have no revocation check and
+   * cannot have one, so the only thing that can refuse those writes is a
+   * document they can see.
+   *
+   * It goes before the first delete rather than beside the last one. Anywhere
+   * later leaves the whole drain — which is the slow part, and the part most
+   * likely to fail — as a window in which the second tab is still writing rows
+   * that this run has already walked past.
+   */
+  it('marks the account deleted before draining, not after, because the drain is the window', async () => {
+    const order: string[] = [];
+    const p = ports(1, 1, 0);
+    const record = (label: string) => () => {
+      order.push(label);
+      return Promise.resolve();
+    };
+    (p.auth.reauthenticate as ReturnType<typeof vi.fn>).mockImplementation(record('reauth'));
+    (p.userProfiles.markDeleted as ReturnType<typeof vi.fn>).mockImplementation(
+      record('tombstone'),
+    );
+    // The reads, not only the deletes. A tombstone written after the first
+    // `list()` still precedes the first `remove()`, so an assertion watching
+    // deletes alone would hold while the window stayed open across the whole
+    // walk — and the walk is where it matters: a row the other tab adds behind
+    // a page this run has already read is never seen and never deleted.
+    const observe = <T>(repo: { list: (q: PageQuery) => Promise<Page<T>> }, label: string) => {
+      const original = repo.list.bind(repo);
+      repo.list = (q) => {
+        order.push(label);
+        return original(q);
+      };
+    };
+    observe(p.wordSets, 'list word sets');
+    observe(p.entries, 'list entries');
+    (p.wordSets.remove as ReturnType<typeof vi.fn>).mockImplementation(record('delete word set'));
+    (p.entries.remove as ReturnType<typeof vi.fn>).mockImplementation(record('delete entry'));
+
+    await deleteEverything(p);
+
+    expect(order).toEqual([
+      'reauth',
+      'tombstone',
+      'list word sets',
+      'delete word set',
+      'list entries',
+      'delete entry',
+    ]);
+    expect((p.userProfiles.markDeleted as ReturnType<typeof vi.fn>).mock.calls).toEqual([['u1']]);
+  });
+
+  /**
+   * `NothingDeleted` means exactly what it says, and a tombstone would make it
+   * a lie: the account would be unable to write anything ever again while all
+   * of its data was still there.
+   */
+  it('writes no tombstone when reauthentication fails, because nothing was deleted', async () => {
+    const p = ports(1, 0, 0);
+    (p.auth.reauthenticate as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('popup closed'),
+    );
+
+    await expect(deleteEverything(p)).rejects.toBeInstanceOf(NothingDeleted);
+
+    expect((p.userProfiles.markDeleted as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
   });
 
   /**

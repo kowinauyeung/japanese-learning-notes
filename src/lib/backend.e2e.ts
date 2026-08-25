@@ -259,7 +259,20 @@ export const userRepository: UserRepository = {
     save(`profile.${uid}`, null);
     return Promise.resolve();
   },
+  /**
+   * Nothing here can reproduce what this is for — the defect is a second tab
+   * holding a token this process never issued — so the stand-in records the
+   * call and no more. What the tombstone actually stops is a rules property,
+   * and it is under test where rules are: `tests/rules`.
+   */
+  markDeleted(uid): Promise<void> {
+    deletedAccounts.add(uid);
+    return Promise.resolve();
+  },
 };
+
+/** Marked deleted this session. Read by nothing; see `markDeleted`. */
+const deletedAccounts = new Set<string>();
 
 function persistProfile(uid: string, draft: UserProfileDraft): void {
   const existing = persistedProfile(uid);

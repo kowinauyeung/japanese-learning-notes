@@ -187,6 +187,138 @@ describe('private data under users/{uid}', () => {
   });
 });
 
+/**
+ * The window between deleting an account and its last ID token expiring.
+ *
+ * Deleting the Auth user does not invalidate tokens already minted for it, and
+ * rules have no revocation check — so a second tab signed in as the same uid
+ * keeps writing for up to an hour after the account and its data are gone. What
+ * it writes lands under a uid nothing will ever issue a token for again, which
+ * makes it unreachable by the app and invisible to both the export and the
+ * delete paths, since each starts from a signed-in session.
+ *
+ * The tombstone is what rules can see that a token cannot carry. It gates
+ * `create` and `update` and deliberately gates neither `read` nor `delete` —
+ * see the tests below for why each of those two would be a defect.
+ */
+describe("a deleted account's token", () => {
+  const tombstone = async (uid: string) => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc(`deletedAccounts/${uid}`).set({ deletedAt: new Date() });
+    });
+  };
+
+  it('refuses a write to every private collection once the tombstone exists', async () => {
+    await tombstone(ALICE);
+    const db = as(ALICE);
+    // Every path the app writes. A gate that misses one is the whole defect
+    // wearing a different collection name, so they are asserted together.
+    await assertFails(db.doc(`users/${ALICE}/entries/e9`).set(entry(ALICE)));
+    await assertFails(db.doc(`users/${ALICE}/wordSets/s9`).set(wordSet(ALICE)));
+    await assertFails(db.doc(`users/${ALICE}/practiceSessions/p9`).set(session(ALICE)));
+    await assertFails(
+      db.doc(`users/${ALICE}/progress/entries`).set({ ownerUid: ALICE, entries: {} }),
+    );
+    await assertFails(db.doc(`users/${ALICE}`).set(profile(ALICE)));
+  });
+
+  it('refuses an update to a document written before the account was deleted', async () => {
+    await tombstone(ALICE);
+    await assertFails(as(ALICE).doc(`users/${ALICE}/entries/e1`).update({ headword: 'x' }));
+  });
+
+  /**
+   * Not an oversight, and the reason it is asserted rather than left implied:
+   * `deleteEverything` writes the tombstone *before* it drains, so gating
+   * deletes would make the account unable to finish deleting itself — and
+   * would strand whatever a half-finished run left behind, which is the state
+   * this whole feature exists to avoid creating.
+   */
+  it('still allows delete, so a half-finished deletion stays finishable', async () => {
+    await tombstone(ALICE);
+    await assertSucceeds(as(ALICE).doc(`users/${ALICE}/entries/e1`).delete());
+  });
+
+  /**
+   * Reads are ungated on purpose: the defect is data written back, not data
+   * seen. Denying reads here would break the export the account screen offers
+   * and change nothing about the race.
+   */
+  it('still allows read, because the defect is the write and not the read', async () => {
+    await tombstone(ALICE);
+    await assertSucceeds(as(ALICE).doc(`users/${ALICE}/entries/e1`).get());
+  });
+
+  it('refuses to let the account delete its own tombstone, which is what makes it one', async () => {
+    await tombstone(ALICE);
+    await assertFails(as(ALICE).doc(`deletedAccounts/${ALICE}`).delete());
+  });
+
+  it('lets an account write its own tombstone and nobody else write it for them', async () => {
+    await assertSucceeds(as(ALICE).doc(`deletedAccounts/${ALICE}`).set({ deletedAt: new Date() }));
+    await assertFails(as(BOB).doc(`deletedAccounts/${ALICE}`).set({ deletedAt: new Date() }));
+  });
+
+  /**
+   * The same gate as everything else, and it was `signedIn()` here for one
+   * revision on reasoning that does not survive being written down: an account
+   * whose claim is gone cannot drain or delete anything either, because all of
+   * that is behind `mine()`. A tombstone it could still write would record a
+   * deletion that cannot happen — while leaving one document per uid reachable
+   * by any verified Google account on a project with no spending cap.
+   */
+  it('refuses a tombstone from an account that is not on the allowlist', async () => {
+    await assertFails(
+      asStranger(MALLORY).doc(`deletedAccounts/${MALLORY}`).set({ deletedAt: new Date() }),
+    );
+  });
+
+  /**
+   * This path is written by an account that is being deleted, which means it is
+   * written by a token that outlives the deletion — so it is reachable by
+   * exactly the session the rest of this feature exists to refuse. Without a
+   * shape it would be the one unbounded write surface left in the file, and it
+   * would make the retention paragraph in `src/content/privacy.ts` untrue: that
+   * says the record holds the account identifier and the time, and nothing else.
+   */
+  it('refuses a tombstone carrying anything beyond the time it was written', async () => {
+    const db = as(ALICE);
+    await assertFails(
+      db.doc(`deletedAccounts/${ALICE}`).set({ deletedAt: new Date(), note: long(5000) }),
+    );
+    await assertFails(db.doc(`deletedAccounts/${ALICE}`).set({ deletedAt: 'yesterday' }));
+    await assertFails(db.doc(`deletedAccounts/${ALICE}`).set({}));
+  });
+
+  /**
+   * Nothing in the application reads this document — `markDeleted` only writes
+   * it, and `notDeleted()` reads it from inside rules, which is not itself
+   * subject to rules. A grant nothing uses is the shape the publishing rules
+   * were closed for, so this one is closed the same way rather than tested open.
+   */
+  it('keeps the tombstone unreadable from any client, its own account included', async () => {
+    await tombstone(ALICE);
+    await assertFails(as(ALICE).doc(`deletedAccounts/${ALICE}`).get());
+    await assertFails(as(BOB).doc(`deletedAccounts/${ALICE}`).get());
+  });
+
+  /**
+   * A retry has to be able to run. `deleteEverything` is not atomic and says so
+   * — a failure part way asks the user to press delete again — so a second run
+   * writes the tombstone a second time and must not be refused for it.
+   */
+  it('accepts the tombstone being written twice, because deletion is retried and not atomic', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(db.doc(`deletedAccounts/${ALICE}`).set({ deletedAt: new Date() }));
+    await assertSucceeds(db.doc(`deletedAccounts/${ALICE}`).set({ deletedAt: new Date() }));
+  });
+
+  it("is scoped to one uid: another account's tombstone stops nothing here", async () => {
+    await tombstone(BOB);
+    await assertSucceeds(as(ALICE).doc(`users/${ALICE}/entries/e9`).set(entry(ALICE)));
+  });
+});
+
 describe('the allowedUsers gate', () => {
   it('denies a signed-in user who is not on the allowlist', async () => {
     const db = asStranger(MALLORY);

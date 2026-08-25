@@ -367,6 +367,22 @@ until that token expires. Revoking the refresh tokens ends the session at the
 next refresh but does not shorten that window. When responding to abuse, delete
 the data — that part takes effect now.
 
+**Clearing a deletion tombstone.** Deleting an account writes
+`deletedAccounts/{uid}`, and Firestore rules refuse every create and update from
+that uid afterwards — which is what stops a second tab, still holding a valid ID
+token, from writing the data back during the hour it takes that token to expire.
+No client can remove the document; the Admin SDK and the console bypass rules and
+can.
+
+You should never need to. A deleted account cannot come back: signing up again
+with the same Google account produces a **new** uid, measured against the Auth
+emulator rather than assumed, so the tombstone does not follow anyone. The one
+case that would need it is that measurement turning out not to hold in
+production — an account that signs in and finds every write refused while its
+data is still there. Deleting `deletedAccounts/{uid}` restores writing
+immediately, because the rule reads the document on each write rather than
+anything in the token.
+
 **Releasing.** Cutting the version — the branch, the changelog and the tag — is
 [docs/releasing.md](docs/releasing.md). What follows is only the access half of
 it, which has an order that matters. Three steps:
