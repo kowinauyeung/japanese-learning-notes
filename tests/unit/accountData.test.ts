@@ -22,12 +22,21 @@ const rows = (n: number, prefix: string) =>
   Array.from({ length: n }, (_, i) => ({ id: `${prefix}-${i}` }));
 
 const ports = (entryCount: number, setCount: number, sessionCount: number) => {
-  const entries = { list: paged(rows(entryCount, 'e')), remove: vi.fn(() => Promise.resolve()) };
-  const wordSets = { list: paged(rows(setCount, 's')), remove: vi.fn(() => Promise.resolve()) };
+  const entries = {
+    list: paged(rows(entryCount, 'e')),
+    remove: vi.fn(() => Promise.resolve()),
+    settlePendingWrites: vi.fn(() => Promise.resolve()),
+  };
+  const wordSets = {
+    list: paged(rows(setCount, 's')),
+    remove: vi.fn(() => Promise.resolve()),
+    settlePendingWrites: vi.fn(() => Promise.resolve()),
+  };
   const progress = {
     listAll: vi.fn(() => Promise.resolve([{ entryId: 'e-0' }])),
     listSessions: paged(rows(sessionCount, 'p')),
     removeAll: vi.fn(() => Promise.resolve()),
+    settlePendingWrites: vi.fn(() => Promise.resolve()),
   };
   const auth = {
     reauthenticate: vi.fn(() => Promise.resolve()),
@@ -152,6 +161,52 @@ describe('deleteEverything', () => {
 
     expect((p.userProfiles.remove as ReturnType<typeof vi.fn>).mock.calls).toEqual([['u1']]);
     expect(order).toEqual(['profile', 'account']);
+  });
+
+  it('waits for locally accepted deletes to reach durable storage before removing the profile', async () => {
+    const order: string[] = [];
+    const p = ports(1, 1, 0);
+    (p.wordSets.settlePendingWrites as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      order.push('wordSet writes');
+      return Promise.resolve();
+    });
+    (p.entries.settlePendingWrites as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      order.push('entry writes');
+      return Promise.resolve();
+    });
+    (p.progress.settlePendingWrites as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      order.push('progress writes');
+      return Promise.resolve();
+    });
+    (p.userProfiles.remove as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      order.push('profile');
+      return Promise.resolve();
+    });
+    (p.auth.deleteAccount as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      order.push('account');
+      return Promise.resolve();
+    });
+
+    await deleteEverything(p);
+
+    expect(order).toEqual([
+      'wordSet writes',
+      'entry writes',
+      'progress writes',
+      'profile',
+      'account',
+    ]);
+  });
+
+  it('stops before removing the profile when the durable delete barrier fails', async () => {
+    const p = ports(1, 1, 0);
+    const failure = new Error('delete rejected by rules');
+    (p.entries.settlePendingWrites as ReturnType<typeof vi.fn>).mockRejectedValue(failure);
+
+    await expect(deleteEverything(p)).rejects.toBe(failure);
+
+    expect((p.userProfiles.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect((p.auth.deleteAccount as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
   });
 
   /**

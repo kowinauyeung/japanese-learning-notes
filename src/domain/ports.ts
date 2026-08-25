@@ -5,11 +5,12 @@
  *
  * 1. Nothing here may reference a vendor type. `src/infra/firebase` is the only
  *    place allowed to import `firebase/*`, enforced by ESLint.
- * 2. **Request/response only — no `subscribe()`.** `onSnapshot` is currently
- *    used zero times, and that is worth keeping deliberately: REST and SQL have
- *    no realtime equivalent, so a subscription on a port turns "write another
- *    adapter" into "rewrite the data flow". If realtime is ever wanted, add it
- *    as an explicit separate capability rather than folding it in here.
+ * 2. **Request/response only — no `subscribe()`.** Firestore may use listeners
+ *    internally to observe its own write metadata, but no port exposes a live
+ *    subscription. REST and SQL have no realtime equivalent, so a subscription
+ *    on a port turns "write another adapter" into "rewrite the data flow". If
+ *    realtime is ever wanted, add it as an explicit separate capability rather
+ *    than folding it in here.
  * 3. Cursors are opaque strings. A `DocumentSnapshot` on a signature would leak
  *    Firestore's pagination model into every caller.
  * 4. No use-case or service layer on top. React hooks are the application
@@ -39,6 +40,8 @@ export interface EntryRepository {
   create(draft: EntryDraft): Promise<string>;
   update(id: string, draft: EntryDraft): Promise<void>;
   remove(id: string): Promise<void>;
+  /** Waits until locally accepted writes have either reached durable storage or failed. */
+  settlePendingWrites(): Promise<void>;
 }
 
 export interface WordSetRepository {
@@ -47,6 +50,8 @@ export interface WordSetRepository {
   create(draft: WordSetDraft): Promise<string>;
   update(id: string, draft: WordSetDraft): Promise<void>;
   remove(id: string): Promise<void>;
+  /** Waits until locally accepted writes have either reached durable storage or failed. */
+  settlePendingWrites(): Promise<void>;
 }
 
 /**
@@ -87,6 +92,8 @@ export interface ProgressRepository {
    * caller has no reason to know about.
    */
   removeAll(): Promise<void>;
+  /** Waits until locally accepted writes have either reached durable storage or failed. */
+  settlePendingWrites(): Promise<void>;
 }
 
 export interface UserRepository {

@@ -11,6 +11,7 @@ import {
   serverTimestamp,
   startAfter,
   Timestamp,
+  waitForPendingWrites,
   writeBatch,
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
@@ -18,6 +19,7 @@ import type { Page, PageQuery, ProgressRepository } from '@/domain/ports';
 import type { EntryProgress, PracticeSession, PracticeSessionDraft } from '@/domain/practice';
 import { sanitizeProgressMap, sanitizeSession } from '@/lib/sanitize';
 import { decodeCursor, encodeCursor } from './cursor';
+import { LocalWriteTracker } from './localWrite';
 import { withIsoTimestamps } from './mappers';
 
 /**
@@ -39,6 +41,7 @@ import { withIsoTimestamps } from './mappers';
 export function createProgressRepository(db: Firestore, uid: string): ProgressRepository {
   const progressDoc = () => doc(db, 'users', uid, 'progress', 'entries');
   const sessionsPath = () => collection(db, 'users', uid, 'practiceSessions');
+  const writes = new LocalWriteTracker();
 
   return {
     async listAll(): Promise<EntryProgress[]> {
@@ -84,7 +87,7 @@ export function createProgressRepository(db: Firestore, uid: string): ProgressRe
         { merge: true },
       );
 
-      await batch.commit();
+      await writes.write(sessionRef, () => batch.commit());
       return sessionRef.id;
     },
 
@@ -146,6 +149,10 @@ export function createProgressRepository(db: Firestore, uid: string): ProgressRe
         if (snapshot.size < 400) break;
       }
       await deleteDoc(progressDoc());
+    },
+
+    async settlePendingWrites(): Promise<void> {
+      await writes.settle(() => waitForPendingWrites(db));
     },
   };
 }

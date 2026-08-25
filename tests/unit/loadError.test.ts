@@ -196,11 +196,11 @@ describe('the unreachable sentences name what was observed, not a cause', () => 
    * worth having as one.
    *
    * The sentence used to end 「接続が戻ると表示されます」 — it will appear once
-   * you are back. Nothing delivers that. There is not one `onSnapshot` in
-   * `src/infra`; every provider loads once from an effect keyed on its
-   * repository, and no error screen offers a retry, so the data arrives when
-   * the reader reloads and not before. Promising otherwise leaves someone
-   * waiting for something that is not coming.
+   * you are back. Nothing delivers that. Providers load once from an effect
+   * keyed on their repository, the only Firestore listener is an internal
+   * write-metadata probe, and no error screen offers a retry, so the data
+   * arrives when the reader reloads and not before. Promising otherwise leaves
+   * someone waiting for something that is not coming.
    *
    * If a provider ever does re-read on reconnect, this test is the thing that
    * has to be deleted deliberately — which is the point of writing it down.

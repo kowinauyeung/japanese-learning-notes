@@ -223,6 +223,14 @@ export async function deleteEverything({
   // something a user thinks of as a row.
   await progress.removeAll();
 
+  // `remove()` may report local persistence so busy UI does not hang offline.
+  // Account deletion is different: deleting the Auth account removes the
+  // credential needed to retry rejected Firestore deletes, so every locally
+  // accepted write must reach durable storage before this flow continues.
+  await wordSets.settlePendingWrites();
+  await entries.settlePendingWrites();
+  await progress.settlePendingWrites();
+
   // Firestore does not cascade. The parent profile comes after every
   // subcollection, but before Auth removes the identity needed to retry it.
   await userProfiles.remove(uid);
