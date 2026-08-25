@@ -77,7 +77,7 @@ export function describeCredentialSource(env: CredentialEnv): string {
   if (env.GOOGLE_APPLICATION_CREDENTIALS) {
     return `GOOGLE_APPLICATION_CREDENTIALS=${env.GOOGLE_APPLICATION_CREDENTIALS}`;
   }
-  const quotaProject = env.GOOGLE_CLOUD_QUOTA_PROJECT ?? 'unset';
+  const quotaProject = env.GOOGLE_CLOUD_QUOTA_PROJECT?.trim() || 'unset';
   if (env.CLOUDSDK_CONFIG) {
     return `applicationDefault() with CLOUDSDK_CONFIG=${env.CLOUDSDK_CONFIG}, GOOGLE_CLOUD_QUOTA_PROJECT=${quotaProject}`;
   }
@@ -85,7 +85,9 @@ export function describeCredentialSource(env: CredentialEnv): string {
 }
 
 export function ensureAdcQuotaProject(env: CredentialEnv, projectId: string): void {
-  env.GOOGLE_CLOUD_QUOTA_PROJECT ??= projectId;
+  if (!env.GOOGLE_CLOUD_QUOTA_PROJECT?.trim()) {
+    env.GOOGLE_CLOUD_QUOTA_PROJECT = projectId;
+  }
 }
 
 export function lookupErrorCode(cause: unknown): string | undefined {

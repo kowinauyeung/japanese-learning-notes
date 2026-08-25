@@ -109,6 +109,15 @@ describe('allow-user helpers', () => {
     );
   });
 
+  it('describeCredentialSource reports an empty quota project as unset', () => {
+    expect(
+      describeCredentialSource({
+        CLOUDSDK_CONFIG: '.gcloud',
+        GOOGLE_CLOUD_QUOTA_PROJECT: '',
+      }),
+    ).toBe('applicationDefault() with CLOUDSDK_CONFIG=.gcloud, GOOGLE_CLOUD_QUOTA_PROJECT=unset');
+  });
+
   it('describeCredentialSource reports when no gcloud directory is configured', () => {
     expect(describeCredentialSource({})).toBe(
       'applicationDefault() with CLOUDSDK_CONFIG unset, GOOGLE_CLOUD_QUOTA_PROJECT=unset',
@@ -117,6 +126,14 @@ describe('allow-user helpers', () => {
 
   it('ensureAdcQuotaProject defaults user ADC billing to the target project', () => {
     const env: { GOOGLE_CLOUD_QUOTA_PROJECT?: string } = {};
+
+    ensureAdcQuotaProject(env, 'goitei-dev');
+
+    expect(env.GOOGLE_CLOUD_QUOTA_PROJECT).toBe('goitei-dev');
+  });
+
+  it('ensureAdcQuotaProject treats an empty quota project as missing billing configuration', () => {
+    const env = { GOOGLE_CLOUD_QUOTA_PROJECT: '' };
 
     ensureAdcQuotaProject(env, 'goitei-dev');
 
