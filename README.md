@@ -173,8 +173,17 @@ broke: `verify` (typecheck, lint, format, build, unit), `emulator`, and `e2e`.
 `.firebaserc` maps `default` and `dev` to `goitei-dev`, and `prod` to `goitei`,
 so a deploy with no `--project` targets development. Branches follow the same
 split — `develop` for dev, `main` for production. Both are protected: changes
-land through a pull request with a green CI run, and neither accepts a force
-push.
+must land through a pull request, all review threads must be resolved, and
+neither branch allows force pushes or deletion. The required checks match what
+each branch can affect: `develop` requires `verify`, while `main` requires
+`verify`, `emulator` and `e2e`, because production deploys only from commits
+that have already landed on `main`.
+
+Branch protection is a repository setting, so no pull request reports a change
+to it and nothing in this tree enforces it. It is recorded here for the same
+reason `pr-title.yml` keeps `validateSingleCommit` next to the repository
+setting that already covers it: the setting is the enforcement, and this file is
+the version-controlled record reviewers can inspect.
 
 Pushing to `develop` deploys hosting and Firestore rules to `goitei-dev`, and a
 pull request gets its own Hosting preview channel that expires after six days
