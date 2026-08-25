@@ -21,6 +21,7 @@ import { AVATAR_HOSTS } from '@/lib/avatar';
 const RECAPTCHA_HOST = 'https://www.google.com';
 
 const firebaseJson = readFileSync(new URL('../../firebase.json', import.meta.url), 'utf8');
+const indexHtml = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
 const client = readFileSync(new URL('../../src/infra/firebase/client.ts', import.meta.url), 'utf8');
 
 interface Header {
@@ -58,6 +59,13 @@ describe('Content-Security-Policy against App Check', () => {
   // requirement quietly became wrong — this is what stops that reading.
   it('still has the App Check provider the guard above exists to protect', () => {
     expect(client).toContain('new ReCaptchaV3Provider(');
+  });
+});
+
+describe('font loading against the self-only policy', () => {
+  it('does not load Google Fonts, which the policy forbids and the worker cannot precache', () => {
+    expect(indexHtml).not.toContain('fonts.googleapis.com');
+    expect(indexHtml).not.toContain('fonts.gstatic.com');
   });
 });
 

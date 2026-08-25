@@ -81,6 +81,10 @@ describe('what an offline navigation can reach', () => {
     // Without the manifest an installed window cannot read its own identity
     // offline, which is the case this whole change exists for.
     expect(patterns.some((pattern) => pattern.includes('webmanifest'))).toBe(true);
+    // Self-hosted Japanese font assets are part of the readable experience, not
+    // decoration: if the app has to fall back while offline, ruby/headword
+    // rendering changes under the reader.
+    expect(patterns.some((pattern) => pattern.includes('woff2'))).toBe(true);
   });
 
   it('answers a deep navigation with the index document, matching the hosting rewrite', () => {

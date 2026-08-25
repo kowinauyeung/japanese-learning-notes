@@ -79,7 +79,7 @@ export const pwaOptions = (mode: string): Partial<VitePWAOptions> => ({
      * it, and an installed window that cannot read its own manifest offline is
      * the case this whole change is for.
      */
-    globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+    globPatterns: ['**/*.{js,css,html,svg,png,webmanifest,woff2}'],
 
     /**
      * Matches the `rewrites` block in `firebase.json`: without a navigation

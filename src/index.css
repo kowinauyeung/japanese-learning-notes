@@ -1,5 +1,32 @@
 @import 'tailwindcss';
 
+@font-face {
+  font-family: 'Zen Maru Gothic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('@fontsource/zen-maru-gothic/files/zen-maru-gothic-japanese-500-normal.woff2')
+    format('woff2');
+}
+
+@font-face {
+  font-family: 'Zen Maru Gothic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('@fontsource/zen-maru-gothic/files/zen-maru-gothic-japanese-700-normal.woff2')
+    format('woff2');
+}
+
+@font-face {
+  font-family: 'Zen Maru Gothic';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 900;
+  src: url('@fontsource/zen-maru-gothic/files/zen-maru-gothic-japanese-900-normal.woff2')
+    format('woff2');
+}
+
 /*
  * Palette derived from the 語彙庭 logo, which carries two distinct greens:
  * the book and wordmark sit at hue ~169 (#014D3A, a blue-leaning forest green)
@@ -82,10 +109,10 @@
   --color-danger: var(--c-danger);
   --color-danger-soft: var(--c-danger-soft);
 
-  /* Inter for UI, Zen Maru Gothic for headwords, Noto Sans TC for CJK prose. */
-  --font-sans: 'Inter', system-ui, sans-serif;
+  /* System UI for chrome, self-hosted Zen Maru Gothic for headwords, platform CJK faces for prose. */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif;
-  --font-cjk: 'Noto Sans TC', 'Hiragino Sans', sans-serif;
+  --font-cjk: 'Hiragino Sans', 'Yu Gothic', Meiryo, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
 
   /* The handoff collapses the nav to a hamburger below 700px, which sits
      between Tailwind's sm and md defaults, so it gets its own breakpoint. */
