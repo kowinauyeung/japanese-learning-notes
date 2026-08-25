@@ -74,6 +74,7 @@ function Practice({ mode }: { mode: PracticeMode }) {
     progress,
     record,
   } = useProgress();
+  const progressErrorMessage = useLoadErrorMessage(progressError);
   const { sets, loading: setsLoading } = useWordSets();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -236,7 +237,13 @@ function Practice({ mode }: { mode: PracticeMode }) {
         now={now}
         matchCount={matches.length}
         weakCount={weakCount}
-        weakState={progressError ? 'error' : progressLoading ? 'loading' : 'ready'}
+        weakState={
+          progressErrorMessage
+            ? { error: progressErrorMessage }
+            : progressLoading
+              ? 'loading'
+              : 'ready'
+        }
         onChange={setFilters}
         onStart={() =>
           start(shuffle(matches, Math.random), describeFilters(filters, sets, filterLabels))

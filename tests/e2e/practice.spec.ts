@@ -233,6 +233,53 @@ test.describe('the practice setup screen', () => {
   });
 
   /**
+   * #24: `weakState` used to collapse every progress-read failure to the same
+   * hard-coded 「記録を読み込めませんでした」, indistinguishable from a denial
+   * that will not clear on retry. `entries` is seeded to succeed on purpose —
+   * a full lockout fails that read too, and `Practice.tsx` returns its own
+   * message before the setup screen renders at all, which is why this needs
+   * `progressLoad` seeded independently of any `entries` failure.
+   *
+   * End-to-end because the layer under test is the wiring: `progressErrorMessage`
+   * reaching `PracticeSetup` through `weakState` rather than being discarded at
+   * that seam. The branch itself is `tests/unit/loadError.test.ts`.
+   */
+  test('shows the access-denied message on a denied progress read, not the generic one', async ({
+    page,
+  }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    await seed(page, { signedIn: true, entries: WORDS, progressLoad: 'denied' });
+    await page.goto('/practice/flashcards');
+
+    // Entries loaded fine, so the setup screen — not Practice.tsx's own
+    // full-screen error — is what is on screen to make this claim about.
+    await expect(page.getByText('3 件が対象')).toBeVisible();
+    await expect(
+      page.getByText(
+        'アクセスが許可されていません。一度サインアウトして、サインインし直してください。',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText('記録を読み込めませんでした')).toBeHidden();
+    // Left enabled, ticking it would silently start against an empty weak
+    // list — read as "no weak words" rather than as the read having failed.
+    await expect(page.getByRole('checkbox')).toBeDisabled();
+    expect(pageErrors).toEqual([]);
+  });
+
+  /** The other half of #24: an unreachable read is not a denial either. */
+  test('says the progress read was not reachable, not that access was denied', async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    await seed(page, { signedIn: true, entries: WORDS, progressLoad: 'unreachable' });
+    await page.goto('/practice/flashcards');
+
+    await expect(page.getByText('接続できないため読み込めませんでした。')).toBeVisible();
+    await expect(page.getByText('アクセスが許可されていません')).toBeHidden();
+    expect(pageErrors).toEqual([]);
+  });
+
+  /**
    * The 単語集 row is absent whenever there are none, which is the design's
    * rule for a notebook that has not organised anything yet. The pair of cases
    * is what stops the row being quietly dropped altogether.
