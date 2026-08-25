@@ -43,4 +43,89 @@ test.describe('dashboard', () => {
     expect(cell!.x).toBeGreaterThanOrEqual(box!.x);
     expect(cell!.x + cell!.width).toBeLessThanOrEqual(box!.x + box!.width);
   });
+
+  test('re-pins the heatmap to today when a wide viewport becomes narrow', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await seedSignedIn(page);
+    await page.goto('/');
+
+    const today = page.getByRole('button', { name: /2026年6月24日/ });
+    await expect(today).toBeVisible();
+
+    const scroller = page.locator('section div.overflow-x-auto').first();
+    // Start from the desktop state that hides the bug from users: the whole
+    // year fits, so the heatmap has no reason to pin itself yet.
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollWidth - node.clientWidth))
+      .toBeLessThanOrEqual(0);
+
+    await page.setViewportSize({ width: 375, height: 667 });
+
+    // Prove the viewport change creates the user-visible risk: today can now
+    // sit off-screen to the right unless the heatmap pins itself.
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollWidth - node.clientWidth), {
+        message: 'the resize must make the year overflow, or nothing is being tested',
+      })
+      .toBeGreaterThan(0);
+
+    // The user-facing outcome is today being visible without manually dragging
+    // the horizontal scroller after rotating or narrowing the viewport.
+    await expect
+      .poll(async () => {
+        const [cell, box] = await Promise.all([today.boundingBox(), scroller.boundingBox()]);
+        if (!cell || !box) return false;
+        return cell.x >= box.x && cell.x + cell.width <= box.x + box.width;
+      })
+      .toBe(true);
+  });
+
+  test('keeps a manually scrolled heatmap on older weeks during later resize', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await seedSignedIn(page);
+    await page.goto('/');
+
+    const today = page.getByRole('button', { name: /2026年6月24日/ });
+    await expect(today).toBeVisible();
+
+    const scroller = page.locator('section div.overflow-x-auto').first();
+    // The preservation check only matters in the phone-width layout where a
+    // reader can scroll away from today into older weeks.
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollWidth - node.clientWidth))
+      .toBeGreaterThan(0);
+
+    const pinnedOffset = await scroller.evaluate((node) => node.scrollLeft);
+    // First prove the normal mobile load still opens on today; otherwise the
+    // manual scroll below would not represent a reader leaving the latest week.
+    expect(
+      pinnedOffset,
+      'the narrow viewport must initially pin to the newest week',
+    ).toBeGreaterThan(0);
+
+    await scroller.evaluate((node) => {
+      node.scrollLeft = 0;
+    });
+    // This models a reader deliberately inspecting old history, which must not
+    // be undone by incidental layout work after the first automatic pin.
+    await expect.poll(async () => scroller.evaluate((node) => node.scrollLeft)).toBe(0);
+
+    const clientWidth = await scroller.evaluate((node) => node.clientWidth);
+    await scroller.evaluate((node) => {
+      node.style.maxWidth = `${Math.max(1, node.clientWidth - 24)}px`;
+    });
+    // Trigger the kind of reflow ResizeObserver sees so the test covers the
+    // same path that would otherwise yank the reader back to today.
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.clientWidth))
+      .toBeLessThan(clientWidth);
+
+    // The user-visible guarantee is that older weeks stay put after the reader
+    // scrolls there; a resize must not turn history into today again.
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollLeft), {
+        message: "a later reflow must not undo the reader's manual scroll",
+      })
+      .toBe(0);
+  });
 });
