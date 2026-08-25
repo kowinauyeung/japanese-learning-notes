@@ -20,6 +20,8 @@ const en = {
   'load.unreachable': 'Could not reach the server. Your saved words can still be read.',
   'load.unreachableSave':
     'Could not reach the server, so this was not saved. Try again in a moment.',
+  'load.unreachableExport':
+    'Could not reach the server, so this was not exported. Try again in a moment.',
   'offline.state': 'Offline',
   'offline.detail': 'Saved words stay readable. Changes may not save until you are back.',
   'diagnostics.summary': 'View and copy diagnostics',
@@ -106,6 +108,8 @@ const ja: AuthenticatedMessages = {
   'load.unreachable': '接続できないため読み込めませんでした。保存済みの単語はそのまま読めます。',
   'load.unreachableSave':
     '接続できないため保存できませんでした。しばらくしてからもう一度お試しください。',
+  'load.unreachableExport':
+    '接続できないためエクスポートできませんでした。しばらくしてからもう一度お試しください。',
   'offline.state': 'オフライン',
   'offline.detail': '保存済みの単語は読めます。変更は接続が戻るまで保存されないことがあります。',
   'diagnostics.summary': '診断情報を見る・コピーする',
@@ -186,6 +190,7 @@ const zhHant: AuthenticatedMessages = {
   'load.exportWalk': '匯出未能完成，請稍後再試。',
   'load.unreachable': '無法連線，因此未能載入。已儲存的單字仍可閱讀。',
   'load.unreachableSave': '無法連線，因此未能儲存。請稍後再試一次。',
+  'load.unreachableExport': '無法連線，因此未能匯出。請稍後再試一次。',
   'offline.state': '離線',
   'offline.detail': '已儲存的單字仍可閱讀。變更可能要等連線恢復後才會儲存。',
   'diagnostics.summary': '查看及複製診斷資料',
@@ -263,6 +268,7 @@ const ko: AuthenticatedMessages = {
   'load.exportWalk': '내보내기가 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.',
   'load.unreachable': '연결할 수 없어 불러오지 못했습니다. 저장된 단어는 그대로 볼 수 있습니다.',
   'load.unreachableSave': '연결할 수 없어 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+  'load.unreachableExport': '연결할 수 없어 내보내지 못했습니다. 잠시 후 다시 시도해 주세요.',
   'offline.state': '오프라인',
   'offline.detail':
     '저장된 단어는 계속 볼 수 있습니다. 변경 사항은 연결이 돌아올 때까지 저장되지 않을 수 있습니다.',
@@ -348,6 +354,8 @@ const es: AuthenticatedMessages = {
     'No se pudo conectar, así que no se pudo cargar. Las palabras guardadas siguen disponibles.',
   'load.unreachableSave':
     'No se pudo conectar, así que no se pudo guardar. Inténtalo de nuevo en un momento.',
+  'load.unreachableExport':
+    'No se pudo conectar, así que no se pudo exportar. Inténtalo de nuevo en un momento.',
   'offline.state': 'Sin conexión',
   'offline.detail':
     'Las palabras guardadas siguen disponibles. Puede que los cambios no se guarden hasta que vuelvas.',
