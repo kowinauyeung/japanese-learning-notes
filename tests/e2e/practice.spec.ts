@@ -261,6 +261,8 @@ test.describe('the practice setup screen', () => {
       ),
     ).toBeVisible();
     await expect(page.getByText('記録を読み込めませんでした')).toBeHidden();
+    // Left enabled, ticking it would silently start against an empty weak
+    // list — read as "no weak words" rather than as the read having failed.
     await expect(page.getByRole('checkbox')).toBeDisabled();
     expect(pageErrors).toEqual([]);
   });
