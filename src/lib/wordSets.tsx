@@ -11,8 +11,9 @@ import type { ReactNode } from 'react';
 import type { WordSetRepository } from '@/domain/ports';
 import type { WordSet } from '@/domain/wordSet';
 import { wordSetRepositoryFor } from '@/lib/backend';
-import { captureLoadFailure } from '@/lib/loadError';
+import { captureLoadFailure, isUnreachable } from '@/lib/loadError';
 import type { LoadFailure } from '@/lib/loadError';
+import { useRetryOnReconnect } from '@/lib/retryOnReconnect';
 
 interface WordSetsValue {
   sets: WordSet[];
@@ -99,6 +100,9 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
     setLoading(true);
     void refresh();
   }, [refresh]);
+
+  /** See the same guard on `EntriesProvider` — denial is not cleared by reconnecting. */
+  useRetryOnReconnect(error !== null && isUnreachable(error.cause), refresh);
 
   const value = useMemo(
     () => ({ sets, loading, error, refresh, repository }),

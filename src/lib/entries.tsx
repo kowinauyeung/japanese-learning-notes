@@ -11,8 +11,9 @@ import type { ReactNode } from 'react';
 import type { Entry } from '@/domain/entry';
 import type { EntryRepository } from '@/domain/ports';
 import { entryRepositoryFor } from '@/lib/backend';
-import { captureLoadFailure } from '@/lib/loadError';
+import { captureLoadFailure, isUnreachable } from '@/lib/loadError';
 import type { LoadFailure } from '@/lib/loadError';
+import { useRetryOnReconnect } from '@/lib/retryOnReconnect';
 
 interface EntriesValue {
   entries: Entry[];
@@ -115,6 +116,12 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
     setLoading(true);
     void refresh();
   }, [refresh]);
+
+  /**
+   * Denial does not belong here: signing back in is what clears it, not the
+   * network coming back, and a retry would only repeat the same rejection.
+   */
+  useRetryOnReconnect(error !== null && isUnreachable(error.cause), refresh);
 
   const value = useMemo(
     () => ({ entries, loading, error, refresh, repository }),

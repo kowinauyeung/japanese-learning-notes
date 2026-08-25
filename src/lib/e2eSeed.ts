@@ -51,6 +51,17 @@ export interface E2ESeed {
    */
   accountExport?: 'denied' | 'unreachable';
   /**
+   * Rejects the named provider's read with Firestore's `unavailable` while
+   * `navigator.onLine` is false, and lets it through once true. Models the one
+   * thing a reconnect retry (#84) needs to observe: a read that failed because
+   * the network was down, and would succeed if asked again now that it is not.
+   *
+   * Independent of `entrySave`/`progressLoad`/`accountExport`, which fail
+   * unconditionally — a retry against one of those would just repeat the same
+   * rejection, which is a different claim from this one.
+   */
+  failWhileOffline?: Array<'entries' | 'progress' | 'wordSets' | 'settings'>;
+  /**
    * Fails the progress read `ProgressProvider` makes on sign-in. `denied`
    * carries `permission-denied`, `unreachable` carries `unavailable` — the two
    * codes `PracticeSetup`'s 苦手のみ row must tell apart rather than collapsing
