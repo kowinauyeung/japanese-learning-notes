@@ -162,7 +162,7 @@
   /* Self-hosted faces keep the app readable offline without widening the CSP past 'self'. */
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-display: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif;
-  --font-cjk: 'Noto Sans TC', 'Hiragino Sans', sans-serif;
+  --font-cjk: 'Zen Maru Gothic', 'Hiragino Sans', sans-serif;
 
   /* The handoff collapses the nav to a hamburger below 700px, which sits
      between Tailwind's sm and md defaults, so it gets its own breakpoint. */
