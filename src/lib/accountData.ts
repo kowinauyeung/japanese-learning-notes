@@ -212,6 +212,24 @@ export async function deleteEverything({
     throw new NothingDeleted(cause);
   }
 
+  // **Before the first delete, and the position is the point.**
+  //
+  // Deleting the Auth account below does not invalidate ID tokens already
+  // minted for this uid, and Firestore rules have no revocation check — so a
+  // second tab signed in as the same account keeps writing for up to an hour
+  // after this function returns, under a uid nothing will ever issue a token
+  // for again. Those rows are then unreachable by the app and invisible to
+  // export and to this function, both of which start from a signed-in session.
+  //
+  // The tombstone is what the rules can see and the token cannot carry. Writing
+  // it anywhere later would leave the drain — the slow part, and the part most
+  // likely to fail — as a window in which the other tab is still adding rows
+  // behind a walk that has already passed them.
+  //
+  // It goes *after* `reauthenticate` because `NothingDeleted` has to stay true:
+  // a refused popup must leave an account that can still write.
+  await userProfiles.markDeleted(uid);
+
   const setList = await drain((q) => wordSets.list(q));
   for (const set of setList) await wordSets.remove(set.id);
 

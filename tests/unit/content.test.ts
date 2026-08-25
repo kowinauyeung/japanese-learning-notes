@@ -23,8 +23,8 @@ const PINNED_DOCS = {
     hash: '62c72d1cdef71d8b154ca3b8d5a258f5be866e729936697c7d01dbe53a6cc231',
   },
   privacy: {
-    updated: '2026-08-14',
-    hash: 'e6589a4a4779972669b21ad2758696b5a169f93720eac46d606ad579f06f0d64',
+    updated: '2026-08-25',
+    hash: '6e05b0dba0d2801454808c26ffea2d0e83c579a21c357071ba7f74cc60608af2',
   },
   terms: {
     updated: '2026-08-14',
