@@ -1,6 +1,11 @@
 import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth, type UserRecord } from 'firebase-admin/auth';
-import { lookupErrorCode, lookupFailureLines, parseAllowUserArgs } from './allow-user.shared';
+import {
+  ensureAdcQuotaProject,
+  lookupErrorCode,
+  lookupFailureLines,
+  parseAllowUserArgs,
+} from './allow-user.shared';
 
 /**
  * Grant or revoke access, by custom claim.
@@ -39,6 +44,7 @@ const { email, revoke, projectId } = parsed;
 
 if (getApps().length === 0) {
   const key = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (!key) ensureAdcQuotaProject(process.env, projectId);
   initializeApp({
     credential: key ? cert(key) : applicationDefault(),
     projectId,

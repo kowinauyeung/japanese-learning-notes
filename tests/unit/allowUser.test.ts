@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   describeCredentialSource,
+  ensureAdcQuotaProject,
   lookupErrorCode,
   lookupFailureLines,
   parseAllowUserArgs,
@@ -93,12 +94,41 @@ describe('allow-user helpers', () => {
 
   it('describeCredentialSource falls back to a configured CLOUDSDK_CONFIG directory', () => {
     expect(describeCredentialSource({ CLOUDSDK_CONFIG: '.gcloud' })).toBe(
-      'applicationDefault() with CLOUDSDK_CONFIG=.gcloud',
+      'applicationDefault() with CLOUDSDK_CONFIG=.gcloud, GOOGLE_CLOUD_QUOTA_PROJECT=unset',
+    );
+  });
+
+  it('describeCredentialSource reports the quota project used by user ADC credentials', () => {
+    expect(
+      describeCredentialSource({
+        CLOUDSDK_CONFIG: '.gcloud',
+        GOOGLE_CLOUD_QUOTA_PROJECT: 'goitei-dev',
+      }),
+    ).toBe(
+      'applicationDefault() with CLOUDSDK_CONFIG=.gcloud, GOOGLE_CLOUD_QUOTA_PROJECT=goitei-dev',
     );
   });
 
   it('describeCredentialSource reports when no gcloud directory is configured', () => {
-    expect(describeCredentialSource({})).toBe('applicationDefault() with CLOUDSDK_CONFIG unset');
+    expect(describeCredentialSource({})).toBe(
+      'applicationDefault() with CLOUDSDK_CONFIG unset, GOOGLE_CLOUD_QUOTA_PROJECT=unset',
+    );
+  });
+
+  it('ensureAdcQuotaProject defaults user ADC billing to the target project', () => {
+    const env: { GOOGLE_CLOUD_QUOTA_PROJECT?: string } = {};
+
+    ensureAdcQuotaProject(env, 'goitei-dev');
+
+    expect(env.GOOGLE_CLOUD_QUOTA_PROJECT).toBe('goitei-dev');
+  });
+
+  it('ensureAdcQuotaProject preserves an operator supplied quota project', () => {
+    const env = { GOOGLE_CLOUD_QUOTA_PROJECT: 'billing-project' };
+
+    ensureAdcQuotaProject(env, 'goitei-dev');
+
+    expect(env.GOOGLE_CLOUD_QUOTA_PROJECT).toBe('billing-project');
   });
 
   it('lookupFailureLines keeps auth/user-not-found failures on the signed-in-once guidance', () => {
@@ -122,7 +152,7 @@ describe('allow-user helpers', () => {
       ),
     ).toEqual([
       'failed to look up reader@example.com in goitei (app/invalid-credential).',
-      'credential configuration: applicationDefault() with CLOUDSDK_CONFIG=.gcloud',
+      'credential configuration: applicationDefault() with CLOUDSDK_CONFIG=.gcloud, GOOGLE_CLOUD_QUOTA_PROJECT=unset',
     ]);
   });
 
