@@ -331,6 +331,7 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
       // `EntriesProvider`'s own read of it, so failing both is unobservable
       // except through the one path #23 is about.
       if (seed().accountExport === 'denied') return Promise.reject(deniedError());
+      if (seed().accountExport === 'unreachable') return Promise.reject(unreachableError());
       countRead('entries');
       const all = [...store.values()].sort(newestFirst);
       const start = cursor ? all.findIndex((entry) => entry.id === cursor) + 1 : 0;

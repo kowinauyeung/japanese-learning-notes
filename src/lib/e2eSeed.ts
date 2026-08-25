@@ -43,11 +43,13 @@ export interface E2ESeed {
    */
   entrySave?: 'denied' | 'unreachable';
   /**
-   * Fails the entry page this account's export walk reads first, with
-   * Firestore's `permission-denied`. See the comment on `entryRepositoryFor`'s
+   * Fails the entry page this account's export walk reads first. `denied`
+   * carries `permission-denied`; `unreachable` carries `unavailable`, so
+   * `Account.tsx` renders export wording rather than `settingsSave`'s save
+   * wording for the same code. See the comment on `entryRepositoryFor`'s
    * `list` for why this does not also break the notebook itself.
    */
-  accountExport?: 'denied';
+  accountExport?: 'denied' | 'unreachable';
   /** Put a waiting build on screen, so `UpdatePrompt` can be laid out against. */
   updateWaiting?: boolean;
   /**

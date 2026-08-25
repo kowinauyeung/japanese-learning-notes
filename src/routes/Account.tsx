@@ -86,7 +86,7 @@ export function Component() {
               cause,
               t('account.exportError'),
               t('load.accessDenied'),
-              t('load.unreachableSave'),
+              t('load.unreachableExport'),
             ),
       );
     } finally {
