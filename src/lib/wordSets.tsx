@@ -78,7 +78,6 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
    */
   const refresh = useCallback(async () => {
     const mine = (walk.current += 1);
-    setError(null);
     try {
       const all: WordSet[] = [];
       let cursor: string | null = null;
@@ -87,7 +86,11 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
         all.push(...page.items);
         cursor = page.cursor;
       } while (cursor);
-      if (walk.current === mine) setSets(all);
+      // Cleared here, not eagerly — see the same comment on `EntriesProvider`.
+      if (walk.current === mine) {
+        setSets(all);
+        setError(null);
+      }
     } catch (cause) {
       console.error(cause);
       if (walk.current === mine) setError(captureLoadFailure(cause, 'load.wordSets'));

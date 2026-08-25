@@ -63,10 +63,13 @@ export function ProgressProvider({ uid, children }: { uid: string; children: Rea
   /** Re-read progress. Deliberately does not raise `loading` — see the effect below. */
   const refresh = useCallback(async () => {
     const mine = (walk.current += 1);
-    setError(null);
     try {
       const rows = await repository.listAll();
-      if (walk.current === mine) setProgress(rows);
+      // Cleared here, not eagerly — see the same comment on `EntriesProvider`.
+      if (walk.current === mine) {
+        setProgress(rows);
+        setError(null);
+      }
     } catch (cause) {
       console.error(cause);
       if (walk.current === mine) setError(captureLoadFailure(cause, 'load.progress'));

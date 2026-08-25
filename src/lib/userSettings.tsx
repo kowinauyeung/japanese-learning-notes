@@ -63,7 +63,6 @@ function UserSettingsState({
    */
   const refresh = useCallback(async () => {
     const mine = (walk.current += 1);
-    setError(null);
     try {
       const stored = await userRepository.get(uid);
       let next = stored;
@@ -77,7 +76,11 @@ function UserSettingsState({
         await userRepository.save(uid, draft);
         next = (await userRepository.get(uid)) ?? defaults;
       }
-      if (walk.current === mine) setStoredProfile(next);
+      // Cleared here, not eagerly — see the same comment on `EntriesProvider`.
+      if (walk.current === mine) {
+        setStoredProfile(next);
+        setError(null);
+      }
     } catch (cause) {
       console.error(cause);
       if (walk.current === mine) setError(captureLoadFailure(cause, 'load.settings'));
@@ -91,8 +94,18 @@ function UserSettingsState({
     void refresh();
   }, [refresh]);
 
-  /** Denial is not cleared by reconnecting — see `EntriesProvider`'s same guard. */
-  useRetryOnReconnect(error !== null && isUnreachable(error.cause), refresh);
+  /**
+   * Gated on `load.settings` specifically, not just "an error exists": `error`
+   * also carries a failed `save` (`load.settingsSave`/`load.unreachableSave`),
+   * and `refresh()` would silently clear that banner on the next reconnect —
+   * telling the reader nothing is wrong when their edit was never committed.
+   * Denial is excluded for the same reason as `EntriesProvider`'s guard: not
+   * cleared by reconnecting.
+   */
+  useRetryOnReconnect(
+    error !== null && error.fallback === 'load.settings' && isUnreachable(error.cause),
+    refresh,
+  );
 
   useEffect(() => {
     const profile = previewDraft ? { ...storedProfile, ...previewDraft } : storedProfile;

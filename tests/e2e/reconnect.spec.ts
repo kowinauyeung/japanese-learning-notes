@@ -50,6 +50,38 @@ test('re-reads the notebook once the connection returns, with no reload', async 
   await expect(page.getByText('3 語')).toBeVisible();
 });
 
+/**
+ * `refresh()` used to clear the old error the instant a retry started, before
+ * the new read had landed — harmless against the in-memory adapter's usual
+ * same-tick resolution, but against a retry that actually takes time it left
+ * a gap rendered as `entries === []`: 「条件に合う単語がありません」, which
+ * reads as "your notebook is empty" rather than "still loading". `waitForTimeout`
+ * is a deliberate mid-flight snapshot against a delay this seed controls, not
+ * a wait on real timing the suite does not own.
+ */
+test('keeps the old message on screen while a slow retry is in flight, not an empty result', async ({
+  page,
+  context,
+}) => {
+  await seed(page, { entries: WORDS, failWhileOffline: ['entries'], entriesReadDelayMs: 600 });
+  await page.goto('/vocabulary');
+  await expect(page).toHaveURL(/\/login$/);
+
+  await context.setOffline(true);
+  await page.getByRole('button', { name: 'Google でログイン' }).click();
+  await expect(page).toHaveURL(/\/vocabulary$/);
+  await expect(page.getByText(UNREACHABLE)).toBeVisible();
+
+  await context.setOffline(false);
+  await page.waitForTimeout(300);
+
+  await expect(page.getByText(UNREACHABLE)).toBeVisible();
+  await expect(page.getByText('条件に合う単語がありません')).toBeHidden();
+
+  await expect(page.getByText(UNREACHABLE)).toBeHidden();
+  await expect(page.getByText('3 語')).toBeVisible();
+});
+
 test('re-reads 単語集 once the connection returns, with no reload', async ({ page, context }) => {
   await seed(page, { entries: WORDS, wordSets: WORD_SETS, failWhileOffline: ['wordSets'] });
   await page.goto('/wordsets');
@@ -128,4 +160,43 @@ test('re-reads the profile once the connection returns, with no reload', async (
 
   await expect(page.getByText(UNREACHABLE)).toBeHidden();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+});
+
+/**
+ * `error` carries a failed `save` as well as a failed read — `save()` and
+ * `refresh()` are the same state — so a reconnect after a save failure must
+ * not trigger a retry: `refresh()` would re-read the profile the transaction
+ * never actually wrote, clear the save error, and tell the reader nothing is
+ * wrong with an edit that was never committed.
+ */
+test('a reconnect after a failed save does not silently clear the save error', async ({
+  page,
+  context,
+}) => {
+  await seed(page, {
+    signedIn: true,
+    profile: { nickname: 'Before', language: 'ja', translationLanguage: 'en' },
+    settingsSave: 'unreachable',
+  });
+  await page.goto('/settings');
+
+  await page.getByLabel('ニックネーム').fill('After');
+  await page.getByRole('button', { name: '設定を保存' }).click();
+
+  const SAVE_UNREACHABLE =
+    '接続できないため保存できませんでした。しばらくしてからもう一度お試しください。';
+  await expect(page.getByText(SAVE_UNREACHABLE)).toBeVisible();
+
+  // A connection blip, not a real reconnect from a failed read — this is
+  // exactly the transition `useRetryOnReconnect` fires a retry on, and the
+  // claim is that it must not fire one here. Waiting for `OfflineNotice` in
+  // between the two matters: back-to-back `setOffline` calls with nothing
+  // awaited between them can both dispatch before React ever renders the
+  // intermediate offline state, and a transition `useOnline` never rendered
+  // is a transition `useRetryOnReconnect` never sees either.
+  await context.setOffline(true);
+  await expect(page.getByText('オフライン')).toBeVisible();
+  await context.setOffline(false);
+
+  await expect(page.getByText(SAVE_UNREACHABLE)).toBeVisible();
 });

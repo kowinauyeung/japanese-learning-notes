@@ -329,9 +329,16 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
   const persist = () => {
     save(`entries.${uid}`, [...store.values()]);
   };
+  /** Backs `entriesReadDelayMs` — only the read that is actually going to succeed. */
+  const waitForRead = () => {
+    const milliseconds = seed().entriesReadDelayMs ?? 0;
+    return milliseconds > 0
+      ? new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
+      : Promise.resolve();
+  };
 
   return {
-    list({ limit, cursor }: PageQuery): Promise<Page<Entry>> {
+    async list({ limit, cursor }: PageQuery): Promise<Page<Entry>> {
       // Gates the export walk, not the initial notebook load: `Account.tsx`
       // drains this same method directly, and nothing on that page renders
       // `EntriesProvider`'s own read of it, so failing both is unobservable
@@ -339,15 +346,16 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
       if (seed().accountExport === 'denied') return Promise.reject(deniedError());
       if (seed().accountExport === 'unreachable') return Promise.reject(unreachableError());
       if (offlineRead('entries')) return Promise.reject(unreachableError());
+      await waitForRead();
       countRead('entries');
       const all = [...store.values()].sort(newestFirst);
       const start = cursor ? all.findIndex((entry) => entry.id === cursor) + 1 : 0;
       const items = all.slice(start, start + limit);
       const more = start + items.length < all.length;
-      return Promise.resolve({
+      return {
         items,
         cursor: more ? (items[items.length - 1]?.id ?? null) : null,
-      });
+      };
     },
 
     get(id: string): Promise<Entry | null> {

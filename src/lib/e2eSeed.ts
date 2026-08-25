@@ -62,6 +62,16 @@ export interface E2ESeed {
    */
   failWhileOffline?: Array<'entries' | 'progress' | 'wordSets' | 'settings'>;
   /**
+   * Hold the notebook's successful read open this long before resolving it.
+   *
+   * Only for the read that actually succeeds — `failWhileOffline`'s rejection
+   * is unaffected — so this exists to make a reconnect retry (#84) slow enough
+   * to observe: `EntriesProvider.refresh` used to clear its error before the
+   * new read landed, and against the in-memory adapter's usual same-tick
+   * resolution that gap is too fast for a spec to see.
+   */
+  entriesReadDelayMs?: number;
+  /**
    * Fails the progress read `ProgressProvider` makes on sign-in. `denied`
    * carries `permission-denied`, `unreachable` carries `unavailable` — the two
    * codes `PracticeSetup`'s 苦手のみ row must tell apart rather than collapsing

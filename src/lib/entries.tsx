@@ -94,7 +94,6 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
    */
   const refresh = useCallback(async () => {
     const mine = (walk.current += 1);
-    setError(null);
     try {
       const all: Entry[] = [];
       let cursor: string | null = null;
@@ -103,7 +102,14 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
         all.push(...page.items);
         cursor = page.cursor;
       } while (cursor);
-      if (walk.current === mine) setEntries(all);
+      // Cleared here, not eagerly at the top: a retry that takes real time
+      // would otherwise blank an existing error before the new read lands,
+      // rendering "0 words" in its place — worse than the error it replaced,
+      // since it looks like an answer rather than a wait.
+      if (walk.current === mine) {
+        setEntries(all);
+        setError(null);
+      }
     } catch (cause) {
       console.error(cause);
       if (walk.current === mine) setError(captureLoadFailure(cause, 'load.entries'));

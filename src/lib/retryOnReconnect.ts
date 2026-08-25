@@ -15,8 +15,11 @@ import { useOnline } from '@/lib/useOnline';
  *
  * Every provider this backs deliberately does not raise `loading` for a
  * `refresh`: the data in hand is one read stale, not invalid, and the screen
- * showing it — or the error in its place — is the right thing to keep
- * showing while the retry is in flight.
+ * showing it is the right thing to keep showing while the retry is in
+ * flight. The same is true of the error this retry is trying to clear — each
+ * provider's `refresh` holds it until the retry actually lands, rather than
+ * clearing it the moment the retry starts, so a slow retry never renders the
+ * gap in between as "loaded, and empty".
  */
 export function useRetryOnReconnect(failed: boolean, retry: () => void | Promise<void>): void {
   const online = useOnline();
