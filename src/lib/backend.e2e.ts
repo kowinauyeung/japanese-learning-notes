@@ -50,6 +50,18 @@ function countRead(store: 'entries' | 'progress' | 'wordSets'): void {
   reads[store] += 1;
 }
 
+/** Shaped like the SDK's own rejection, keyed by the `code` `isAccessDenied`/`isUnreachable` read. */
+function deniedError(): Error {
+  return Object.assign(new Error('Missing or insufficient permissions.'), {
+    code: 'permission-denied',
+  });
+}
+function unreachableError(): Error {
+  return Object.assign(new Error('Failed to get document because the client is offline.'), {
+    code: 'unavailable',
+  });
+}
+
 const E2E_USER: AuthUser = {
   uid: 'e2e-user',
   email: 'e2e@example.test',
@@ -314,6 +326,11 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
 
   return {
     list({ limit, cursor }: PageQuery): Promise<Page<Entry>> {
+      // Gates the export walk, not the initial notebook load: `Account.tsx`
+      // drains this same method directly, and nothing on that page renders
+      // `EntriesProvider`'s own read of it, so failing both is unobservable
+      // except through the one path #23 is about.
+      if (seed().accountExport === 'denied') return Promise.reject(deniedError());
       countRead('entries');
       const all = [...store.values()].sort(newestFirst);
       const start = cursor ? all.findIndex((entry) => entry.id === cursor) + 1 : 0;
@@ -330,6 +347,8 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
     },
 
     create(draft: EntryDraft): Promise<string> {
+      if (seed().entrySave === 'denied') return Promise.reject(deniedError());
+      if (seed().entrySave === 'unreachable') return Promise.reject(unreachableError());
       const id = nextId();
       const now = stamp();
       store.set(id, {
@@ -347,6 +366,8 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
     },
 
     update(id: string, draft: EntryDraft): Promise<void> {
+      if (seed().entrySave === 'denied') return Promise.reject(deniedError());
+      if (seed().entrySave === 'unreachable') return Promise.reject(unreachableError());
       const existing = store.get(id);
       // Matching Firestore's updateDoc, which rejects a write to a missing
       // document rather than creating one.

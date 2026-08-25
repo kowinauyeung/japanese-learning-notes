@@ -35,6 +35,19 @@ export interface E2ESeed {
   settingsSave?: 'fail' | 'defer' | 'unreachable';
   /** Fail the profile re-read that follows a committed save, and only that one. */
   settingsRefresh?: 'fail';
+  /**
+   * Fails an entry `create`/`update`. `denied` carries Firestore's own
+   * `permission-denied`, so `EntryFormModal` renders the account-denial
+   * sentence rather than the generic 保存できませんでした. `unreachable`
+   * mirrors `settingsSave`'s branch of the same name.
+   */
+  entrySave?: 'denied' | 'unreachable';
+  /**
+   * Fails the entry page this account's export walk reads first, with
+   * Firestore's `permission-denied`. See the comment on `entryRepositoryFor`'s
+   * `list` for why this does not also break the notebook itself.
+   */
+  accountExport?: 'denied';
   /** Put a waiting build on screen, so `UpdatePrompt` can be laid out against. */
   updateWaiting?: boolean;
   /**

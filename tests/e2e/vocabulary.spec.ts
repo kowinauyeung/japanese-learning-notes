@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { INPUT_LIMITS } from '../../src/domain/limits';
-import { DETAILED_WORD, seed, seedSignedIn, watchForBlanking } from './fixtures';
+import { DETAILED_WORD, seed, seedSignedIn, watchForBlanking, WORDS } from './fixtures';
 
 /**
  * The notebook's whole reason to exist: find a word, read it, add one, change
@@ -418,6 +418,33 @@ test.describe('editing and deleting', () => {
 
     await expect(page.getByText('起こる前のしるし。')).toBeVisible();
     await expect(page.getByText('何かが起こる前ぶれ。')).toBeHidden();
+  });
+
+  /**
+   * #23: a denied save used to render the same 保存できませんでした as a typo
+   * or a dropped connection — retrying a lockout never clears it, which is the
+   * ambiguity `loadErrorMessage` exists to remove. End-to-end because the layer
+   * under test is the wiring — `entryRepositoryFor` (`src/lib/backend.e2e.ts`)
+   * rejecting with Firestore's own `permission-denied`, and the modal choosing
+   * what to render. The branch itself is `tests/unit/loadError.test.ts`.
+   */
+  test('shows the access-denied message on a denied save, not the generic one', async ({
+    page,
+  }) => {
+    await seed(page, { signedIn: true, entries: WORDS, entrySave: 'denied' });
+    await page.goto('/vocabulary/w-choukou');
+    await page.getByRole('button', { name: '編集' }).click();
+
+    const dialog = editDialog(page);
+    await dialog.getByLabel('意味・説明').fill('起こる前のしるし。');
+    await dialog.getByRole('button', { name: '保存する' }).click();
+
+    await expect(
+      dialog.getByText(
+        'アクセスが許可されていません。一度サインアウトして、サインインし直してください。',
+      ),
+    ).toBeVisible();
+    await expect(dialog.getByText('保存できませんでした。', { exact: true })).toBeHidden();
   });
 
   /**

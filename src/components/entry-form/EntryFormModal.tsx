@@ -9,6 +9,7 @@ import { dateKey } from '@/lib/dates';
 import { draftError, emptyDraft, parseTags, toDraft } from '@/lib/draft';
 import { useEntries } from '@/lib/entries';
 import { jsonToDraft } from '@/lib/jsonImport';
+import { loadErrorMessage } from '@/lib/loadError';
 import { EntryForm } from './EntryForm';
 import { Area, Field, Text } from './fields';
 import { emptyJsonImport, JsonImport } from './JsonImport';
@@ -174,7 +175,18 @@ export function EntryFormModal({
       onClose();
     } catch (cause) {
       console.error(cause);
-      setErrors([t('form.saveError')]);
+      // `permission-denied` here is a lockout, not a mistake in the draft —
+      // #22 gave reads that distinction and #23 gives it to saves. Retrying
+      // never clears it, which "保存できませんでした" reads as an invitation
+      // to do.
+      setErrors([
+        loadErrorMessage(
+          cause,
+          t('form.saveError'),
+          t('load.accessDenied'),
+          t('load.unreachableSave'),
+        ),
+      ]);
     } finally {
       setSaving(false);
     }
