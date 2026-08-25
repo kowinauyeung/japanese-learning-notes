@@ -1595,6 +1595,16 @@
   resolved "https://registry.yarnpkg.com/@firebase/webchannel-wrapper/-/webchannel-wrapper-1.0.7.tgz#45a201ad457323f8fda59c17cc4be11c8908cd4a"
   integrity sha512-phBFwieDLvkZGYN9CE9ZFNEIoBVksprzsnCzQejCmCHtgwCXReeuRpoEGN9C4EbhONztv8NRV1tau6Rb9pONwQ==
 
+"@fontsource/inter@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/inter/-/inter-5.3.0.tgz#866278dc2357659f8be1755c8b67f29d3697b440"
+  integrity sha512-RofMylZmjlJEfELXeNHFWBRcSs75rGU/6bV2S2jfnvv/3rPXPGe0LgUJTklcHZ9lM4OZmAVFhcJPnACfb91A3g==
+
+"@fontsource/noto-sans-tc@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@fontsource/noto-sans-tc/-/noto-sans-tc-5.3.0.tgz#dba53fac5883455bca23300e361c18fe1821501a"
+  integrity sha512-+0MguVH2vIxkVJLiaMHVKHk+yJZmZvMU9d8z88JdUx8C2CgMLOtm7WNloi3HYlvCNy7TpuvjIUvh5iiGp6INxQ==
+
 "@fontsource/zen-maru-gothic@^5.3.0":
   version "5.3.0"
   resolved "https://registry.yarnpkg.com/@fontsource/zen-maru-gothic/-/zen-maru-gothic-5.3.0.tgz#f6fce5ddf2b327cafabbdea0ed436a9b4df26c6c"

@@ -1,6 +1,65 @@
 @import 'tailwindcss';
 
 @font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/inter/files/inter-latin-400-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('@fontsource/inter/files/inter-latin-500-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('@fontsource/inter/files/inter-latin-600-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('@fontsource/inter/files/inter-latin-700-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Noto Sans TC';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/noto-sans-tc/files/noto-sans-tc-chinese-traditional-400-normal.woff2')
+    format('woff2');
+}
+
+@font-face {
+  font-family: 'Noto Sans TC';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('@fontsource/noto-sans-tc/files/noto-sans-tc-chinese-traditional-500-normal.woff2')
+    format('woff2');
+}
+
+@font-face {
+  font-family: 'Noto Sans TC';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('@fontsource/noto-sans-tc/files/noto-sans-tc-chinese-traditional-700-normal.woff2')
+    format('woff2');
+}
+
+@font-face {
   font-family: 'Zen Maru Gothic';
   font-style: normal;
   font-display: swap;
@@ -100,10 +159,10 @@
   --color-danger: var(--c-danger);
   --color-danger-soft: var(--c-danger-soft);
 
-  /* System UI for chrome, self-hosted Zen Maru Gothic for headwords, platform CJK faces for prose. */
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* Self-hosted faces keep the app readable offline without widening the CSP past 'self'. */
+  --font-sans: 'Inter', system-ui, sans-serif;
   --font-display: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif;
-  --font-cjk: 'Hiragino Sans', 'Yu Gothic', Meiryo, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --font-cjk: 'Noto Sans TC', 'Hiragino Sans', sans-serif;
 
   /* The handoff collapses the nav to a hamburger below 700px, which sits
      between Tailwind's sm and md defaults, so it gets its own breakpoint. */
@@ -259,8 +318,7 @@ body {
 }
 
 :lang(zh-Hant) .prose-cjk {
-  font-family:
-    'PingFang TC', 'Microsoft JhengHei', 'Hiragino Sans', 'Yu Gothic', Meiryo, sans-serif;
+  font-family: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
 }
 
 ruby {

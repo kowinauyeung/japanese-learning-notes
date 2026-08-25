@@ -38,6 +38,8 @@
     "rules:prod": "firebase deploy --only firestore:rules --project prod"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/noto-sans-tc": "^5.3.0",
     "@fontsource/zen-maru-gothic": "^5.3.0",
     "firebase": "^12.18.0",
     "react": "^19.2.0",
