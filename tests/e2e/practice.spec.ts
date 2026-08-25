@@ -240,7 +240,7 @@ test.describe('the practice setup screen', () => {
    * message before the setup screen renders at all, which is why this needs
    * `progressLoad` seeded independently of any `entries` failure.
    *
-   * End-to-end because the layer under test is the wiring: `progressLoadMessage`
+   * End-to-end because the layer under test is the wiring: `progressErrorMessage`
    * reaching `PracticeSetup` through `weakState` rather than being discarded at
    * that seam. The branch itself is `tests/unit/loadError.test.ts`.
    */
