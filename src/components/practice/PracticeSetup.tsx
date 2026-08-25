@@ -55,7 +55,7 @@ const selectClass = 'rounded-panel border-line bg-bg text-ink min-h-9 border px-
 export function PracticeSetup({
   mode,
   filters,
-  allTags,
+  recentTags,
   allSets,
   now,
   matchCount,
@@ -67,7 +67,14 @@ export function PracticeSetup({
 }: {
   mode: PracticeMode;
   filters: PracticeFilters;
-  allTags: string[];
+  /**
+   * A recency-biased sample, not every tag in the notebook — see
+   * `src/lib/tags.ts`. Unlike Browse there is no search box here to fall back
+   * on, but that is deliberate: scoping a practice session to a specific tag
+   * is a narrower ask than finding one word, and a word set already exists
+   * for "the exact group I want to practice" — see `wordSets.title` above.
+   */
+  recentTags: string[];
   /** Hidden entirely when empty, per the design — see the note above. */
   allSets: SetChip[];
   /** What 「直近1ヶ月」 is measured from. An argument so it can be frozen. */
@@ -86,7 +93,7 @@ export function PracticeSetup({
     onChange({ ...filters, [key]: value });
 
   const active = activeQuickRange(filters, now);
-  const selectedHiddenTags = filters.tags.filter((tag) => !allTags.includes(tag));
+  const selectedHiddenTags = filters.tags.filter((tag) => !recentTags.includes(tag));
 
   // A quick range clears any end the learner had set: 「直近1ヶ月」 means
   // "since that day", and leaving an old end in place would silently produce a
@@ -133,7 +140,7 @@ export function PracticeSetup({
         </div>
       )}
 
-      {(selectedHiddenTags.length > 0 || allTags.length > 0) && (
+      {(selectedHiddenTags.length > 0 || recentTags.length > 0) && (
         <div className="space-y-1.5">
           <p className="text-[11px] text-muted">{t('practice.tags')}</p>
           {selectedHiddenTags.length > 0 && (
@@ -153,7 +160,7 @@ export function PracticeSetup({
             </div>
           )}
           <div className="flex flex-wrap gap-1.5">
-            {allTags.map((tag) => (
+            {recentTags.map((tag) => (
               <button
                 key={tag}
                 type="button"

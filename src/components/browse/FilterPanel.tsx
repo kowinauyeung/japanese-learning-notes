@@ -17,11 +17,20 @@ const selectClass = 'rounded-panel border-line bg-bg text-ink min-h-9 border px-
 
 export function FilterPanel({
   filters,
-  allTags,
+  tags,
+  tagsLabel,
   onChange,
 }: {
   filters: Filters;
-  allTags: string[];
+  /**
+   * Shared with `PickerToolbar`, whose caller (`WordSetDetail`) passes every
+   * tag in the notebook rather than a recency-limited sample — so this
+   * component makes no claim either way about what the list contains. Say so
+   * with `tagsLabel`, not by naming this prop after one caller's choice.
+   */
+  tags: string[];
+  /** Shown above the chips when given; omitted, they render unlabeled. */
+  tagsLabel?: string;
   onChange: (next: Filters) => void;
 }) {
   const { t } = useI18n();
@@ -36,18 +45,21 @@ export function FilterPanel({
 
   return (
     <div className="space-y-4 rounded-card bg-card p-4 shadow-panel">
-      {allTags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {allTags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => set('tags', toggle(filters.tags, tag))}
-              className={chipClass(filters.tags.includes(tag))}
-            >
-              #{tag}
-            </button>
-          ))}
+      {tags.length > 0 && (
+        <div className="space-y-1.5">
+          {tagsLabel && <span className="text-[11px] text-muted">{tagsLabel}</span>}
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => set('tags', toggle(filters.tags, tag))}
+                className={chipClass(filters.tags.includes(tag))}
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
