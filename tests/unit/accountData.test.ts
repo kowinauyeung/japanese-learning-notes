@@ -235,12 +235,33 @@ describe('deleteEverything', () => {
     (p.userProfiles.markDeleted as ReturnType<typeof vi.fn>).mockImplementation(
       record('tombstone'),
     );
+    // The reads, not only the deletes. A tombstone written after the first
+    // `list()` still precedes the first `remove()`, so an assertion watching
+    // deletes alone would hold while the window stayed open across the whole
+    // walk — and the walk is where it matters: a row the other tab adds behind
+    // a page this run has already read is never seen and never deleted.
+    const observe = <T>(repo: { list: (q: PageQuery) => Promise<Page<T>> }, label: string) => {
+      const original = repo.list.bind(repo);
+      repo.list = (q) => {
+        order.push(label);
+        return original(q);
+      };
+    };
+    observe(p.wordSets, 'list word sets');
+    observe(p.entries, 'list entries');
     (p.wordSets.remove as ReturnType<typeof vi.fn>).mockImplementation(record('delete word set'));
     (p.entries.remove as ReturnType<typeof vi.fn>).mockImplementation(record('delete entry'));
 
     await deleteEverything(p);
 
-    expect(order).toEqual(['reauth', 'tombstone', 'delete word set', 'delete entry']);
+    expect(order).toEqual([
+      'reauth',
+      'tombstone',
+      'list word sets',
+      'delete word set',
+      'list entries',
+      'delete entry',
+    ]);
     expect((p.userProfiles.markDeleted as ReturnType<typeof vi.fn>).mock.calls).toEqual([['u1']]);
   });
 

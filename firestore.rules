@@ -468,24 +468,40 @@ service cloud.firestore {
     // can still clear one; see README's operator runbook for the one case that
     // needs it.
     //
+    // **Bounded to one field, because of who writes it.** This is the one path
+    // reachable by the session the rest of this feature exists to refuse: the
+    // deletion writes it, and the token that wrote it stays valid for up to an
+    // hour afterwards. Left open it would be the only unbounded write surface
+    // in this file — a megabyte per deleted account, rewritable — which is the
+    // threat the "shape and size" section above is entirely about. It would
+    // also make the retention paragraph in `src/content/privacy.ts` untrue: that
+    // says this record holds the account identifier and the time it was written,
+    // and nothing else.
+    //
+    // **`isAllowed()`, on the same footing as every other path.** This said
+    // `signedIn()` for one revision, on the reasoning that an account whose
+    // claim had been taken away should still be able to record that it was
+    // gone. That does not survive being written down: draining and deleting are
+    // all behind `mine()`, so such an account cannot delete anything anyway,
+    // and the tombstone would record a deletion that never happened. What the
+    // looser gate actually bought was one document per uid reachable by any
+    // verified Google account, on a project with no hard spending cap.
+    //
     // **`create` and `update` both, because deletion is retried.** The flow is
     // not atomic and says so: a failure part way asks the user to press delete
     // again, and a second run writes this document a second time. Refusing that
     // would leave the account permanently unable to finish deleting itself.
-    // Letting the write through twice costs nothing, because no rule reads what
-    // is inside — `notDeleted` asks only whether the document is there.
     //
-    // **`signedIn()` and not `isAllowed()`**: an account whose claim has been
-    // taken away can no longer write anything anyway, and the one thing it
-    // should never be blocked from is recording that it is gone.
-    //
-    // `deletedAt` is for whoever reads this in the console a year from now. It
-    // is not consulted by any rule, so a client that writes something else
-    // there changes nothing that matters.
+    // **No read, deliberately.** Nothing in the application reads this
+    // document — `markDeleted` only writes it, and `notDeleted()` reads it from
+    // inside rules, which is not itself subject to rules. A grant nothing uses
+    // is what the publishing block below was closed for, and this is closed the
+    // same way.
     match /deletedAccounts/{uid} {
-      allow read: if isOwner(uid);
-      allow create, update: if isOwner(uid) && signedIn();
-      allow delete: if false;
+      allow create, update: if isOwner(uid) && isAllowed()
+                            && request.resource.data.keys().hasOnly(['deletedAt'])
+                            && request.resource.data.deletedAt is timestamp;
+      allow read, delete: if false;
     }
 
     // ---- publishing: closed until it exists ----

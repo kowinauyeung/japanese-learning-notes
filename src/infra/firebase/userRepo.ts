@@ -51,8 +51,13 @@ export function createUserRepository(db: Firestore): UserRepository {
      * thing it outlives is not a marker.
      *
      * `setDoc` rather than a create, and the rules allow the overwrite for the
-     * same reason — a retried deletion writes this twice, and nothing reads
-     * what is inside it.
+     * same reason: deletion is retried and is not atomic, so a second run
+     * writes this a second time.
+     *
+     * One field, and the rules require exactly that one. This document is
+     * written by a session that outlives the account, so anything it accepted
+     * would be a write surface reachable by the token this whole feature exists
+     * to refuse.
      */
     async markDeleted(uid): Promise<void> {
       await setDoc(doc(db, 'deletedAccounts', uid), { deletedAt: serverTimestamp() });

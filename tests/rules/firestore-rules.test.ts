@@ -260,6 +260,49 @@ describe("a deleted account's token", () => {
   });
 
   /**
+   * The same gate as everything else, and it was `signedIn()` here for one
+   * revision on reasoning that does not survive being written down: an account
+   * whose claim is gone cannot drain or delete anything either, because all of
+   * that is behind `mine()`. A tombstone it could still write would record a
+   * deletion that cannot happen — while leaving one document per uid reachable
+   * by any verified Google account on a project with no spending cap.
+   */
+  it('refuses a tombstone from an account that is not on the allowlist', async () => {
+    await assertFails(
+      asStranger(MALLORY).doc(`deletedAccounts/${MALLORY}`).set({ deletedAt: new Date() }),
+    );
+  });
+
+  /**
+   * This path is written by an account that is being deleted, which means it is
+   * written by a token that outlives the deletion — so it is reachable by
+   * exactly the session the rest of this feature exists to refuse. Without a
+   * shape it would be the one unbounded write surface left in the file, and it
+   * would make the retention paragraph in `src/content/privacy.ts` untrue: that
+   * says the record holds the account identifier and the time, and nothing else.
+   */
+  it('refuses a tombstone carrying anything beyond the time it was written', async () => {
+    const db = as(ALICE);
+    await assertFails(
+      db.doc(`deletedAccounts/${ALICE}`).set({ deletedAt: new Date(), note: long(5000) }),
+    );
+    await assertFails(db.doc(`deletedAccounts/${ALICE}`).set({ deletedAt: 'yesterday' }));
+    await assertFails(db.doc(`deletedAccounts/${ALICE}`).set({}));
+  });
+
+  /**
+   * Nothing in the application reads this document — `markDeleted` only writes
+   * it, and `notDeleted()` reads it from inside rules, which is not itself
+   * subject to rules. A grant nothing uses is the shape the publishing rules
+   * were closed for, so this one is closed the same way rather than tested open.
+   */
+  it('keeps the tombstone unreadable from any client, its own account included', async () => {
+    await tombstone(ALICE);
+    await assertFails(as(ALICE).doc(`deletedAccounts/${ALICE}`).get());
+    await assertFails(as(BOB).doc(`deletedAccounts/${ALICE}`).get());
+  });
+
+  /**
    * A retry has to be able to run. `deleteEverything` is not atomic and says so
    * — a failure part way asks the user to press delete again — so a second run
    * writes the tombstone a second time and must not be refused for it.
