@@ -1,4 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  DEFAULT_GEMINI_MODEL,
+  GEMINI_MODEL_NAME_CONFIG_KEY,
+  GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS,
+  GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS,
+} from '@/infra/ai/modelConfig';
 
 const generateContent = vi.hoisted(() => vi.fn());
 const getGenerativeModel = vi.hoisted(() => vi.fn(() => ({ generateContent })));
@@ -9,8 +15,11 @@ const remoteConfig = vi.hoisted<{
   defaultConfig: {},
   settings: { fetchTimeoutMillis: 60_000, minimumFetchIntervalMillis: 43_200_000 },
 }));
+const cachedModel = vi.hoisted(() => ({ name: 'gemini-4.0-flash' }));
+const remoteModel = vi.hoisted(() => ({ name: 'gemini-4.0-flash' }));
+const ensureInitialized = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 const fetchAndActivate = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
-const getValue = vi.hoisted(() => vi.fn(() => ({ asString: () => 'gemini-4.0-flash' })));
+const getValue = vi.hoisted(() => vi.fn(() => ({ asString: () => remoteModel.name })));
 
 vi.mock('firebase/ai', () => ({
   AIError: class AIError extends Error {
@@ -21,6 +30,7 @@ vi.mock('firebase/ai', () => ({
   getGenerativeModel,
 }));
 vi.mock('firebase/remote-config', () => ({
+  ensureInitialized,
   fetchAndActivate,
   getRemoteConfig: vi.fn(() => remoteConfig),
   getValue,
@@ -46,8 +56,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   remoteConfig.defaultConfig = {};
   remoteConfig.settings = { fetchTimeoutMillis: 60_000, minimumFetchIntervalMillis: 43_200_000 };
+  cachedModel.name = 'gemini-4.0-flash';
+  remoteModel.name = 'gemini-4.0-flash';
+  ensureInitialized.mockResolvedValue(undefined);
   fetchAndActivate.mockResolvedValue(true);
-  getValue.mockReturnValue({ asString: () => 'gemini-4.0-flash' });
+  getValue.mockReturnValue({ asString: () => remoteModel.name });
   vi.stubEnv('VITE_FIREBASE_API_KEY', 'test');
   vi.stubEnv('VITE_FIREBASE_AUTH_DOMAIN', 'test');
   vi.stubEnv('VITE_FIREBASE_PROJECT_ID', 'test');
@@ -64,25 +77,52 @@ afterEach(() => {
 });
 
 describe('geminiEntryDrafting', () => {
+  it('checks availability without fetching Remote Config during render', async () => {
+    const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
+
+    expect(geminiEntryDrafting.available()).toBe(true);
+
+    // Availability is read during render, so it must not schedule network work
+    // while the reader is typing or opening the import form.
+    expect(ensureInitialized).not.toHaveBeenCalled();
+    expect(fetchAndActivate).not.toHaveBeenCalled();
+  });
+
   it('uses the Remote Config model name before drafting', async () => {
     generateContent.mockResolvedValueOnce({ response: { text: () => 'draft' } });
     const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
 
     await expect(geminiEntryDrafting.draft('prompt')).resolves.toBe('draft');
 
+    // Without the cached value first, a reader can restart offline and regress
+    // from a previously fixed model name to the retired bundled fallback.
+    expect(ensureInitialized).toHaveBeenCalledWith(remoteConfig);
+    // Without the fresh fetch, a console update cannot repair the next draft
+    // after the operator publishes a replacement model name.
     expect(fetchAndActivate).toHaveBeenCalledWith(remoteConfig);
-    expect(remoteConfig.defaultConfig).toEqual({ model_name: 'gemini-3.6-flash' });
-    expect(remoteConfig.settings).toEqual({
-      fetchTimeoutMillis: 3_000,
-      minimumFetchIntervalMillis: 5 * 60 * 1000,
+    // If this default drifts, first-load readers can hit a retired bundled
+    // model before the console value has ever reached their browser.
+    expect(remoteConfig.defaultConfig).toEqual({
+      [GEMINI_MODEL_NAME_CONFIG_KEY]: DEFAULT_GEMINI_MODEL,
     });
+    // If these settings drift, an emergency model-name change can take too long
+    // to reach readers, or a slow Remote Config call can block drafting.
+    expect(remoteConfig.settings).toEqual({
+      fetchTimeoutMillis: GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS,
+      minimumFetchIntervalMillis: GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS,
+    });
+    // This is the user-visible recovery path: after the console parameter is
+    // published, the next draft must ask the replacement model, not the retired
+    // bundled default.
     expect(getGenerativeModel).toHaveBeenLastCalledWith(expect.anything(), {
-      model: 'gemini-4.0-flash',
+      model: remoteModel.name,
     });
   });
 
-  it('falls back to the bundled model when Remote Config cannot fetch', async () => {
+  it('uses the cached Remote Config model when a fresh fetch fails', async () => {
+    cachedModel.name = 'gemini-4.1-flash';
     fetchAndActivate.mockRejectedValueOnce(new Error('remote config unavailable'));
+    getValue.mockReturnValue({ asString: () => cachedModel.name });
     generateContent.mockResolvedValueOnce({ response: { text: () => 'draft' } });
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -91,9 +131,9 @@ describe('geminiEntryDrafting', () => {
 
       await expect(geminiEntryDrafting.draft('prompt')).resolves.toBe('draft');
 
-      expect(getValue).not.toHaveBeenCalled();
+      expect(getValue).toHaveBeenCalledWith(remoteConfig, GEMINI_MODEL_NAME_CONFIG_KEY);
       expect(getGenerativeModel).toHaveBeenLastCalledWith(expect.anything(), {
-        model: 'gemini-3.6-flash',
+        model: cachedModel.name,
       });
     } finally {
       error.mockRestore();

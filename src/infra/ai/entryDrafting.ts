@@ -6,12 +6,19 @@ import {
   getGenerativeModel,
 } from 'firebase/ai';
 import {
+  ensureInitialized,
   fetchAndActivate,
   getRemoteConfig,
   getValue,
   type RemoteConfig,
 } from 'firebase/remote-config';
 import { EntryDraftingError, type EntryDraftingPort } from '@/domain/ports';
+import {
+  DEFAULT_GEMINI_MODEL,
+  GEMINI_MODEL_NAME_CONFIG_KEY,
+  GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS,
+  GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS,
+} from '@/infra/ai/modelConfig';
 import { app } from '@/infra/firebase/client';
 
 /**
@@ -51,11 +58,6 @@ import { app } from '@/infra/firebase/client';
  * value instead of a deploy, while this constant keeps first load and failed
  * fetches working. Do not remove the log below to tidy up.
  */
-const DEFAULT_MODEL = 'gemini-3.6-flash';
-const MODEL_NAME_CONFIG_KEY = 'model_name';
-const REMOTE_CONFIG_FETCH_INTERVAL_MS = 5 * 60 * 1000;
-const REMOTE_CONFIG_FETCH_TIMEOUT_MS = 3_000;
-
 /**
  * `getAI` runs once, lazily, rather than at module scope.
  *
@@ -64,7 +66,7 @@ const REMOTE_CONFIG_FETCH_TIMEOUT_MS = 3_000;
  * before the reader had asked for anything. Failing at import time turns a
  * feature that should be quietly absent into an app that does not start.
  */
-let configuredModelName = DEFAULT_MODEL;
+let configuredModelName = DEFAULT_GEMINI_MODEL;
 let model: { instance: GenerativeModel; name: string } | undefined;
 let unavailable = false;
 let remoteConfig: RemoteConfig | undefined;
@@ -85,9 +87,9 @@ function ensureRemoteConfig(): RemoteConfig | undefined {
   if (remoteConfig) return remoteConfig;
   try {
     remoteConfig = getRemoteConfig(app);
-    remoteConfig.defaultConfig = { [MODEL_NAME_CONFIG_KEY]: DEFAULT_MODEL };
-    remoteConfig.settings.minimumFetchIntervalMillis = REMOTE_CONFIG_FETCH_INTERVAL_MS;
-    remoteConfig.settings.fetchTimeoutMillis = REMOTE_CONFIG_FETCH_TIMEOUT_MS;
+    remoteConfig.defaultConfig = { [GEMINI_MODEL_NAME_CONFIG_KEY]: DEFAULT_GEMINI_MODEL };
+    remoteConfig.settings.minimumFetchIntervalMillis = GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS;
+    remoteConfig.settings.fetchTimeoutMillis = GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS;
   } catch (error) {
     // Remote Config is an upgrade path, not a prerequisite. The bundled model
     // default is still valid input to Firebase AI Logic when configuration
@@ -98,27 +100,41 @@ function ensureRemoteConfig(): RemoteConfig | undefined {
   return remoteConfig;
 }
 
+function applyRemoteConfigModelName(config: RemoteConfig): void {
+  setConfiguredModelName(getValue(config, GEMINI_MODEL_NAME_CONFIG_KEY).asString());
+}
+
 function refreshConfiguredModelName(): Promise<void> {
   const config = ensureRemoteConfig();
   if (!config) return Promise.resolve();
-  remoteConfigFetch ??= fetchAndActivate(config)
-    .then(() => {
-      setConfiguredModelName(getValue(config, MODEL_NAME_CONFIG_KEY).asString());
-    })
-    .catch((error) => {
+  remoteConfigFetch ??= (async () => {
+    try {
+      await ensureInitialized(config);
+    } catch (error) {
+      // A failed storage read should not block the bundled fallback below, and
+      // `getValue` still has the default config to answer from.
+      console.error('Gemini model Remote Config cache initialisation failed', error);
+    }
+
+    applyRemoteConfigModelName(config);
+
+    try {
+      await fetchAndActivate(config);
+      applyRemoteConfigModelName(config);
+    } catch (error) {
       // The fallback is the point: Remote Config must not turn drafting into a
       // feature that needs two network calls to succeed before the first model
-      // request can be made.
+      // request can be made. Cached activated values have already been applied
+      // above, so a failed fetch does not force the bundled default back in.
       console.error('Gemini model Remote Config fetch failed', error);
-    })
-    .finally(() => {
-      remoteConfigFetch = undefined;
-    });
+    }
+  })().finally(() => {
+    remoteConfigFetch = undefined;
+  });
   return remoteConfigFetch;
 }
 
-function ensureModel(refreshModelName = true): GenerativeModel | undefined {
-  if (refreshModelName) void refreshConfiguredModelName();
+function ensureModel(): GenerativeModel | undefined {
   if (unavailable) return undefined;
   if (model?.name === configuredModelName) return model.instance;
   try {
@@ -211,7 +227,7 @@ export const geminiEntryDrafting: EntryDraftingPort = {
 
   async draft(prompt) {
     await refreshConfiguredModelName();
-    const generative = ensureModel(false);
+    const generative = ensureModel();
     if (!generative) throw new EntryDraftingError('unavailable');
 
     let text: string;
