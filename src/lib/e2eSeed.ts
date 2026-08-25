@@ -50,6 +50,15 @@ export interface E2ESeed {
    * `list` for why this does not also break the notebook itself.
    */
   accountExport?: 'denied' | 'unreachable';
+  /**
+   * Fails the progress read `ProgressProvider` makes on sign-in. `denied`
+   * carries `permission-denied`, `unreachable` carries `unavailable` — the two
+   * codes `PracticeSetup`'s 苦手のみ row must tell apart rather than collapsing
+   * to one hard-coded sentence (#24). Independent of `entries`, so the setup
+   * screen still renders: a full lockout fails that read too and `Practice.tsx`
+   * returns its own message first, which is why this needs its own seed.
+   */
+  progressLoad?: 'denied' | 'unreachable';
   /** Put a waiting build on screen, so `UpdatePrompt` can be laid out against. */
   updateWaiting?: boolean;
   /**

@@ -81,8 +81,16 @@ export function PracticeSetup({
   now: Date;
   matchCount: number;
   weakCount: number;
-  /** 苦手のみ can only be honoured once the progress map has arrived. */
-  weakState: 'ready' | 'loading' | 'error';
+  /**
+   * 苦手のみ can only be honoured once the progress map has arrived.
+   *
+   * The failed case carries the message rather than a bare `'error'` tag:
+   * `progressError` is a `LoadFailure` that can be a denial, unreachable, or
+   * generic, and only the caller has translated it — collapsing it to a tag
+   * here would put the same hard-coded sentence on screen regardless of which
+   * one it was (#24).
+   */
+  weakState: 'ready' | 'loading' | { error: string };
   onChange: (next: PracticeFilters) => void;
   onStart: () => void;
   onCancel: () => void;
@@ -279,7 +287,7 @@ export function PracticeSetup({
               ? t('vocabulary.resultCount', { count: weakCount })
               : weakState === 'loading'
                 ? t('vocabulary.loading')
-                : t('practice.weakLoadingError')}
+                : weakState.error}
           </span>
         </span>
         <input

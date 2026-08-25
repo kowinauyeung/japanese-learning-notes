@@ -450,6 +450,8 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
 
   return {
     listAll(): Promise<EntryProgress[]> {
+      if (seed().progressLoad === 'denied') return Promise.reject(deniedError());
+      if (seed().progressLoad === 'unreachable') return Promise.reject(unreachableError());
       countRead('progress');
       return Promise.resolve([...progress.values()]);
     },
