@@ -1,6 +1,33 @@
 @import 'tailwindcss';
 
 @font-face {
+  font-family: 'Noto Sans TC';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/noto-sans-tc/files/noto-sans-tc-chinese-traditional-400-normal.woff2')
+    format('woff2');
+}
+
+@font-face {
+  font-family: 'Noto Sans TC';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('@fontsource/noto-sans-tc/files/noto-sans-tc-chinese-traditional-500-normal.woff2')
+    format('woff2');
+}
+
+@font-face {
+  font-family: 'Noto Sans TC';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('@fontsource/noto-sans-tc/files/noto-sans-tc-chinese-traditional-700-normal.woff2')
+    format('woff2');
+}
+
+@font-face {
   font-family: 'Inter';
   font-style: normal;
   font-display: swap;
@@ -30,33 +57,6 @@
   font-display: swap;
   font-weight: 700;
   src: url('@fontsource/inter/files/inter-latin-700-normal.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Noto Sans TC';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 400;
-  src: url('@fontsource/noto-sans-tc/files/noto-sans-tc-chinese-traditional-400-normal.woff2')
-    format('woff2');
-}
-
-@font-face {
-  font-family: 'Noto Sans TC';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 500;
-  src: url('@fontsource/noto-sans-tc/files/noto-sans-tc-chinese-traditional-500-normal.woff2')
-    format('woff2');
-}
-
-@font-face {
-  font-family: 'Noto Sans TC';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 700;
-  src: url('@fontsource/noto-sans-tc/files/noto-sans-tc-chinese-traditional-700-normal.woff2')
-    format('woff2');
 }
 
 @font-face {
@@ -212,7 +212,7 @@
   /* Self-hosted faces keep the app readable offline without widening the CSP past 'self'. */
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-display: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif;
-  --font-cjk: 'Zen Maru Gothic', 'Hiragino Sans', sans-serif;
+  --font-cjk: 'Noto Sans TC', 'Hiragino Sans', sans-serif;
 
   /* The handoff collapses the nav to a hamburger below 700px, which sits
      between Tailwind's sm and md defaults, so it gets its own breakpoint. */
