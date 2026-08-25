@@ -82,6 +82,47 @@ test('keeps the old message on screen while a slow retry is in flight, not an em
   await expect(page.getByText('3 語')).toBeVisible();
 });
 
+/**
+ * `failed` stays true for as long as a retry is in flight — that is the
+ * point of not clearing the error eagerly, proven above — so a connection
+ * that drops and returns again before a slow retry lands is exactly the
+ * shape that would start a second one over the first without a guard.
+ * `__GOITEI_E2E_READS__` counts only reads that actually reached
+ * `countRead`, which the failing branch never does, so it is the read the
+ * production adapter would be charged for, not a DOM effect of one.
+ */
+test('does not start a second read while a slow retry is already in flight', async ({
+  page,
+  context,
+}) => {
+  await seed(page, { entries: WORDS, failWhileOffline: ['entries'], entriesReadDelayMs: 800 });
+  await page.goto('/vocabulary');
+  await expect(page).toHaveURL(/\/login$/);
+
+  await context.setOffline(true);
+  await page.getByRole('button', { name: 'Google でログイン' }).click();
+  await expect(page).toHaveURL(/\/vocabulary$/);
+  await expect(page.getByText(UNREACHABLE)).toBeVisible();
+
+  // Starts the slow retry, then flaps the connection again while it is still
+  // in flight. Waiting for `OfflineNotice` in between matters: back-to-back
+  // `setOffline` calls with nothing awaited between them can both dispatch
+  // before React ever renders the intermediate offline state.
+  await context.setOffline(false);
+  await context.setOffline(true);
+  await expect(page.getByText('オフライン')).toBeVisible();
+  await context.setOffline(false);
+
+  await expect(page.getByText(UNREACHABLE)).toBeHidden();
+  await expect(page.getByText('3 語')).toBeVisible();
+  const reads = await page.evaluate(
+    () =>
+      (window as unknown as { __GOITEI_E2E_READS__?: { entries: number } }).__GOITEI_E2E_READS__
+        ?.entries,
+  );
+  expect(reads).toBe(1);
+});
+
 test('re-reads 単語集 once the connection returns, with no reload', async ({ page, context }) => {
   await seed(page, { entries: WORDS, wordSets: WORD_SETS, failWhileOffline: ['wordSets'] });
   await page.goto('/wordsets');
@@ -159,6 +200,8 @@ test('re-reads the profile once the connection returns, with no reload', async (
   await context.setOffline(false);
 
   await expect(page.getByText(UNREACHABLE)).toBeHidden();
+  // The retry actually replaced `defaults` with the real profile — a read
+  // that failed silently forever would leave this on the fallback theme.
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 

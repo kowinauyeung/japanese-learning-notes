@@ -20,13 +20,32 @@ import { useOnline } from '@/lib/useOnline';
  * provider's `refresh` holds it until the retry actually lands, rather than
  * clearing it the moment the retry starts, so a slow retry never renders the
  * gap in between as "loaded, and empty".
+ *
+ * **One retry in flight at a time.** `failed` stays true for as long as that
+ * retry takes, precisely because of the paragraph above — so a connection
+ * that flaps offline and online again before it lands would otherwise start
+ * a second one over the first. The provider's `walk` counter keeps that safe
+ * (the stale result is discarded), but it is still a second read charged for
+ * no reason, which is exactly the overlap #84 asked this hook to avoid.
  */
 export function useRetryOnReconnect(failed: boolean, retry: () => void | Promise<void>): void {
   const online = useOnline();
   const wasOffline = useRef(!online);
+  const retrying = useRef(false);
 
   useEffect(() => {
-    if (online && wasOffline.current && failed) void retry();
+    if (online && wasOffline.current && failed && !retrying.current) {
+      retrying.current = true;
+      // `retry` is always a provider's `refresh`, which already catches its
+      // own failure into the caller's error state and never rejects — the
+      // `catch` here guards the hook's public contract, typed to accept a
+      // rejecting `Promise<void>`, not a rejection this codebase produces.
+      void Promise.resolve(retry())
+        .catch(() => undefined)
+        .finally(() => {
+          retrying.current = false;
+        });
+    }
     wasOffline.current = !online;
   }, [online, failed, retry]);
 }
