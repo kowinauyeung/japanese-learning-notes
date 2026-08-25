@@ -667,7 +667,32 @@ describe('bounds on what an owner may write', () => {
    */
   it('documents the accepted nested string size limit in client-only rules', async () => {
     const db = as(ALICE);
+    const shortNestedString = ascii(10);
     const largeNestedString = ascii(900_000);
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/short-topic`).set(
+        wordSet(ALICE, {
+          topics: [shortNestedString],
+        }),
+      ),
+    );
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/short-copy-source`).set(
+        wordSet(ALICE, {
+          copiedFrom: {
+            ownerNickname: shortNestedString,
+          },
+        }),
+      ),
+    );
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/practiceSessions/short-missed-id`).set(
+        session(ALICE, {
+          missed: [shortNestedString],
+        }),
+      ),
+    );
 
     await assertSucceeds(
       db.doc(`users/${ALICE}/wordSets/large-topic`).set(
