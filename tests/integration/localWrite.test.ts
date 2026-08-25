@@ -119,7 +119,7 @@ afterAll(async () => {
 });
 
 describe('local Firestore writes while offline', () => {
-  it('shows the real SDK defect: the write promise stays pending after the local cache accepts it', async () => {
+  it('Firestore SDK setDoc keeps the write promise pending after the local cache accepts it', async () => {
     const owner = uid();
     const ref = doc(db, 'users', owner, 'entries', 'raw-sdk-write');
     const locallyPending = pendingSnapshot(ref);
@@ -134,15 +134,19 @@ describe('local Firestore writes while offline', () => {
     await expect(write).resolves.toBeUndefined();
   });
 
-  it('resolves entry create, update and delete from real pending-write metadata', async () => {
+  it('EntryRepository create, update and remove resolve from real pending-write metadata', async () => {
     const owner = uid();
     const repo = createEntryRepository(db, owner);
     const existing = await repo.create(entryDraft());
 
     await disableNetwork(db);
-    await expect(within(repo.create(entryDraft()), fallbackBudget)).resolves.toMatchObject({
-      status: 'value',
-    });
+    const created = await within(repo.create(entryDraft()), fallbackBudget);
+    expect(created.status).toBe('value');
+    if (created.status !== 'value') throw new Error('entry create did not resolve locally');
+    expect(created.value).toMatch(/\S/);
+    const stored = await repo.get(created.value);
+    expect(stored).toMatchObject(entryDraft());
+
     await expect(
       within(
         repo.update(existing, { ...entryDraft(), definition: 'ゆっくり進む列車。' }),
@@ -155,16 +159,20 @@ describe('local Firestore writes while offline', () => {
     });
   });
 
-  it('resolves word set writes and practice batch writes from real pending-write metadata', async () => {
+  it('WordSetRepository writes and ProgressRepository batch writes resolve from real pending-write metadata', async () => {
     const owner = uid();
     const wordSets = createWordSetRepository(db, owner);
     const progress = createProgressRepository(db, owner);
     const existingSet = await wordSets.create(wordSetDraft());
 
     await disableNetwork(db);
-    await expect(within(wordSets.create(wordSetDraft()), fallbackBudget)).resolves.toMatchObject({
-      status: 'value',
-    });
+    const created = await within(wordSets.create(wordSetDraft()), fallbackBudget);
+    expect(created.status).toBe('value');
+    if (created.status !== 'value') throw new Error('word set create did not resolve locally');
+    expect(created.value).toMatch(/\S/);
+    const stored = await wordSets.get(created.value);
+    expect(stored).toMatchObject(wordSetDraft());
+
     await expect(
       within(wordSets.update(existingSet, { ...wordSetDraft(), name: '通勤の語' }), fallbackBudget),
     ).resolves.toEqual({ status: 'value', value: undefined });

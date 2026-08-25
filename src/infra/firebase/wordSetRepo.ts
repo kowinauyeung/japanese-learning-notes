@@ -20,7 +20,7 @@ import type { Page, PageQuery, WordSetRepository } from '@/domain/ports';
 import type { WordSet, WordSetDraft } from '@/domain/wordSet';
 import { sanitizeWordSet } from '@/lib/sanitize';
 import { decodeCursor, encodeCursor } from './cursor';
-import { waitForLocalWrite } from './localWrite';
+import { LocalWriteTracker } from './localWrite';
 import { withIsoTimestamps } from './mappers';
 
 /**
@@ -35,6 +35,7 @@ import { withIsoTimestamps } from './mappers';
 export function createWordSetRepository(db: Firestore, uid: string): WordSetRepository {
   const setsPath = () => collection(db, 'users', uid, 'wordSets');
   const setRef = (id: string) => doc(db, 'users', uid, 'wordSets', id);
+  const writes = new LocalWriteTracker();
 
   const toWordSet = (id: string, data: Record<string, unknown>): WordSet =>
     sanitizeWordSet(id, withIsoTimestamps(data));
@@ -74,7 +75,7 @@ export function createWordSetRepository(db: Firestore, uid: string): WordSetRepo
     /** Duplicates are deduped on the way in as well as on the way out. */
     async create(draft: WordSetDraft): Promise<string> {
       const ref = doc(setsPath());
-      await waitForLocalWrite(ref, () =>
+      await writes.write(ref, () =>
         setDoc(ref, {
           ...draft,
           entryIds: [...new Set(draft.entryIds)],
@@ -91,7 +92,7 @@ export function createWordSetRepository(db: Firestore, uid: string): WordSetRepo
 
     async update(id: string, draft: WordSetDraft): Promise<void> {
       const ref = setRef(id);
-      await waitForLocalWrite(ref, () =>
+      await writes.write(ref, () =>
         updateDoc(ref, {
           ...draft,
           entryIds: [...new Set(draft.entryIds)],
@@ -107,11 +108,11 @@ export function createWordSetRepository(db: Firestore, uid: string): WordSetRepo
      */
     async remove(id: string): Promise<void> {
       const ref = setRef(id);
-      await waitForLocalWrite(ref, () => deleteDoc(ref));
+      await writes.write(ref, () => deleteDoc(ref));
     },
 
     async settlePendingWrites(): Promise<void> {
-      await waitForPendingWrites(db);
+      await writes.settle(() => waitForPendingWrites(db));
     },
   };
 }

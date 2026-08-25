@@ -518,11 +518,20 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
   const persist = () => {
     save(`wordSets.${uid}`, [...store.values()]);
   };
+  const pendingWrites = new Set<Promise<unknown>>();
   const waitForWrite = () => {
     const milliseconds = seed().wordSetWriteDelayMs ?? 0;
     return milliseconds > 0
       ? new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
       : Promise.resolve();
+  };
+  const track = <T>(write: Promise<T>): Promise<T> => {
+    pendingWrites.add(write);
+    void write.then(
+      () => pendingWrites.delete(write),
+      () => pendingWrites.delete(write),
+    );
+    return write;
   };
 
   return {
@@ -544,46 +553,58 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
       return Promise.resolve(store.get(id) ?? null);
     },
 
-    async create(draft: WordSetDraft): Promise<string> {
-      await waitForWrite();
-      const id = `e2e-set-${++setSequence}`;
-      const now = stamp();
-      store.set(id, {
-        ...draft,
-        entryIds: [...new Set(draft.entryIds)],
-        id,
-        ownerUid: uid,
-        publishedId: null,
-        publishedVersion: 0,
-        copiedFrom: null,
-        createdAt: now,
-        updatedAt: now,
-      });
-      persist();
-      return id;
+    create(draft: WordSetDraft): Promise<string> {
+      return track(
+        (async () => {
+          await waitForWrite();
+          const id = `e2e-set-${++setSequence}`;
+          const now = stamp();
+          store.set(id, {
+            ...draft,
+            entryIds: [...new Set(draft.entryIds)],
+            id,
+            ownerUid: uid,
+            publishedId: null,
+            publishedVersion: 0,
+            copiedFrom: null,
+            createdAt: now,
+            updatedAt: now,
+          });
+          persist();
+          return id;
+        })(),
+      );
     },
 
-    async update(id: string, draft: WordSetDraft): Promise<void> {
-      const existing = store.get(id);
-      if (!existing) return Promise.reject(new Error(`no word set ${id}`));
-      await waitForWrite();
-      store.set(id, {
-        ...existing,
-        ...draft,
-        entryIds: [...new Set(draft.entryIds)],
-        updatedAt: stamp(),
-      });
-      persist();
+    update(id: string, draft: WordSetDraft): Promise<void> {
+      return track(
+        (async () => {
+          const existing = store.get(id);
+          if (!existing) return Promise.reject(new Error(`no word set ${id}`));
+          await waitForWrite();
+          store.set(id, {
+            ...existing,
+            ...draft,
+            entryIds: [...new Set(draft.entryIds)],
+            updatedAt: stamp(),
+          });
+          persist();
+        })(),
+      );
     },
 
-    async remove(id: string): Promise<void> {
-      await waitForWrite();
-      store.delete(id);
-      persist();
+    remove(id: string): Promise<void> {
+      return track(
+        (async () => {
+          await waitForWrite();
+          store.delete(id);
+          persist();
+        })(),
+      );
     },
 
-    settlePendingWrites(): Promise<void> {
-      return Promise.resolve();
+    async settlePendingWrites(): Promise<void> {
+      await Promise.all([...pendingWrites]);
     },
   };
 };

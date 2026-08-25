@@ -20,7 +20,7 @@ import type { Entry, EntryDraft } from '@/domain/entry';
 import type { EntryRepository, Page, PageQuery } from '@/domain/ports';
 import { sanitizeEntry } from '@/lib/sanitize';
 import { decodeCursor, encodeCursor } from './cursor';
-import { waitForLocalWrite } from './localWrite';
+import { LocalWriteTracker } from './localWrite';
 import { withIsoTimestamps } from './mappers';
 
 /**
@@ -41,6 +41,7 @@ import { withIsoTimestamps } from './mappers';
  */
 export function createEntryRepository(db: Firestore, uid: string): EntryRepository {
   const entriesPath = () => collection(db, 'users', uid, 'entries');
+  const writes = new LocalWriteTracker();
 
   const toEntry = (id: string, data: Record<string, unknown>): Entry =>
     sanitizeEntry(id, withIsoTimestamps(data));
@@ -98,7 +99,7 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
      */
     async create(draft: EntryDraft): Promise<string> {
       const ref = doc(entriesPath());
-      await waitForLocalWrite(ref, () =>
+      await writes.write(ref, () =>
         setDoc(ref, {
           ...draft,
           ownerUid: uid,
@@ -118,7 +119,7 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
      */
     async update(id: string, draft: EntryDraft): Promise<void> {
       const ref = doc(db, 'users', uid, 'entries', id);
-      await waitForLocalWrite(ref, () =>
+      await writes.write(ref, () =>
         updateDoc(ref, {
           ...draft,
           updatedAt: serverTimestamp(),
@@ -128,11 +129,11 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
 
     async remove(id: string): Promise<void> {
       const ref = doc(db, 'users', uid, 'entries', id);
-      await waitForLocalWrite(ref, () => deleteDoc(ref));
+      await writes.write(ref, () => deleteDoc(ref));
     },
 
     async settlePendingWrites(): Promise<void> {
-      await waitForPendingWrites(db);
+      await writes.settle(() => waitForPendingWrites(db));
     },
   };
 }
