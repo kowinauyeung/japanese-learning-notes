@@ -18,15 +18,6 @@
     format('woff2');
 }
 
-@font-face {
-  font-family: 'Zen Maru Gothic';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 900;
-  src: url('@fontsource/zen-maru-gothic/files/zen-maru-gothic-japanese-900-normal.woff2')
-    format('woff2');
-}
-
 /*
  * Palette derived from the 語彙庭 logo, which carries two distinct greens:
  * the book and wordmark sit at hue ~169 (#014D3A, a blue-leaning forest green)
@@ -265,6 +256,11 @@ body {
   font-family: var(--font-cjk);
   line-height: 1.85;
   overflow-wrap: anywhere;
+}
+
+:lang(zh-Hant) .prose-cjk {
+  font-family:
+    'PingFang TC', 'Microsoft JhengHei', 'Hiragino Sans', 'Yu Gothic', Meiryo, sans-serif;
 }
 
 ruby {
