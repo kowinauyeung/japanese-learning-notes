@@ -660,29 +660,20 @@ describe('bounds on what an owner may write', () => {
   });
 
   /**
-   * Client-only rules cannot bound bytes inside list elements or nested map
-   * values. This is accepted deliberately for the one-owner release; the
-   * mitigation before adding another account is a backend/schema decision or
-   * quota alerting, not a rule that Firestore can express.
+   * Client-only rules can check a known list index, but not every element in a
+   * list. This list-element limit is accepted deliberately for the one-owner
+   * release; the mitigation before adding another account is a backend/schema
+   * decision or quota alerting, not an all-elements rule Firestore can express.
    */
-  it('documents the accepted nested string size limit in client-only rules', async () => {
+  it('documents the accepted list element string size limit in client-only rules', async () => {
     const db = as(ALICE);
     const shortNestedString = ascii(10);
-    const largeNestedString = ascii(900_000);
+    const largeNestedString = ascii(500_000);
 
     await assertSucceeds(
       db.doc(`users/${ALICE}/wordSets/short-topic`).set(
         wordSet(ALICE, {
           topics: [shortNestedString],
-        }),
-      ),
-    );
-    await assertSucceeds(
-      db.doc(`users/${ALICE}/wordSets/short-copy-source`).set(
-        wordSet(ALICE, {
-          copiedFrom: {
-            ownerNickname: shortNestedString,
-          },
         }),
       ),
     );
@@ -702,18 +693,32 @@ describe('bounds on what an owner may write', () => {
       ),
     );
     await assertSucceeds(
-      db.doc(`users/${ALICE}/wordSets/large-copy-source`).set(
+      db.doc(`users/${ALICE}/practiceSessions/large-missed-id`).set(
+        session(ALICE, {
+          missed: [largeNestedString],
+        }),
+      ),
+    );
+  });
+
+  it('bounds the copied word set owner nickname that rules can name directly', async () => {
+    const db = as(ALICE);
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/short-copy-source`).set(
         wordSet(ALICE, {
           copiedFrom: {
-            ownerNickname: largeNestedString,
+            ownerNickname: ascii(10),
           },
         }),
       ),
     );
-    await assertSucceeds(
-      db.doc(`users/${ALICE}/practiceSessions/large-missed-id`).set(
-        session(ALICE, {
-          missed: [largeNestedString],
+    await assertFails(
+      db.doc(`users/${ALICE}/wordSets/large-copy-source`).set(
+        wordSet(ALICE, {
+          copiedFrom: {
+            ownerNickname: ascii(51),
+          },
         }),
       ),
     );
