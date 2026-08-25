@@ -361,6 +361,10 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
       persist();
       return Promise.resolve();
     },
+
+    settlePendingWrites(): Promise<void> {
+      return Promise.resolve();
+    },
   };
 };
 
@@ -459,6 +463,10 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
       sessions.length = 0;
       save(`progress.${uid}`, []);
       save(`sessions.${uid}`, []);
+      return Promise.resolve();
+    },
+
+    settlePendingWrites(): Promise<void> {
       return Promise.resolve();
     },
   };
@@ -572,6 +580,10 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
       await waitForWrite();
       store.delete(id);
       persist();
+    },
+
+    settlePendingWrites(): Promise<void> {
+      return Promise.resolve();
     },
   };
 };

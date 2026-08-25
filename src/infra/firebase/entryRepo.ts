@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -11,14 +10,17 @@ import {
   query,
   serverTimestamp,
   startAfter,
+  setDoc,
   Timestamp,
   updateDoc,
+  waitForPendingWrites,
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import type { Entry, EntryDraft } from '@/domain/entry';
 import type { EntryRepository, Page, PageQuery } from '@/domain/ports';
 import { sanitizeEntry } from '@/lib/sanitize';
 import { decodeCursor, encodeCursor } from './cursor';
+import { waitForLocalWrite } from './localWrite';
 import { withIsoTimestamps } from './mappers';
 
 /**
@@ -95,15 +97,18 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
      * stamps come from the server, never the device clock.
      */
     async create(draft: EntryDraft): Promise<string> {
-      const ref = await addDoc(entriesPath(), {
-        ...draft,
-        ownerUid: uid,
-        publishedId: null,
-        publishedVersion: 0,
-        copiedFrom: null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      const ref = doc(entriesPath());
+      await waitForLocalWrite(ref, () =>
+        setDoc(ref, {
+          ...draft,
+          ownerUid: uid,
+          publishedId: null,
+          publishedVersion: 0,
+          copiedFrom: null,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }),
+      );
       return ref.id;
     },
 
@@ -112,14 +117,22 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
      * the creation time and published state survive every later edit.
      */
     async update(id: string, draft: EntryDraft): Promise<void> {
-      await updateDoc(doc(db, 'users', uid, 'entries', id), {
-        ...draft,
-        updatedAt: serverTimestamp(),
-      });
+      const ref = doc(db, 'users', uid, 'entries', id);
+      await waitForLocalWrite(ref, () =>
+        updateDoc(ref, {
+          ...draft,
+          updatedAt: serverTimestamp(),
+        }),
+      );
     },
 
     async remove(id: string): Promise<void> {
-      await deleteDoc(doc(db, 'users', uid, 'entries', id));
+      const ref = doc(db, 'users', uid, 'entries', id);
+      await waitForLocalWrite(ref, () => deleteDoc(ref));
+    },
+
+    async settlePendingWrites(): Promise<void> {
+      await waitForPendingWrites(db);
     },
   };
 }
