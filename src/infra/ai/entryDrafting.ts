@@ -5,6 +5,12 @@ import {
   getAI,
   getGenerativeModel,
 } from 'firebase/ai';
+import {
+  fetchAndActivate,
+  getRemoteConfig,
+  getValue,
+  type RemoteConfig,
+} from 'firebase/remote-config';
 import { EntryDraftingError, type EntryDraftingPort } from '@/domain/ports';
 import { app } from '@/infra/firebase/client';
 
@@ -27,13 +33,13 @@ import { app } from '@/infra/firebase/client';
  */
 
 /**
- * Flash rather than Pro, named here rather than configured.
+ * Flash rather than Pro, kept here as the Remote Config default.
  *
  * The no-cost tier covers the Flash family only, and filling a fixed schema for
- * one word is not a task a larger model answers better. Moving off this string
+ * one word is not a task a larger model answers better. Moving off this family
  * is a decision about money, so it should be a diff somebody reads.
  *
- * **A stable model has a retirement date, so this line expires.** It was
+ * **A stable model has a retirement date, so this default expires.** It was
  * `gemini-2.5-flash` until 2026-08-23, when the proxy began answering
  * `404 … no longer available to new users`. Nothing in the build catches that:
  * the name is a string until it reaches the model, so a retired one compiles,
@@ -41,10 +47,14 @@ import { app } from '@/infra/firebase/client';
  *
  * What makes it recoverable is that the 404 names its own replacement — the
  * reply above said to use `gemini-3.6-flash` — and `classify` below logs the
- * cause before discarding it. So the fix instruction arrives in the console of
- * whoever hits it. Do not remove that log to tidy up.
+ * cause before discarding it. Remote Config makes that replacement a console
+ * value instead of a deploy, while this constant keeps first load and failed
+ * fetches working. Do not remove the log below to tidy up.
  */
-const MODEL = 'gemini-3.6-flash';
+const DEFAULT_MODEL = 'gemini-3.6-flash';
+const MODEL_NAME_CONFIG_KEY = 'model_name';
+const REMOTE_CONFIG_FETCH_INTERVAL_MS = 5 * 60 * 1000;
+const REMOTE_CONFIG_FETCH_TIMEOUT_MS = 3_000;
 
 /**
  * `getAI` runs once, lazily, rather than at module scope.
@@ -54,21 +64,77 @@ const MODEL = 'gemini-3.6-flash';
  * before the reader had asked for anything. Failing at import time turns a
  * feature that should be quietly absent into an app that does not start.
  */
-let model: GenerativeModel | undefined;
+let configuredModelName = DEFAULT_MODEL;
+let model: { instance: GenerativeModel; name: string } | undefined;
 let unavailable = false;
+let remoteConfig: RemoteConfig | undefined;
+let remoteConfigUnavailable = false;
+let remoteConfigFetch: Promise<void> | undefined;
 
-function ensureModel(): GenerativeModel | undefined {
-  if (unavailable) return undefined;
-  if (model) return model;
+function setConfiguredModelName(next: string): void {
+  const trimmed = next.trim();
+  if (!trimmed || trimmed === configuredModelName) return;
+  configuredModelName = trimmed;
+  model = undefined;
+  // A newer remote model name is the recovery path for a retired default.
+  unavailable = false;
+}
+
+function ensureRemoteConfig(): RemoteConfig | undefined {
+  if (remoteConfigUnavailable) return undefined;
+  if (remoteConfig) return remoteConfig;
   try {
-    model = getGenerativeModel(getAI(app, { backend: new GoogleAIBackend() }), { model: MODEL });
+    remoteConfig = getRemoteConfig(app);
+    remoteConfig.defaultConfig = { [MODEL_NAME_CONFIG_KEY]: DEFAULT_MODEL };
+    remoteConfig.settings.minimumFetchIntervalMillis = REMOTE_CONFIG_FETCH_INTERVAL_MS;
+    remoteConfig.settings.fetchTimeoutMillis = REMOTE_CONFIG_FETCH_TIMEOUT_MS;
+  } catch (error) {
+    // Remote Config is an upgrade path, not a prerequisite. The bundled model
+    // default is still valid input to Firebase AI Logic when configuration
+    // cannot initialise in this browser or project.
+    console.error('Gemini model Remote Config initialisation failed', error);
+    remoteConfigUnavailable = true;
+  }
+  return remoteConfig;
+}
+
+function refreshConfiguredModelName(): Promise<void> {
+  const config = ensureRemoteConfig();
+  if (!config) return Promise.resolve();
+  remoteConfigFetch ??= fetchAndActivate(config)
+    .then(() => {
+      setConfiguredModelName(getValue(config, MODEL_NAME_CONFIG_KEY).asString());
+    })
+    .catch((error) => {
+      // The fallback is the point: Remote Config must not turn drafting into a
+      // feature that needs two network calls to succeed before the first model
+      // request can be made.
+      console.error('Gemini model Remote Config fetch failed', error);
+    })
+    .finally(() => {
+      remoteConfigFetch = undefined;
+    });
+  return remoteConfigFetch;
+}
+
+function ensureModel(refreshModelName = true): GenerativeModel | undefined {
+  if (refreshModelName) void refreshConfiguredModelName();
+  if (unavailable) return undefined;
+  if (model?.name === configuredModelName) return model.instance;
+  try {
+    model = {
+      instance: getGenerativeModel(getAI(app, { backend: new GoogleAIBackend() }), {
+        model: configuredModelName,
+      }),
+      name: configuredModelName,
+    };
   } catch {
     // No AI Logic on this project, or the SDK refused to initialise. Recorded
     // rather than retried: it fails identically on every later attempt, and a
     // button that retries a permanent failure reads as a broken button.
     unavailable = true;
   }
-  return model;
+  return model?.instance;
 }
 
 /**
@@ -144,7 +210,8 @@ export const geminiEntryDrafting: EntryDraftingPort = {
   available: () => ensureModel() !== undefined,
 
   async draft(prompt) {
-    const generative = ensureModel();
+    await refreshConfiguredModelName();
+    const generative = ensureModel(false);
     if (!generative) throw new EntryDraftingError('unavailable');
 
     let text: string;
