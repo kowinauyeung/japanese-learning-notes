@@ -108,6 +108,9 @@ const profile = (uid: string, over: Record<string, unknown> = {}) => ({
 /** `n` characters, for the length caps. */
 const long = (n: number) => 'あ'.repeat(n);
 
+/** ASCII keeps the fixture below Firestore's 1 MiB document ceiling. */
+const ascii = (n: number) => 'a'.repeat(n);
+
 const snapshotEntry = (ownerUid: string) => ({
   ownerUid,
   ownerNickname: 'nick',
@@ -653,6 +656,71 @@ describe('bounds on what an owner may write', () => {
       db
         .doc(`users/${ALICE}/practiceSessions/x`)
         .set(session(ALICE, { finishedAt: '2026-08-13T00:01:00.000Z' })),
+    );
+  });
+
+  /**
+   * Client-only rules can check a known list index, but not every element in a
+   * list. This list-element limit is accepted deliberately for the one-owner
+   * release; the mitigation before adding another account is a backend/schema
+   * decision or quota alerting, not an all-elements rule Firestore can express.
+   */
+  it('documents the accepted list element string size limit in client-only rules', async () => {
+    const db = as(ALICE);
+    const shortNestedString = ascii(10);
+    const largeNestedString = ascii(500_000);
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/short-topic`).set(
+        wordSet(ALICE, {
+          topics: [shortNestedString],
+        }),
+      ),
+    );
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/practiceSessions/short-missed-id`).set(
+        session(ALICE, {
+          missed: [shortNestedString],
+        }),
+      ),
+    );
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/large-topic`).set(
+        wordSet(ALICE, {
+          topics: [largeNestedString],
+        }),
+      ),
+    );
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/practiceSessions/large-missed-id`).set(
+        session(ALICE, {
+          missed: [largeNestedString],
+        }),
+      ),
+    );
+  });
+
+  it('bounds the copied word set owner nickname that rules can name directly', async () => {
+    const db = as(ALICE);
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/short-copy-source`).set(
+        wordSet(ALICE, {
+          copiedFrom: {
+            ownerNickname: ascii(10),
+          },
+        }),
+      ),
+    );
+    await assertFails(
+      db.doc(`users/${ALICE}/wordSets/large-copy-source`).set(
+        wordSet(ALICE, {
+          copiedFrom: {
+            ownerNickname: ascii(51),
+          },
+        }),
+      ),
     );
   });
 
