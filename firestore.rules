@@ -311,6 +311,12 @@ service cloud.firestore {
         && str(d.get('description', ''), 1000)
         // The one unbounded list in the schema, and the one a set is made of.
         && list(d.get('entryIds', []), 1000)
+        // Only the element count is bounded here. Rules cannot apply `str()` to
+        // each nested list value, so a single topic can still carry a large
+        // string until Firestore's document limit stops it. For the one-owner
+        // release this is accepted explicitly; before a second account exists,
+        // move these writes behind a trusted backend, flatten the schema, or keep
+        // accepting the risk with quota alerting rather than validation.
         && list(d.get('topics', []), 20)
         // The rest of what `wordSetFields()` permits. Naming a field and never
         // reading it is the hole `hasOnly` was added to close, and closing it
@@ -319,6 +325,8 @@ service cloud.firestore {
         && str(d.get('level', ''), 10)
         && (d.get('publishedId', null) == null || str(d.get('publishedId', ''), 200))
         && d.get('publishedVersion', 0) is int && d.get('publishedVersion', 0) >= 0
+        // Same nested-value limit as `topics`: key count is enforceable, string
+        // bytes inside `copiedFrom.ownerNickname` are not reachable by rules.
         && (d.get('copiedFrom', null) == null || d.get('copiedFrom', {}).size() <= 10)
         && d.createdAt is timestamp
         && d.updatedAt is timestamp;
@@ -332,6 +340,8 @@ service cloud.firestore {
         && d.get('total', 0) is int && d.get('total', 0) >= 0 && d.get('total', 0) <= 2000
         && d.get('correct', 0) is int && d.get('correct', 0) >= 0
         && d.get('correct', 0) <= d.get('total', 0)
+        // Element count only. A large nested id string cannot be byte-bounded in
+        // client-only rules; see the `validWordSet` note for the product decision.
         && list(d.get('missed', []), 2000)
         // Same again, and `mode` is bounded by length rather than by value on
         // purpose. `PRACTICE_MODES` in `src/domain/practice.ts` holds two words

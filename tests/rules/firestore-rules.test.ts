@@ -108,6 +108,9 @@ const profile = (uid: string, over: Record<string, unknown> = {}) => ({
 /** `n` characters, for the length caps. */
 const long = (n: number) => 'あ'.repeat(n);
 
+/** ASCII keeps the fixture below Firestore's 1 MiB document ceiling. */
+const ascii = (n: number) => 'a'.repeat(n);
+
 const snapshotEntry = (ownerUid: string) => ({
   ownerUid,
   ownerNickname: 'nick',
@@ -653,6 +656,41 @@ describe('bounds on what an owner may write', () => {
       db
         .doc(`users/${ALICE}/practiceSessions/x`)
         .set(session(ALICE, { finishedAt: '2026-08-13T00:01:00.000Z' })),
+    );
+  });
+
+  /**
+   * Client-only rules cannot bound bytes inside list elements or nested map
+   * values. This is accepted deliberately for the one-owner release; the
+   * mitigation before adding another account is a backend/schema decision or
+   * quota alerting, not a rule that Firestore can express.
+   */
+  it('documents the accepted nested string size limit in client-only rules', async () => {
+    const db = as(ALICE);
+    const largeNestedString = ascii(900_000);
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/large-topic`).set(
+        wordSet(ALICE, {
+          topics: [largeNestedString],
+        }),
+      ),
+    );
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/large-copy-source`).set(
+        wordSet(ALICE, {
+          copiedFrom: {
+            ownerNickname: largeNestedString,
+          },
+        }),
+      ),
+    );
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/practiceSessions/large-missed-id`).set(
+        session(ALICE, {
+          missed: [largeNestedString],
+        }),
+      ),
     );
   });
 
