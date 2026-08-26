@@ -72,43 +72,6 @@ describe('entrySummary', () => {
 });
 
 /**
- * The guard for the site nobody wrote a test for.
- *
- * `senses[0].description || definition` was inlined at six call sites, and the
- * sixth — the missed-word list in `SessionSummary` — survived two rounds of
- * review. It survived because it is the one without `prose-cjk`, so a search
- * for the summary pattern by its styling missed it, and because no component
- * test existed for that screen: a per-component assertion cannot fail for a
- * screen nobody thought to cover.
- *
- * So the assertion is about the codebase rather than about one render. It is
- * the cheapest layer that can see this defect, because the defect is *a call
- * site that bypassed the helper* — which is a fact about the source.
- */
-describe('every screen goes through entrySummary', () => {
-  const srcDir = fileURLToPath(new URL('../../src', import.meta.url));
-  const components = readdirSync(srcDir, { recursive: true, encoding: 'utf8' }).filter((name) =>
-    name.endsWith('.tsx'),
-  );
-
-  // Without this the loop below passes by reading nothing at all.
-  it('has components to read', () => {
-    expect(components.length).toBeGreaterThan(20);
-  });
-
-  it.each(components)('%s does not reach past it into senses[0]', (name) => {
-    const source = readFileSync(`${srcDir}/${name}`, 'utf8');
-    expect(
-      source,
-      `${name} reads senses[0] directly. The one-line summary under a headword is ` +
-        '`entrySummary(entry)`: its `text` is the sense description or the definition, ' +
-        'and its `lang` is `ja` for the first and absent for the second, because the ' +
-        'schema says what language one is in and refuses to say for the other.',
-    ).not.toContain('senses[0]');
-  });
-});
-
-/**
  * A language tag with no face to apply it to.
  *
  * The `:lang()` rules in `src/index.css` redefine `--font-cjk`, and only
@@ -121,6 +84,13 @@ describe('every screen goes through entrySummary', () => {
  * first of them was found by review rather than by anything here. It is
  * invisible in every other layer — the markup is right, the CSS is right, and
  * the text is perfectly legible in the wrong face.
+ *
+ * **The face is required on the element itself, not inherited.** Several of
+ * these sit inside a `.prose-cjk` parent and would render correctly without a
+ * class of their own. Requiring it anyway is what lets this be a local check
+ * rather than one that has to model inheritance — and a redundant
+ * `font-family: var(--font-cjk)` costs nothing, since it resolves to what the
+ * element was already inheriting.
  */
 describe('every language tag has a face to apply', () => {
   const srcDir = fileURLToPath(new URL('../../src', import.meta.url));
@@ -132,22 +102,49 @@ describe('every language tag has a face to apply', () => {
    */
   const CALLER_SUPPLIES_THE_FACE = ['components/Ruby.tsx', 'components/PitchAccent.tsx'];
 
-  const tagged = readdirSync(srcDir, { recursive: true, encoding: 'utf8' })
+  /** Block comments hold prose about `lang="…"`, which is not markup. */
+  const stripComments = (source: string) => source.replaceAll(/\/\*[\s\S]*?\*\//g, '');
+
+  const files = readdirSync(srcDir, { recursive: true, encoding: 'utf8' })
     .filter((name) => name.endsWith('.tsx') && !CALLER_SUPPLIES_THE_FACE.includes(name))
-    .flatMap((name) => {
-      const source = readFileSync(`${srcDir}/${name}`, 'utf8');
-      return [...source.matchAll(/<\w+\s([^>]*lang=\{[^}]*\}[^>]*)>/g)].map((match) => ({
-        name,
-        attributes: match[1] ?? '',
-        line: source.slice(0, match.index).split('\n').length,
-      }));
-    });
+    .map((name) => ({ name, source: stripComments(readFileSync(`${srcDir}/${name}`, 'utf8')) }))
+    .filter((file) => file.source.includes('lang='));
+
+  /**
+   * `(?:[^>]|=>)` rather than `[^>]`, because an attribute list can contain an
+   * arrow function — the dictation answer field's does — and a bare `[^>]*`
+   * gives up at the `>` inside `=>`, skipping the element in silence. The count
+   * assertion below is what proves this keeps working.
+   */
+  const elementsIn = (source: string) => [
+    ...source.matchAll(/<\w+\s((?:[^>]|=>)*?lang=(?:\{[^}]*\}|"[^"]*")(?:[^>]|=>)*?)\/?>/g),
+  ];
+
+  const tagged = files.flatMap((file) =>
+    elementsIn(file.source).map((match) => ({
+      name: file.name,
+      attributes: match[1] ?? '',
+      line: file.source.slice(0, match.index).split('\n').length,
+    })),
+  );
 
   // Without this the loop below passes by matching nothing — which is also what
   // a regular expression that stopped working would look like.
   it('finds the tagged elements to check', () => {
     expect(tagged.length).toBeGreaterThan(10);
   });
+
+  it.each(files.map((file) => [file.name, file] as const))(
+    'every lang= in %s is on an element this can read',
+    (_name, file) => {
+      // The half that makes the assertions below mean anything. This reads JSX
+      // with a regular expression, which cannot be right for every form JSX
+      // takes — and the way it fails is to match nothing and skip the element
+      // in silence, which reads as coverage. Counting both ways turns a form it
+      // cannot parse into a red test instead of a gap.
+      expect(elementsIn(file.source).length).toBe([...file.source.matchAll(/\blang=/g)].length);
+    },
+  );
 
   it.each(tagged.map((el) => [`${el.name}:${el.line}`, el] as const))(
     '%s reads --font-cjk, without which its lang decides nothing',

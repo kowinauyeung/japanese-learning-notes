@@ -62,19 +62,29 @@ describe('SessionSummary — the missed-word list', () => {
     renderSummary();
     const summary = screen.getByText('物事が起こる前のしるし。');
 
+    // `lang` is the only thing the `:lang()` rules in `src/index.css` select
+    // on. Without it this line is drawn in the interface locale's forms — for a
+    // Traditional Chinese reader, Japanese vocabulary in Chinese strokes.
     expect(summary.getAttribute('lang')).toBe('ja');
+    // And `cjk-face` is the only thing that makes the element read
+    // `--font-cjk` at all. Without it the tag above selects nothing: the span
+    // inherits `Inter`, which has no CJK, and every character falls through to
+    // whatever the platform picked — a different face from the headword two
+    // columns to its left, on the same row.
     expect(summary.className).toContain('cjk-face');
   });
 
   it('still asks for the CJK face when it falls back to the definition, but claims no language', () => {
-    // `definition` is the field the schema refuses to tie to a language, so the
-    // tag comes off — but the element must still read `--font-cjk`, or it is
-    // drawn by `Inter` and the platform's fallback rather than by whatever the
-    // document's language resolves that variable to.
     renderSummary([makeEntry({ id: 'e2', definition: '花開嘅跡象', senses: [] })]);
     const summary = screen.getByText('花開嘅跡象');
 
+    // The schema refuses to tie `definition` to a language, so a tag here would
+    // draw this reader's own Cantonese in Japanese forms — 花 with the
+    // three-stroke 艹 rather than the four they wrote it with.
     expect(summary.getAttribute('lang')).toBeNull();
+    // The face is still required. Untagged means "follow the document", not
+    // "follow nothing": without this class the element reads `--font-sans` and
+    // the document's language decides nothing at all.
     expect(summary.className).toContain('cjk-face');
   });
 });

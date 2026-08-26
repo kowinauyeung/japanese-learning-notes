@@ -143,7 +143,11 @@ export function DictationSession({
             // browser takes for that.
             lang="ja"
             autoComplete="off"
-            className="min-h-12 w-full rounded-panel border border-line bg-bg px-3 text-lg text-ink"
+            // `cjk-face` for the same reason as the `lang` above, one layer
+            // on: the learner types Japanese into this field, and without it
+            // their answer is drawn by the platform while the word they are
+            // being asked to write sits beside it in the app's own face.
+            className="cjk-face min-h-12 w-full rounded-panel border border-line bg-bg px-3 text-lg text-ink"
           />
         </label>
 

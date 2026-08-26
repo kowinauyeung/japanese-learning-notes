@@ -173,6 +173,19 @@ test.describe('with the network off', () => {
     await page.goto('/');
     await waitForPrecache(page);
 
+    // **The HTTP cache is emptied first, and Cache Storage is not.**
+    //
+    // `firebase.json` serves `/assets/**` as `immutable` for a year, so the
+    // font files the online visit fetched are sitting in the browser's own
+    // cache — which `setOffline` does not empty. Without this the offline
+    // reload could be answered from there and the test would report a font the
+    // worker never precached. `Network.clearBrowserCache` is Chromium-only, and
+    // this project is the one place that is fine: the spec already runs in a
+    // Chromium-only project, because Playwright's WebKit has no service worker.
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Network.clearBrowserCache');
+    await cdp.detach();
+
     await context.setOffline(true);
     await page.goto('/');
 
@@ -240,15 +253,26 @@ test.describe('with the network off', () => {
       const hrefs = [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')].map(
         (link) => link.href,
       );
-      const sheets = await Promise.all(hrefs.map((href) => fetch(href).then((r) => r.text())));
+      const sheets = await Promise.all(
+        hrefs.map(async (href) => {
+          const response = await fetch(href);
+          // `fetch` resolves for a 404 as readily as for a 200, and an error
+          // page contains no `data:font` — so without this the assertion below
+          // would be satisfied by a stylesheet that was never served.
+          return { ok: response.ok, css: await response.text() };
+        }),
+      );
       return {
         sheets: sheets.length,
-        hits: sheets.filter((css) => css.includes('data:font')).length,
+        failed: sheets.filter((sheet) => !sheet.ok).length,
+        hits: sheets.filter((sheet) => sheet.css.includes('data:font')).length,
       };
     });
 
-    // Without this the loop above passes by finding no stylesheet at all.
+    // Without these two the check below passes by finding no stylesheet at all,
+    // or by reading error pages instead of the build's CSS.
     expect(inlined.sheets).toBeGreaterThan(0);
+    expect(inlined.failed, 'a stylesheet did not load, so its contents prove nothing').toBe(0);
     expect(inlined.hits, 'a font is inlined into a stylesheet the worker precaches').toBe(0);
   });
 
