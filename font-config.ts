@@ -237,10 +237,24 @@ export function isCoreFontFile(fileName: string): boolean {
   const family = FONT_FAMILIES.find(
     (candidate) => candidate.fontsourcePackage === parsed.fontsourcePackage,
   );
-  const weight = family?.weights.find((candidate) => candidate.weight === parsed.weight);
+  if (!family) return false;
+
+  const weight = family.weights.find((candidate) => candidate.weight === parsed.weight);
   if (!weight) return false;
 
-  // A named subset — `latin` — has no frequency rank to compare against, and is
-  // always precached.
-  return parsed.chunk === null || parsed.chunk >= weight.coreFrom;
+  // A named subset — `latin` — has no frequency rank to compare against, so it
+  // is precached if this app ships it and refused if it does not. `latin-ext`,
+  // `cyrillic` and `greek` all exist in the Fontsource packages and are all
+  // deliberately absent from `namedSubsets`: answering `true` for one of them
+  // would put it in `CORE_FONT_DIR` and into every reader's precache the moment
+  // a rule for it appeared in `src/fonts.css`, which is the opposite of the
+  // "unrecognised means runtime" rule this function documents.
+  if (parsed.chunk === null) {
+    return family.namedSubsets.some(
+      (subset) =>
+        fileName === `${parsed.fontsourcePackage}-${subset}-${parsed.weight}-normal.woff2`,
+    );
+  }
+
+  return parsed.chunk >= weight.coreFrom;
 }

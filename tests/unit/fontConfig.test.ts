@@ -164,6 +164,18 @@ describe('which files the worker precaches', () => {
     expect(isCoreFontFile('zen-maru-gothic-latin-700-normal.woff2')).toBe(true);
   });
 
+  it.each(['latin-ext', 'cyrillic', 'greek'])(
+    'refuses the %s subset, which this app does not ship and must not precache',
+    (subset) => {
+      // All three exist in the Fontsource packages and none is in
+      // `namedSubsets`. Treating "no chunk number" as "always core" answered
+      // true for them, so the day one appeared in `src/fonts.css` it would be
+      // emitted into the precached directory rather than the runtime one — and
+      // nothing would report it, because the file would still load.
+      expect(isCoreFontFile(`zen-maru-gothic-${subset}-500-normal.woff2`)).toBe(false);
+    },
+  );
+
   it('keeps every chunk a file, since an inlined one belongs to whatever precaches the CSS', () => {
     // Measured, not feared: with Vite's 4 KiB default, twelve `Zen Maru Gothic`
     // chunks were emitted into neither directory. They went into `index.css` as
