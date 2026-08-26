@@ -1,4 +1,5 @@
 import type { VitePWAOptions } from 'vite-plugin-pwa';
+import { CORE_FONT_DIR, RUNTIME_FONT_DIR } from './font-config.ts';
 
 /**
  * The service worker's configuration, as a function of the build mode.
@@ -79,7 +80,47 @@ export const pwaOptions = (mode: string): Partial<VitePWAOptions> => ({
      * it, and an installed window that cannot read its own manifest offline is
      * the case this whole change is for.
      */
-    globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+    globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}', `${CORE_FONT_DIR}/*.woff2`],
+
+    /**
+     * **Why the fonts are not simply added to the pattern above.**
+     *
+     * Adding `woff2` to the extension list above would precache 6.8 MB — two
+     * whole CJK families at every weight — onto a reader's device before they
+     * have looked at a single word. Precaching none of them costs the
+     * other way: #81 is explicit that a reader whose vocabulary falls back to
+     * the platform face is not looking at a slightly different page, they are
+     * looking at different letterforms — which is the subject of this
+     * application.
+     *
+     * So `font-config.ts` splits the files by how common the characters in
+     * them are, `vite.config.ts` emits the two halves into two directories,
+     * and the split lands here: the common half is precached (about 1.2 MB, so
+     * roughly a doubling of a precache that was 1.2 MB), and the long tail is
+     * fetched the first time a character needs it and kept from then on.
+     *
+     * `CacheFirst` rather than `StaleWhileRevalidate`, because these files are
+     * content-hashed: the URL changes when the bytes do, so there is nothing a
+     * revalidation could discover except that the file is still itself.
+     */
+    runtimeCaching: [
+      {
+        urlPattern: new RegExp(`/${RUNTIME_FONT_DIR}/.*\\.woff2$`),
+        handler: 'CacheFirst',
+        options: {
+          cacheName: 'font-chunks',
+          /**
+           * Above the number of files that exist (266 at the time of writing),
+           * so the cap is a runaway guard rather than an eviction policy. A
+           * limit that actually bit would evict on a schedule nobody chose, and
+           * the character it dropped would silently change shape the next time
+           * the reader opened the app offline.
+           */
+          expiration: { maxEntries: 400 },
+          cacheableResponse: { statuses: [0, 200] },
+        },
+      },
+    ],
 
     /**
      * Matches the `rewrites` block in `firebase.json`: without a navigation

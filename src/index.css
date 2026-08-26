@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './fonts.css';
 
 /*
  * Palette derived from the 語彙庭 logo, which carries two distinct greens:
@@ -82,10 +83,21 @@
   --color-danger: var(--c-danger);
   --color-danger-soft: var(--c-danger-soft);
 
-  /* Inter for UI, Zen Maru Gothic for headwords, Noto Sans TC for CJK prose. */
+  /*
+   * Inter for the interface, Zen Maru Gothic for headwords, Noto Sans JP for
+   * Japanese prose. All three are self-hosted — see font-config.ts.
+   *
+   * `--font-cjk` was `Noto Sans TC` until #81, and that was not a near miss.
+   * It is what draws the definitions and example sentences, so this app about
+   * Japanese was rendering Japanese in Traditional Chinese character forms:
+   * four-stroke 艹 in 草 and 花, the mirrored upper-right box in 骨, the 卩 foot
+   * on 令. `Noto Sans JP` is the same family at the same weights, so nothing
+   * about the metrics or the colour of a paragraph moves; only the forms are
+   * now the ones the reader is trying to learn.
+   */
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-display: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif;
-  --font-cjk: 'Noto Sans TC', 'Hiragino Sans', sans-serif;
+  --font-cjk: 'Noto Sans JP', 'Hiragino Sans', sans-serif;
 
   /* The handoff collapses the nav to a hamburger below 700px, which sits
      between Tailwind's sm and md defaults, so it gets its own breakpoint. */

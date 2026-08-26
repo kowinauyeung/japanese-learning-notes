@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { CORE_FONT_DIR, RUNTIME_FONT_DIR } from '../../font-config';
 import { pwaOptions } from '../../pwa-config';
 
 /**
@@ -81,6 +82,40 @@ describe('what an offline navigation can reach', () => {
     // Without the manifest an installed window cannot read its own identity
     // offline, which is the case this whole change exists for.
     expect(patterns.some((pattern) => pattern.includes('webmanifest'))).toBe(true);
+  });
+
+  it('precaches the common font chunks, so an installed app is not two faces offline', () => {
+    const patterns = workboxOf('production').globPatterns ?? [];
+    // Fonts are not in the extension list above — they are named by directory,
+    // because only half of them are precached. Dropping this entry costs
+    // nothing visible online and, offline, renders the reader's vocabulary in
+    // whatever face the device picked: #81's whole subject.
+    expect(patterns.some((pattern) => pattern.startsWith(CORE_FONT_DIR))).toBe(true);
+  });
+
+  it('leaves the long tail to a runtime rule rather than the precache', () => {
+    const rules = workboxOf('production').runtimeCaching ?? [];
+    const matches = (path: string) =>
+      rules.some((rule) => rule.urlPattern instanceof RegExp && rule.urlPattern.test(path));
+
+    // Both directions. Without the first, a rare kanji is fetched from the
+    // network on every single view and is simply absent offline. Without the
+    // second — a rule that also swept up the core directory — the two halves
+    // stop being two halves, and the precached files would be served from a
+    // cache that expires on a schedule nobody chose.
+    expect(matches(`/${RUNTIME_FONT_DIR}/zen-maru-gothic-5-700-normal-abc123.woff2`)).toBe(true);
+    expect(matches(`/${CORE_FONT_DIR}/zen-maru-gothic-119-700-normal-abc123.woff2`)).toBe(false);
+  });
+
+  it('does not let the precache glob reach the runtime directory', () => {
+    const patterns = workboxOf('production').globPatterns ?? [];
+    // `**/*.{js,css,…}` is deliberately extension-scoped and `woff2` is not in
+    // it. Adding it there would precache all 6.8 MB and leave the runtime rule
+    // matching files that are already in the precache — the split gone, with
+    // every assertion above still green.
+    expect(patterns.some((pattern) => pattern.includes('woff2') && pattern.startsWith('**'))).toBe(
+      false,
+    );
   });
 
   it('answers a deep navigation with the index document, matching the hosting rewrite', () => {

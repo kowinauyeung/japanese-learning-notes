@@ -35,6 +35,7 @@
     "vitest.config.ts",
     "playwright.config.ts",
     "build-info.ts",
+    "font-config.ts",
     "pwa-config.ts",
     "manifest-plugin.ts"
   ]
