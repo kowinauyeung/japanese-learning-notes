@@ -2,9 +2,12 @@ import { Ruby } from '@/components/Ruby';
 import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
+import { entrySummary } from '@/lib/contentLang';
 
 export function EntryCard({ entry }: { entry: Entry }) {
   const entryLabel = useEntryLabel();
+  const summary = entrySummary(entry);
+
   return (
     <VocabLink
       entryId={entry.id}
@@ -29,8 +32,8 @@ export function EntryCard({ entry }: { entry: Entry }) {
         </span>
       </div>
 
-      <p className="prose-cjk line-clamp-2 text-sm text-muted">
-        {entry.senses[0]?.description || entry.definition}
+      <p className="prose-cjk line-clamp-2 text-sm text-muted" lang={summary.lang}>
+        {summary.text}
       </p>
 
       <div className="mt-auto flex flex-wrap items-center gap-1.5">

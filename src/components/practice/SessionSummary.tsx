@@ -3,6 +3,7 @@ import { Ruby } from '@/components/Ruby';
 import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
+import { entrySummary } from '@/lib/contentLang';
 
 /**
  * End of a session: the score, what was missed, and the two ways back in.
@@ -44,28 +45,35 @@ export function SessionSummary({
         <div className="space-y-1.5">
           <p className="text-[11px] text-muted">{t('practice.missed')}</p>
           <ul className="divide-y divide-line">
-            {missed.map((entry) => (
-              <li key={entry.id}>
-                <VocabLink
-                  entryId={entry.id}
-                  className="flex min-w-0 items-baseline justify-between gap-3 py-2.5"
-                >
-                  {/* Same treatment as the dashboard's recent list, for the
-                      same reason: a flex item does not shrink below its content
-                      unless told to, so one long headword turned this row into
-                      sixteen lines and pushed the 再挑戦 buttons under the fold —
-                      the two controls the summary exists to offer. */}
-                  <Ruby
-                    headword={entry.headword}
-                    reading={entry.reading}
-                    className="has-ruby max-w-1/2 min-w-0 truncate font-display font-bold"
-                  />
-                  <span className="line-clamp-1 min-w-0 flex-1 text-xs text-muted">
-                    {entry.senses[0]?.description || entry.definition}
-                  </span>
-                </VocabLink>
-              </li>
-            ))}
+            {missed.map((entry) => {
+              const summary = entrySummary(entry);
+
+              return (
+                <li key={entry.id}>
+                  <VocabLink
+                    entryId={entry.id}
+                    className="flex min-w-0 items-baseline justify-between gap-3 py-2.5"
+                  >
+                    {/* Same treatment as the dashboard's recent list, for the
+                        same reason: a flex item does not shrink below its content
+                        unless told to, so one long headword turned this row into
+                        sixteen lines and pushed the 再挑戦 buttons under the fold —
+                        the two controls the summary exists to offer. */}
+                    <Ruby
+                      headword={entry.headword}
+                      reading={entry.reading}
+                      className="has-ruby max-w-1/2 min-w-0 truncate font-display font-bold"
+                    />
+                    <span
+                      className="cjk-face line-clamp-1 min-w-0 flex-1 text-xs text-muted"
+                      lang={summary.lang}
+                    >
+                      {summary.text}
+                    </span>
+                  </VocabLink>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

@@ -3,6 +3,7 @@ import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
 import type { PracticeSession } from '@/domain/practice';
 import { useI18n } from '@/i18n/context';
+import { JAPANESE } from '@/lib/contentLang';
 import { missedWords, sessionTime } from '@/lib/history';
 
 /**
@@ -72,9 +73,13 @@ export function SessionDialog({
                     className="flex items-center justify-between gap-3 py-2"
                   >
                     <span className="min-w-0 truncate">
-                      <span className="font-display font-bold">{entry.headword}</span>
+                      <span className="font-display font-bold" lang={JAPANESE}>
+                        {entry.headword}
+                      </span>
                       {entry.reading && (
-                        <span className="text-sm text-muted">（{entry.reading}）</span>
+                        <span className="cjk-face text-sm text-muted" lang={JAPANESE}>
+                          （{entry.reading}）
+                        </span>
                       )}
                     </span>
                     <span className="shrink-0 rounded-pill bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">

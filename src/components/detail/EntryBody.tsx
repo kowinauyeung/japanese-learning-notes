@@ -3,6 +3,7 @@ import type { SectionSurface } from '@/components/detail/Section';
 import type { Entry } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
+import { JAPANESE, useTranslationLang } from '@/lib/contentLang';
 import { circled, stars } from '@/lib/entryFormat';
 
 /**
@@ -21,6 +22,9 @@ import { circled, stars } from '@/lib/entryFormat';
 export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?: SectionSurface }) {
   const { t } = useI18n();
   const entryLabel = useEntryLabel();
+  // Which face draws which field — see the `:lang()` rules in `src/index.css`
+  // for why a note needs two of them.
+  const translated = useTranslationLang();
 
   const manifest = [
     { label: t('vocabulary.partOfSpeech'), value: entry.pos.map(entryLabel).join('／') },
@@ -29,13 +33,19 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
     { label: t('vocabulary.style'), value: entryLabel(entry.style) },
     { label: t('vocabulary.politeness'), value: entryLabel(entry.politeness) },
     { label: t('vocabulary.frequency'), value: stars(entry.freq) },
-    { label: t('vocabulary.citationForm'), value: entry.citationForm },
+    // The only Japanese value in this table. Everything above it is a label
+    // `entryLabel` has already localised.
+    { label: t('vocabulary.citationForm'), value: entry.citationForm, lang: JAPANESE },
   ].filter((row) => row.value);
 
   const usageRows = [
-    { label: t('vocabulary.whenUsed'), value: entry.usage.when },
-    { label: t('vocabulary.translationEquivalent'), value: entry.usage.translation },
-    { label: t('vocabulary.caution'), value: entry.usage.caution },
+    { label: t('vocabulary.whenUsed'), value: entry.usage.when, lang: JAPANESE },
+    {
+      label: t('vocabulary.translationEquivalent'),
+      value: entry.usage.translation,
+      lang: translated,
+    },
+    { label: t('vocabulary.caution'), value: entry.usage.caution, lang: JAPANESE },
   ].filter((row) => row.value);
 
   return (
@@ -56,14 +66,19 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
           the word was actually learned in. */}
       {entry.context.original && (
         <Section emoji="📌" title={t('vocabulary.context')} surface={surface}>
-          <blockquote className="prose-cjk rounded-panel border-l-4 border-accent bg-bg-alt px-4 py-3 text-sm">
+          <blockquote
+            className="prose-cjk rounded-panel border-l-4 border-accent bg-bg-alt px-4 py-3 text-sm"
+            lang={JAPANESE}
+          >
             {entry.context.original}
           </blockquote>
           {entry.context.ja && (
-            <p className="prose-cjk mt-4 text-sm whitespace-pre-line">{entry.context.ja}</p>
+            <p className="prose-cjk mt-4 text-sm whitespace-pre-line" lang={JAPANESE}>
+              {entry.context.ja}
+            </p>
           )}
           {entry.context.translation && (
-            <p className="prose-cjk mt-3 text-sm whitespace-pre-line text-muted">
+            <p className="prose-cjk mt-3 text-sm whitespace-pre-line text-muted" lang={translated}>
               {entry.context.translation}
             </p>
           )}
@@ -72,11 +87,24 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
 
       {(entry.definition || entry.definitionSub) && (
         <Section emoji="📖" title={t('vocabulary.definition')} surface={surface}>
+          {/* Deliberately unmarked, and it is the one field in this component
+              that is. `src/domain/entry.ts` declines to tie `definition` to a
+              language — "write it in Japanese, in your own language, or both" —
+              and it is also the only field an entry is required to have, which
+              makes it the likeliest of all of them to hold the reader's own
+              language. Marking it `ja` would take the defect this change exists
+              to fix and point it the other way: a Cantonese definition drawn in
+              Japanese character forms. Inheriting the document's language is
+              the only claim that is actually supported, and giving this field a
+              language of its own needs metadata the schema does not carry. */}
           {entry.definition && (
             <p className="prose-cjk text-sm whitespace-pre-line">{entry.definition}</p>
           )}
           {entry.definitionSub && (
-            <p className="prose-cjk mt-4 border-t border-line pt-4 text-sm whitespace-pre-line">
+            <p
+              className="prose-cjk mt-4 border-t border-line pt-4 text-sm whitespace-pre-line"
+              lang={translated}
+            >
               {entry.definitionSub}
             </p>
           )}
@@ -88,13 +116,20 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
           <ol className="divide-y divide-line">
             {entry.senses.map((sense, index) => (
               <li key={index} className="py-4 first:pt-0 last:pb-0">
-                <h3 className="text-sm font-semibold">
+                <h3 className="cjk-face text-sm font-semibold" lang={JAPANESE}>
                   <span className="mr-1.5 text-accent">{circled(index)}</span>
                   {sense.label}
                 </h3>
-                {sense.description && <p className="prose-cjk mt-2 text-sm">{sense.description}</p>}
+                {sense.description && (
+                  <p className="prose-cjk mt-2 text-sm" lang={JAPANESE}>
+                    {sense.description}
+                  </p>
+                )}
                 {sense.example && (
-                  <blockquote className="prose-cjk mt-3 border-l-2 border-line pl-3 text-sm">
+                  <blockquote
+                    className="prose-cjk mt-3 border-l-2 border-line pl-3 text-sm"
+                    lang={JAPANESE}
+                  >
                     {sense.example}
                     {sense.exampleGloss && (
                       <span className="block text-xs text-muted">
@@ -103,9 +138,13 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
                     )}
                   </blockquote>
                 )}
-                {sense.translation && <p className="prose-cjk mt-2 text-sm">{sense.translation}</p>}
+                {sense.translation && (
+                  <p className="prose-cjk mt-2 text-sm" lang={translated}>
+                    {sense.translation}
+                  </p>
+                )}
                 {sense.usage && (
-                  <p className="prose-cjk mt-2 text-xs text-muted">
+                  <p className="prose-cjk mt-2 text-xs text-muted" lang={JAPANESE}>
                     {t('vocabulary.usageSituation', { value: sense.usage })}
                   </p>
                 )}
@@ -120,12 +159,14 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
           <ol className="divide-y divide-line">
             {entry.examples.map((example, index) => (
               <li key={index} className="py-3 first:pt-0 last:pb-0">
-                <p className="prose-cjk text-sm">
+                <p className="prose-cjk text-sm" lang={JAPANESE}>
                   <span className="mr-1.5 text-accent">{circled(index)}</span>
                   {example.ja}
                 </p>
                 {example.translation && (
-                  <p className="prose-cjk mt-1 pl-6 text-sm text-muted">{example.translation}</p>
+                  <p className="prose-cjk mt-1 pl-6 text-sm text-muted" lang={translated}>
+                    {example.translation}
+                  </p>
                 )}
               </li>
             ))}
@@ -144,8 +185,13 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
           <ul className="divide-y divide-line text-sm">
             {entry.related.map((related, index) => (
               <li key={index} className="py-2.5 first:pt-0 last:pb-0">
-                <span className="font-display font-bold">{related.headword}</span>
-                <span className="prose-cjk text-muted"> — {related.note}</span>
+                <span className="font-display font-bold" lang={JAPANESE}>
+                  {related.headword}
+                </span>
+                <span className="prose-cjk text-muted" lang={JAPANESE}>
+                  {' '}
+                  — {related.note}
+                </span>
               </li>
             ))}
           </ul>
@@ -153,7 +199,7 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
       )}
 
       {entry.source && (
-        <p className="px-1 text-xs text-muted">
+        <p className="cjk-face px-1 text-xs text-muted" lang={JAPANESE}>
           {t('vocabulary.sourceLine', { source: entry.source })}
         </p>
       )}
