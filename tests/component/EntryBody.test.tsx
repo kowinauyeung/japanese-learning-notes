@@ -68,23 +68,25 @@ const entry = makeEntry({
 
 describe('EntryBody — which language each field is in', () => {
   it('marks a sense description Japanese, so a Chinese interface does not redraw it', () => {
-    // The interface locale above is `zh-Hant`, which is exactly the case that
-    // used to be wrong: `documentElement.lang` becomes `zh-Hant`, every field
-    // inherits it, and the Japanese is drawn in Chinese forms. `description` is
-    // "Japanese explanation of this sense" in the schema, so it can say so.
     renderBody(<EntryBody entry={entry} />);
+
+    // The interface locale is `zh-Hant`, which is exactly the case that was
+    // wrong: `documentElement.lang` becomes `zh-Hant`, every unmarked field
+    // inherits it, and this sentence is then drawn with 四-stroke 艹 and a
+    // mirrored 骨 — the strokes a learner copying off the screen would take.
     expect(screen.getByText('物事が起こる前のしるし。').getAttribute('lang')).toBe('ja');
+    // The same for the example sentence, which the schema also calls Japanese.
     expect(screen.getByText('景気回復の兆候が見える。').getAttribute('lang')).toBe('ja');
   });
 
   it('leaves `definition` unmarked, since the schema declines to say what language it is', () => {
-    // The field the schema calls "the one piece of content every entry must
-    // have", and the one it explicitly refuses to tie to a language — "write it
-    // in Japanese, in your own language, or both". Marking it `ja` would point
-    // the very defect this change fixes the other way: a required field written
-    // in Cantonese, drawn in Japanese character forms. Inheriting the
-    // document's language is the only supported claim.
     renderBody(<EntryBody entry={entry} />);
+
+    // The schema calls this "the one piece of content every entry must have"
+    // and explicitly refuses to tie it to a language — "write it in Japanese,
+    // in your own language, or both". A tag here points the very defect this
+    // change fixes the other way: a required field written in Cantonese, drawn
+    // in Japanese character forms on the screen its author reads every day.
     expect(screen.getByText('何かが起こる前ぶれ。').getAttribute('lang')).toBeNull();
   });
 
@@ -93,25 +95,30 @@ describe('EntryBody — which language each field is in', () => {
     ['見到經濟復甦嘅跡象。', "a sense's translation"],
     ['花開嘅跡象。', "an example's translation"],
   ])("marks %s with the reader's translation language, being %s", (text) => {
-    // The other half, and the half a blanket `lang="ja"` on the whole note
-    // would break: these fields are the reader's own language, and drawing
-    // them with a Japanese face is the same defect pointing the other way.
     renderBody(<EntryBody entry={entry} />);
+
+    // The half a blanket `lang="ja"` on the whole note would break. These are
+    // the reader's own Cantonese: without their own tag they inherit `ja` and
+    // are drawn with Japanese regional forms, and the characters Japanese does
+    // not use — 嘅, 咗, 喺 — fall through to the platform one glyph at a time,
+    // so a single line comes out in two faces.
     expect(screen.getByText(text).closest('[lang]')?.getAttribute('lang')).toBe(TRANSLATION);
   });
 
   it('leaves a translation unmarked when there is no profile to read it from', () => {
-    // A published entry is rendered outside the settings provider, and its
-    // translation is in *its author's* language — which the reader's profile
-    // does not know. Inheriting the document's language is the honest answer;
-    // guessing `ja` there would mislabel every public note.
     render(
       <I18nProvider locale="zh-Hant">
         <EntryBody entry={entry} />
       </I18nProvider>,
     );
+
+    // A published entry renders outside the settings provider, and its
+    // translation is in *its author's* language, which the reader's profile
+    // does not know. Guessing `ja` here would mislabel every public note in the
+    // catalogue; inheriting the document's language is the honest answer.
     expect(screen.getByText('徵兆').getAttribute('lang')).toBeNull();
-    // The Japanese half does not depend on the profile and must still be marked.
+    // The Japanese half does not depend on the profile, so a missing provider
+    // must not quietly take the tag off it too.
     expect(screen.getByText('物事が起こる前のしるし。').getAttribute('lang')).toBe('ja');
   });
 });

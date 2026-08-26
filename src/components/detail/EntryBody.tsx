@@ -38,14 +38,20 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
     { label: t('vocabulary.citationForm'), value: entry.citationForm, lang: JAPANESE },
   ].filter((row) => row.value);
 
+  // `when` and `caution` carry no tag, and that is the same rule `definition`
+  // is left unmarked by: `UsageNotes` in `src/domain/entry.ts` documents none of
+  // its three fields, and the form offers them as free text, so nothing
+  // establishes that a reader writing "polite only, avoid with 先輩" in their
+  // own language is writing Japanese. `translation` is named for its language
+  // and is the one row here that can say so.
   const usageRows = [
-    { label: t('vocabulary.whenUsed'), value: entry.usage.when, lang: JAPANESE },
+    { label: t('vocabulary.whenUsed'), value: entry.usage.when },
     {
       label: t('vocabulary.translationEquivalent'),
       value: entry.usage.translation,
       lang: translated,
     },
-    { label: t('vocabulary.caution'), value: entry.usage.caution, lang: JAPANESE },
+    { label: t('vocabulary.caution'), value: entry.usage.caution },
   ].filter((row) => row.value);
 
   return (
@@ -66,10 +72,10 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
           the word was actually learned in. */}
       {entry.context.original && (
         <Section emoji="📌" title={t('vocabulary.context')} surface={surface}>
-          <blockquote
-            className="prose-cjk rounded-panel border-l-4 border-accent bg-bg-alt px-4 py-3 text-sm"
-            lang={JAPANESE}
-          >
+          {/* `original` is the sentence as it was met, and `EntryContext` says
+              nothing about what language that is — only the field literally
+              named `ja` below does. Untagged, so it follows the document. */}
+          <blockquote className="prose-cjk rounded-panel border-l-4 border-accent bg-bg-alt px-4 py-3 text-sm">
             {entry.context.original}
           </blockquote>
           {entry.context.ja && (
@@ -126,11 +132,18 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
                   </p>
                 )}
                 {sense.example && (
-                  <blockquote
-                    className="prose-cjk mt-3 border-l-2 border-line pl-3 text-sm"
-                    lang={JAPANESE}
-                  >
-                    {sense.example}
+                  <blockquote className="prose-cjk mt-3 border-l-2 border-line pl-3 text-sm">
+                    {/* The tag is on the sentence, not on the quote, because the
+                        gloss beneath it is a localised label wrapped around a
+                        Japanese value — 意味：, 意思：, 뜻:, Significado: — and `t`
+                        returns a string, so the two halves cannot be tagged
+                        apart. Tagging the whole quote declared a Korean or
+                        Spanish label to be Japanese, which picks the wrong face
+                        for it and tells a screen reader to pronounce it as
+                        Japanese. An inline span adds no box of its own. */}
+                    <span className="cjk-face" lang={JAPANESE}>
+                      {sense.example}
+                    </span>
                     {sense.exampleGloss && (
                       <span className="block text-xs text-muted">
                         {t('vocabulary.gloss', { value: sense.exampleGloss })}
@@ -143,8 +156,11 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
                     {sense.translation}
                   </p>
                 )}
+                {/* Both reasons at once: `usage` is documented as "when this
+                    sense is used" without saying in what language, and the line
+                    is a localised label around it. */}
                 {sense.usage && (
-                  <p className="prose-cjk mt-2 text-xs text-muted" lang={JAPANESE}>
+                  <p className="prose-cjk mt-2 text-xs text-muted">
                     {t('vocabulary.usageSituation', { value: sense.usage })}
                   </p>
                 )}
@@ -188,10 +204,9 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
                 <span className="font-display font-bold" lang={JAPANESE}>
                   {related.headword}
                 </span>
-                <span className="prose-cjk text-muted" lang={JAPANESE}>
-                  {' '}
-                  — {related.note}
-                </span>
+                {/* The headword is Japanese by definition; the note beside it
+                    is "how this word differs", in no stated language. */}
+                <span className="prose-cjk text-muted"> — {related.note}</span>
               </li>
             ))}
           </ul>
@@ -199,7 +214,7 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
       )}
 
       {entry.source && (
-        <p className="cjk-face px-1 text-xs text-muted" lang={JAPANESE}>
+        <p className="cjk-face px-1 text-xs text-muted">
           {t('vocabulary.sourceLine', { source: entry.source })}
         </p>
       )}
