@@ -4,6 +4,7 @@ import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
+import { entrySummary } from '@/lib/contentLang';
 
 /**
  * Same word all day, a different one tomorrow, with nothing persisted: the
@@ -25,7 +26,7 @@ export function pickWordOfDay(entries: Entry[], todayKey: string): Entry | null 
 export function TodayWord({ entry }: { entry: Entry }) {
   const { t } = useI18n();
   const entryLabel = useEntryLabel();
-  const summary = entry.senses[0]?.description || entry.definition;
+  const summary = entrySummary(entry);
 
   return (
     <VocabLink
@@ -51,7 +52,11 @@ export function TodayWord({ entry }: { entry: Entry }) {
           className="has-ruby mt-3 block font-display text-4xl font-bold [overflow-wrap:anywhere]"
         />
 
-        {summary && <p className="prose-cjk mt-2 line-clamp-2 text-sm">{summary}</p>}
+        {summary.text && (
+          <p className="prose-cjk mt-2 line-clamp-2 text-sm" lang={summary.lang}>
+            {summary.text}
+          </p>
+        )}
 
         <div className="mt-4 flex flex-wrap items-center gap-1.5">
           {entry.pos.slice(0, 2).map((part) => (

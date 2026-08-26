@@ -33,11 +33,15 @@
     "allow": "vite-node admin/allow-user.ts --",
     "mint-preview-appcheck-token": "vite-node admin/mint-preview-app-check-token.ts --",
     "icons": "vite-node scripts/icons.ts",
+    "fonts": "vite-node scripts/fonts.ts",
     "manifest:screenshots": "vite-node scripts/manifest-screenshots.ts",
     "rules:dev": "firebase deploy --only firestore:rules --project dev",
     "rules:prod": "firebase deploy --only firestore:rules --project prod"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/noto-sans-jp": "^5.3.0",
+    "@fontsource/zen-maru-gothic": "^5.3.0",
     "firebase": "^12.18.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

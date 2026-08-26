@@ -44,13 +44,36 @@ export function Section({
   );
 }
 
-export function KeyValueTable({ rows }: { rows: { label: string; value: string }[] }) {
+export interface KeyValueRow {
+  label: string;
+  value: string;
+  /**
+   * What language the *value* is in, when it is content rather than an
+   * interface string — `lang="ja"` for a citation form, the reader's
+   * translation language for a translation equivalent. The label never takes
+   * one: it is always localised interface text.
+   *
+   * Optional because most rows carry a value that is already localised, and a
+   * tag those rows do not need would be a claim this file cannot back up.
+   *
+   * `| undefined` written out because `exactOptionalPropertyTypes` is on and
+   * the translation language genuinely is undefined on a public entry, where
+   * the reader's profile does not know the author's — see
+   * `useTranslationLang`. React drops the attribute for that value, which is
+   * the behaviour wanted.
+   */
+  lang?: string | undefined;
+}
+
+export function KeyValueTable({ rows }: { rows: KeyValueRow[] }) {
   return (
     <dl className="divide-y divide-line text-sm">
       {rows.map((row) => (
         <div key={row.label} className="grid grid-cols-[8rem_1fr] gap-3 py-2.5">
           <dt className="text-muted">{row.label}</dt>
-          <dd className="prose-cjk">{row.value}</dd>
+          <dd className="prose-cjk" lang={row.lang}>
+            {row.value}
+          </dd>
         </div>
       ))}
     </dl>

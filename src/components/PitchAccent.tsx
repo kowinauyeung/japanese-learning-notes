@@ -1,4 +1,5 @@
 import { useEntryLabel } from '@/i18n/useEntryLabel';
+import { JAPANESE } from '@/lib/contentLang';
 import { accentPattern, moraCount, pitchShape } from '@/lib/mora';
 
 /**
@@ -36,7 +37,10 @@ export function PitchAccent({
       <span className="text-muted tabular-nums">
         {pitchAccent}（{pattern ? entryLabel(pattern) : ''}）
       </span>{' '}
-      <span className="whitespace-nowrap">
+      {/* The kana, marked so they are drawn by a Japanese face whatever the
+          interface language is. The pattern name beside them is not: it comes
+          from `entryLabel`, which localises it. */}
+      <span className="whitespace-nowrap" lang={JAPANESE}>
         {shape.map((mora, index) => (
           <span
             key={index}

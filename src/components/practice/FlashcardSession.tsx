@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Ruby } from '@/components/Ruby';
 import type { Entry } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
+import { JAPANESE, useTranslationLang } from '@/lib/contentLang';
 import { SessionHeader } from './SessionHeader';
 
 const isEditable = (node: unknown): boolean => {
@@ -125,6 +126,7 @@ export function FlashcardSession({
     };
   }, [keyboard, flipped, onAnswer, onQuit]);
 
+  const translated = useTranslationLang();
   const meanings = entry.senses.map((sense) => sense.description).filter(Boolean);
   const example = entry.senses.find((sense) => sense.example)?.example ?? entry.examples[0]?.ja;
   const exampleTranslation =
@@ -143,7 +145,14 @@ export function FlashcardSession({
 
         {flipped ? (
           <div className="space-y-4 text-left">
-            <ul className="prose-cjk space-y-1 text-sm">
+            {/* The meanings are sense descriptions, which are Japanese. With
+                no senses recorded the list falls back to `definition`, whose
+                language the schema does not state — so the tag comes off with
+                it rather than mislabelling a Cantonese definition. */}
+            <ul
+              className="prose-cjk space-y-1 text-sm"
+              lang={meanings.length ? JAPANESE : undefined}
+            >
               {(meanings.length ? meanings : [entry.definition]).map((meaning, position) => (
                 <li key={position} className="flex gap-2">
                   <span className="text-muted">・</span>
@@ -152,13 +161,20 @@ export function FlashcardSession({
               ))}
             </ul>
             {entry.definitionSub && (
-              <p className="text-sm [overflow-wrap:anywhere] text-muted">{entry.definitionSub}</p>
+              <p className="cjk-face text-sm [overflow-wrap:anywhere] text-muted" lang={translated}>
+                {entry.definitionSub}
+              </p>
             )}
             {example && (
               <div className="rounded-panel bg-bg-alt p-3">
-                <p className="prose-cjk text-sm">{example}</p>
+                <p className="prose-cjk text-sm" lang={JAPANESE}>
+                  {example}
+                </p>
                 {exampleTranslation && (
-                  <p className="mt-1 text-xs [overflow-wrap:anywhere] text-muted">
+                  <p
+                    className="cjk-face mt-1 text-xs [overflow-wrap:anywhere] text-muted"
+                    lang={translated}
+                  >
                     {exampleTranslation}
                   </p>
                 )}

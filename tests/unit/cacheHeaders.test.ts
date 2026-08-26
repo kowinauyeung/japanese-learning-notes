@@ -70,12 +70,19 @@ describe('Cache-Control that a request resolves to', () => {
     },
   );
 
-  it.each(['/assets/index-CXo-DkYT.js', '/assets/index-BRZ7eUL-.css'])(
-    'lets the browser keep %s forever, since Vite puts the content hash in the name',
-    (path) => {
-      expect(resolve(path, 'Cache-Control')).toBe('public, max-age=31536000, immutable');
-    },
-  );
+  it.each([
+    '/assets/index-CXo-DkYT.js',
+    '/assets/index-BRZ7eUL-.css',
+    // Nested one level deeper than the rest: the fonts are emitted into
+    // `assets/fonts/core` and `assets/fonts/ext` so the worker can precache one
+    // and runtime-cache the other. `/assets/**` covers them only if `**` spans
+    // separators — if it did not, 351 hashed font files would revalidate on
+    // every load, which is invisible except as a slow app.
+    '/assets/fonts/core/zen-maru-gothic-119-700-normal-uJuiJZB6.woff2',
+    '/assets/fonts/ext/zen-maru-gothic-5-700-normal-uJuiJZB6.woff2',
+  ])('lets the browser keep %s forever, since Vite puts the content hash in the name', (path) => {
+    expect(resolve(path, 'Cache-Control')).toBe('public, max-age=31536000, immutable');
+  });
 
   // The narrower entries must not cost an asset its security headers. They do
   // not, because matching entries merge rather than shadow — but that is the
