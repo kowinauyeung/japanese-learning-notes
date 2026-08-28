@@ -24,7 +24,6 @@ const rows = (n: number, prefix: string) =>
 const ports = (entryCount: number, setCount: number, sessionCount: number) => {
   const entries = {
     list: paged(rows(entryCount, 'e')),
-    saveDashboardStats: vi.fn(() => Promise.resolve()),
     remove: vi.fn(() => Promise.resolve()),
     removeDashboardStats: vi.fn(() => Promise.resolve()),
     settlePendingWrites: vi.fn(() => Promise.resolve()),

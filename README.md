@@ -119,6 +119,8 @@ source tree.
 | `yarn release`                         | Bump the version and write `CHANGELOG.md`             |
 | `yarn rules:dev` / `yarn rules:prod`   | Deploy `firestore.rules`                              |
 | `yarn auth:login` / `yarn auth:revoke` | Repo-local Google ADC, used by the operator scripts   |
+| `yarn backfill:vocabulary-stats`       | Rebuild cached Dashboard vocabulary stats on dev      |
+| `yarn backfill:vocabulary-stats prod`  | Rebuild and sample-verify every production user       |
 
 `yarn auth:login` writes to `.gcloud/` via `CLOUDSDK_CONFIG`, deliberately apart
 from the machine-wide `~/.config/gcloud`. There is no long-lived service-account
@@ -382,6 +384,30 @@ production — an account that signs in and finds every write refused while its
 data is still there. Deleting `deletedAccounts/{uid}` restores writing
 immediately, because the rule reads the document on each write rather than
 anything in the token.
+
+**Backfilling Dashboard vocabulary stats after deploy.** Run this only after
+the app and Firestore rules containing `users/{uid}/stats/vocabulary` have
+deployed:
+
+```sh
+yarn auth:login
+yarn backfill:vocabulary-stats prod --sample 20
+```
+
+The script visits every `users/{uid}` document, creates a zeroed stats document
+when one is missing, then uses an Admin SDK transaction to scan that user's
+entries and replace the counters. It reads the stats document in the same
+transaction, so a client counter delta that overlaps the scan forces a retry
+rather than being overwritten by an older snapshot. It also samples the requested
+number of rebuilt users and compares each stored stats document with its source
+entries; a mismatch exits non-zero.
+
+The operation is idempotent and safe to rerun. Run it once after this deploy and
+again after any manual data repair or bulk import. It needs ADC for the target
+project and Firestore read/write permission (for example `roles/datastore.user`)
+on the operator identity. Do not use the Dashboard's client fallback as a
+migration mechanism: it may read missing cache data, but it deliberately never
+writes a full cache snapshot.
 
 **Releasing.** Cutting the version — the branch, the changelog and the tag — is
 [docs/releasing.md](docs/releasing.md). What follows is only the access half of

@@ -122,20 +122,6 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
       return snapshot.exists() ? statsFrom(snapshot.data()) : null;
     },
 
-    async saveDashboardStats(stats: Omit<EntryDashboardStats, 'ownerUid'>): Promise<void> {
-      const ref = statsPath();
-      await writes.write(ref, () =>
-        setDoc(ref, {
-          ownerUid: uid,
-          total: stats.total,
-          countsByDay: stats.countsByDay,
-          jlptCounts: stats.jlptCounts,
-          posCounts: stats.posCounts,
-          updatedAt: serverTimestamp(),
-        }),
-      );
-    },
-
     async countLearnedSince(date: string): Promise<number> {
       const snapshot = await getCountFromServer(
         query(entriesPath(), where('learnedOn', '>=', date)),

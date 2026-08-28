@@ -38,13 +38,14 @@ deploy` (<https://github.com/kowinauyeung/japanese-learning-notes/issues/140>)
 
 ## Status update
 
-The review blockers below have now been implemented in the uncommitted
-worktree. `saveDashboardStats()` bootstraps a complete cache document after the
-Dashboard fallback drain. CRUD awaits the stats delta before resolving, and the
-Dashboard derives period totals from cached day buckets rather than three server
-aggregates. The focused adapter regression was proven red by restoring
-`void writeStatsDelta(...)`, which read `total: 0` after create, then green with
-the awaited implementation. Full emulator verification passes with 113 tests.
+The client-side full-scan writer was removed after review identified its stale
+snapshot race. Dashboard now has a read-only fallback for a missing cache. The
+privileged `yarn backfill:vocabulary-stats` Admin SDK script creates and rebuilds
+every cache document transactionally, then sample-verifies source parity. CRUD
+awaits stats deltas, and Dashboard derives period totals from cached day buckets
+rather than three server aggregates. The focused adapter regression was proven
+red by restoring `void writeStatsDelta(...)`, which read `total: 0` after create,
+then green with the awaited implementation.
 
 ## Feature implemented so far
 

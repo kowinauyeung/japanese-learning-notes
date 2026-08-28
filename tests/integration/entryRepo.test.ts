@@ -1,4 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import {
+  deleteApp as deleteAdminApp,
+  initializeApp as initializeAdminApp,
+} from 'firebase-admin/app';
+import type { App as AdminApp } from 'firebase-admin/app';
+import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
+import type { Firestore as AdminFirestore } from 'firebase-admin/firestore';
 import { deleteApp, initializeApp } from 'firebase/app';
 import type { FirebaseApp } from 'firebase/app';
 import {
@@ -15,6 +22,10 @@ import type { EntryDraft } from '@/domain/entry';
 import type { EntryRepository } from '@/domain/ports';
 import { createEntryRepository } from '@/infra/firebase/entryRepo';
 import { emptyDraft } from '@/lib/draft';
+import {
+  rebuildVocabularyStats,
+  verifyVocabularyStats,
+} from '../../admin/backfill-vocabulary-stats.lib';
 
 /**
  * The Firestore adapter, run against a real Firestore.
@@ -45,6 +56,8 @@ import { emptyDraft } from '@/lib/draft';
 
 let app: FirebaseApp;
 let db: Firestore;
+let adminApp: AdminApp;
+let adminDb: AdminFirestore;
 
 /** A distinct `users/{uid}/entries` per test, so no cleanup is needed. */
 const freshRepo = (): EntryRepository => createEntryRepository(db, `it-${randomUUID()}`);
@@ -64,15 +77,18 @@ async function seed(repo: EntryRepository, headwords: string[]): Promise<string[
 }
 
 beforeAll(() => {
+  process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
   app = initializeApp({ projectId: 'demo-goitei' }, `entryRepo-${randomUUID()}`);
   db = getFirestore(app);
   // Plain getFirestore, not the app's initializeFirestore: the persistent cache
   // the real client uses is IndexedDB-backed and has nothing to run on here.
   connectFirestoreEmulator(db, '127.0.0.1', 8080, { mockUserToken: 'owner' });
+  adminApp = initializeAdminApp({ projectId: 'demo-goitei' }, `entryRepo-admin-${randomUUID()}`);
+  adminDb = getAdminFirestore(adminApp);
 });
 
 afterAll(async () => {
-  await deleteApp(app);
+  await Promise.all([deleteApp(app), deleteAdminApp(adminApp)]);
 });
 
 describe('create and read back', () => {
@@ -300,25 +316,26 @@ describe('dashboard reads', () => {
     expect(await freshRepo().dashboardStats()).toBeNull();
   });
 
-  it('bootstraps a complete dashboard stats document from a fallback summary', async () => {
-    const uid = `it-stats-bootstrap-${randomUUID()}`;
+  it('backfills a missing cache without dropping an entry created after the source scan begins', async () => {
+    const uid = `it-stats-concurrent-bootstrap-${randomUUID()}`;
     const repo = createEntryRepository(db, uid);
+    await repo.create(draft({ learnedOn: '2026-06-23', jlpt: 'N3', pos: ['名詞'] }));
 
-    await repo.saveDashboardStats({
-      total: 2,
-      countsByDay: { '2026-06-24': 1, '2026-06-23': 1 },
-      jlptCounts: { N2: 1, N3: 1 },
-      posCounts: { 名詞: 1, 動詞: 1 },
+    await rebuildVocabularyStats(adminDb, uid, {
+      onSourceRead: async () => {
+        await repo.create(draft({ learnedOn: '2026-06-24', jlpt: 'N2', pos: ['動詞'] }));
+      },
     });
 
-    const stats = await repo.dashboardStats();
-    expect(stats).toEqual({
+    await repo.settlePendingWrites();
+    expect(await repo.dashboardStats()).toEqual({
       ownerUid: uid,
       total: 2,
-      countsByDay: { '2026-06-24': 1, '2026-06-23': 1 },
-      jlptCounts: { N2: 1, N3: 1 },
+      countsByDay: { '2026-06-23': 1, '2026-06-24': 1 },
+      jlptCounts: { N3: 1, N2: 1 },
       posCounts: { 名詞: 1, 動詞: 1 },
     });
+    await expect(verifyVocabularyStats(adminDb, uid)).resolves.toBeUndefined();
   });
 
   it('updates the dashboard stats document on writes after backfill has created it', async () => {

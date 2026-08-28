@@ -31,6 +31,7 @@
     "auth:login": "CLOUDSDK_CONFIG=.gcloud gcloud auth application-default login",
     "auth:revoke": "CLOUDSDK_CONFIG=.gcloud gcloud auth application-default revoke",
     "allow": "vite-node admin/allow-user.ts --",
+    "backfill:vocabulary-stats": "vite-node admin/backfill-vocabulary-stats.ts --",
     "mint-preview-appcheck-token": "vite-node admin/mint-preview-app-check-token.ts --",
     "icons": "vite-node scripts/icons.ts",
     "fonts": "vite-node scripts/fonts.ts",

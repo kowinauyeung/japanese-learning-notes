@@ -17,7 +17,7 @@ import { latestByMode, RECENT_WINDOW } from '@/lib/history';
 import { captureLoadFailure } from '@/lib/loadError';
 import type { LoadFailure } from '@/lib/loadError';
 import { useProgress } from '@/lib/progress';
-import { dashboardStatsFromSummary, summarise, summaryFromDashboardStats } from '@/lib/stats';
+import { summarise, summaryFromDashboardStats } from '@/lib/stats';
 import type { Summary } from '@/lib/stats';
 
 const ENTRY_PAGE_SIZE = 200;
@@ -96,11 +96,12 @@ export function Component() {
           return;
         }
 
+        // The Admin SDK migration owns cache bootstrap. A client may read this
+        // fallback, but must never publish a full snapshot that races another
+        // device's entry mutation.
         const all = await drainEntries(entriesRepository);
         if (cancelled) return;
         const stats = summarise(all, now);
-        await entriesRepository.saveDashboardStats(dashboardStatsFromSummary(stats, all.length));
-        if (cancelled) return;
         const fallbackRecent = [...all]
           .sort((a, b) => b.learnedOn.localeCompare(a.learnedOn))
           .slice(0, RECENT_WORDS);
