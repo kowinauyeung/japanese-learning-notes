@@ -80,6 +80,45 @@ test.describe('history', () => {
   });
 
   /**
+   * Two dialogs, and a stack rather than a swap.
+   *
+   * Opening a word closes the session dialog on purpose — two modals over each
+   * other is one Escape closing both and a backdrop belonging to neither — but
+   * closing the word used to leave the bare history page, so reading one word
+   * out of a drill cost the whole session you were reading.
+   *
+   * Here rather than in a component test because the two dialogs are driven by
+   * different things: the session by this route's own state, the word by a
+   * provider that pushes the address bar and listens for `popstate`.
+   */
+  test('returns to the session after closing a word opened from inside it', async ({ page }) => {
+    await seedSignedIn(page);
+    await page.goto('/practice/flashcards');
+    await page.getByRole('button', { name: '#仕事' }).click();
+    await page.getByRole('button', { name: '開始する' }).click();
+    await page.getByRole('button', { name: /裏を見る/ }).click();
+    await page.getByRole('button', { name: /もう一度/ }).click();
+
+    await page.goto('/history');
+    await sessionRows(page).first().getByRole('button').click();
+
+    const session = page.getByRole('dialog', { name: 'フラッシュカード' });
+    await session.locator('a[href="/vocabulary/w-kiriwake"]').click();
+
+    // Never both at once: the session steps back while the word is showing.
+    const word = page.getByRole('dialog', { name: '単語' });
+    await expect(word).toBeVisible();
+    await expect(session).toBeHidden();
+    await expect(page).toHaveURL(/\/vocabulary\/w-kiriwake$/);
+
+    await word.getByRole('button', { name: '閉じる' }).click();
+
+    await expect(word).toBeHidden();
+    await expect(session).toBeVisible();
+    await expect(page).toHaveURL(/\/history$/);
+  });
+
+  /**
    * The only screen in the app that pages. `listSessions` is tested against the
    * emulator; what is untested until here is a component walking the cursor.
    */

@@ -82,16 +82,20 @@ export function Component() {
   const weak = useMemo(() => weakWords(weakIds, entries), [weakIds, entries]);
 
   /**
-   * Opening a word from inside the session dialog closes the session dialog.
+   * Opening a word from inside the session dialog hides it, and closing the
+   * word brings it back.
    *
-   * Two modals over each other is one Escape closing both and a backdrop that
-   * belongs to neither. The word is what was asked for, so it is the one that
-   * stays.
+   * Never two modals at once — that is one Escape closing both and a backdrop
+   * belonging to neither — but the session is not thrown away to achieve it.
+   * It stays in `opened` and is simply not rendered while a word is showing, so
+   * closing the word returns to where the word was found rather than to an
+   * empty page. Going Back does the same thing, because that also clears
+   * `openId`.
+   *
+   * State rather than an effect: an effect clearing `opened` would run a render
+   * after the word opened, so both dialogs would be mounted for one frame.
    */
   const { openId } = useVocabDialog();
-  useEffect(() => {
-    if (openId !== null) setOpened(null);
-  }, [openId]);
 
   if (entriesLoading || progressLoading)
     return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
@@ -143,7 +147,11 @@ export function Component() {
         )}
       </section>
 
-      <SessionDialog session={opened} entries={entries} onClose={() => setOpened(null)} />
+      <SessionDialog
+        session={openId === null ? opened : null}
+        entries={entries}
+        onClose={() => setOpened(null)}
+      />
     </div>
   );
 }
