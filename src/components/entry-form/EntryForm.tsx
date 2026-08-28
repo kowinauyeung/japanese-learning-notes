@@ -1,4 +1,4 @@
-import { chipClass, SelectControl } from '@/components/controls';
+import { chipClass, DateControl, SelectControl } from '@/components/controls';
 import type { EntryDraft, Pos } from '@/domain/entry';
 import { JLPT_LEVELS, POLITENESS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import { ENTRY_LIMITS, TAG_INPUT_MAX } from '@/domain/limits';
@@ -6,7 +6,7 @@ import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { parseTags } from '@/lib/draft';
 import { accentKana } from '@/lib/mora';
-import { Area, Field, RepeatableList, Select, Text, inputClass } from './fields';
+import { Area, Field, RepeatableList, Select, Text } from './fields';
 import { PitchAccentField } from './PitchAccentField';
 
 /**
@@ -61,11 +61,9 @@ export function EntryForm({
           />
         </Field>
         <Field label={t('form.learnedOn')}>
-          <input
-            type="date"
+          <DateControl
             value={draft.learnedOn}
             onChange={(event) => set('learnedOn', event.target.value)}
-            className={inputClass}
           />
         </Field>
         <Field label={t('form.source')} hint={t('form.optional')}>

@@ -1,4 +1,4 @@
-import { chipClass, SelectControl, controlClass } from '@/components/controls';
+import { chipClass, DateControl, SelectControl } from '@/components/controls';
 import { JLPT_LEVELS, POS, WORD_ORIGINS } from '@/domain/entry';
 import type { PracticeMode } from '@/domain/practice';
 import { useI18n } from '@/i18n/context';
@@ -240,20 +240,16 @@ export function PracticeSetup({
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="space-y-1">
             <span className="text-[11px] text-muted">{t('vocabulary.startDate')}</span>
-            <input
-              type="date"
+            <DateControl
               value={filters.from}
               onChange={(event) => update('from', event.target.value)}
-              className={controlClass}
             />
           </label>
           <label className="space-y-1">
             <span className="text-[11px] text-muted">{t('vocabulary.endDate')}</span>
-            <input
-              type="date"
+            <DateControl
               value={filters.to}
               onChange={(event) => update('to', event.target.value)}
-              className={controlClass}
             />
           </label>
         </div>

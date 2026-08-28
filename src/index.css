@@ -246,37 +246,35 @@ body {
 }
 
 /*
- * `input[type="date"]` is a widget, not a text box, and the widget is what put
- * the date fields out of line with the dropdowns beside them.
+ * `input[type="date"]` is a widget, not a text box, and it will not be trusted
+ * with the size of the box around it.
  *
- * The measured problem is vertical: Safari lays the printed value out at the
- * top of any box taller than the text, and every control in the app is now a
- * fixed 44px — taller than the text — so the date sat against the top border
- * while the dropdown beside it centred its value.
+ * It was given `display: flex` here to centre its value, on the reasoning that
+ * Chrome's own UA stylesheet already makes it an `inline-flex`. On iOS Safari
+ * that made the control size itself to its widget content instead of to the
+ * 100% width it was given, and the field grew wider than the card holding it
+ * — reported from a phone, on a build where every test in this repository was
+ * green, including the one that measures these four controls to the same width
+ * and the ones that check the page does not scroll sideways. Neither desktop
+ * engine reproduces it: Playwright's WebKit draws the segmented desktop field,
+ * where iOS draws a formatted date and a wheel.
  *
- * `min-width: 0` is not from a bug seen here; it is because a date field
- * carries an intrinsic width for the longest date it can print, and a grid
- * track narrower than that is one screen rotation away. The width half of the
- * assertion in `visual.spec.ts` is what would report it.
- *
- * `display: flex` is what a date input already is in Chrome's own UA
- * stylesheet (`inline-flex`, `align-items: center`), so this states for Safari
- * what one engine had all along rather than imposing a new layout on both.
- *
- * On the element rather than a class: every date field in the app wants this,
- * and the failure mode of forgetting the class is a control that looks nearly
- * right, which is the kind of drift nobody files.
+ * So the box is drawn by a wrapper now — see `DateControl` in
+ * `src/components/controls.tsx` — and what is left here applies to the input
+ * inside it. `max-width` because a `width` a widget may decline is not a
+ * constraint, and this one it cannot exceed.
  */
 input[type='date'] {
-  display: flex;
-  align-items: center;
   min-width: 0;
+  max-width: 100%;
 }
 
 /*
  * Safari centres the printed date in whatever width is left over. Every other
  * control starts its value at the left padding edge, and a row where one value
- * floats in the middle of its box reads as a different kind of field.
+ * floats in the middle of its box reads as a different kind of field. It is
+ * also what decides which end of an over-wide field the wrapper clips: the
+ * date stays readable and the empty space goes.
  */
 input[type='date']::-webkit-date-and-time-value {
   text-align: left;

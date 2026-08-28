@@ -1,4 +1,4 @@
-import type { ReactNode, SelectHTMLAttributes } from 'react';
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
 
 /**
  * One shape for every form control, held in one place.
@@ -73,6 +73,34 @@ export function SelectControl({
           strokeLinejoin="round"
         />
       </svg>
+    </span>
+  );
+}
+
+/**
+ * A date field, boxed by a wrapper rather than by itself.
+ *
+ * The wrapper is the whole point. A native date widget carries an intrinsic
+ * size that iOS Safari will use in place of the width it was given, and when
+ * it did, the field grew past the card around it — while both desktop engines,
+ * and therefore every test here, showed a control the right width. A `<span>`
+ * has no widget in it and no opinion about how wide it should be, so the box
+ * the layout depends on is one nothing can push. `overflow-hidden` is what
+ * holds the input to it; the value is left-aligned, so anything clipped is the
+ * space after the date rather than the date.
+ *
+ * The inner input keeps `text-sm` because the coarse-pointer rule in
+ * `index.css` selects on it by name to hold form text at 16px, which is what
+ * stops iOS zooming the page on focus.
+ */
+export function DateControl({ className = '', ...input }: InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <span className={`${controlClass} flex items-center overflow-hidden ${className}`}>
+      <input
+        type="date"
+        {...input}
+        className="w-full min-w-0 border-0 bg-transparent p-0 text-sm text-ink outline-none"
+      />
     </span>
   );
 }

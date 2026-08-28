@@ -1,4 +1,4 @@
-import { chipClass, SelectControl, controlClass } from '@/components/controls';
+import { chipClass, DateControl, SelectControl } from '@/components/controls';
 import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
@@ -130,22 +130,12 @@ export function FilterPanel({
 
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.startDate')}</span>
-          <input
-            type="date"
-            value={filters.from}
-            onChange={(event) => set('from', event.target.value)}
-            className={controlClass}
-          />
+          <DateControl value={filters.from} onChange={(event) => set('from', event.target.value)} />
         </label>
 
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.endDate')}</span>
-          <input
-            type="date"
-            value={filters.to}
-            onChange={(event) => set('to', event.target.value)}
-            className={controlClass}
-          />
+          <DateControl value={filters.to} onChange={(event) => set('to', event.target.value)} />
         </label>
       </div>
 

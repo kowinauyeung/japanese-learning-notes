@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { OVERSIZE_SET, OVERSIZE_WORDS, seed, seedSignedIn, WORDS } from './fixtures';
 
 /**
@@ -507,17 +508,32 @@ test.describe('one control shape', () => {
   test.use({ isMobile: true, hasTouch: true });
   const CONTROL_HEIGHT = 44;
 
+  /**
+   * The date fields are measured through their wrapper, because that is what
+   * draws the box: `DateControl` puts the border, the height and the padding
+   * on a `<span>` and the bare input inside it, so that no native widget's
+   * idea of its own size can decide the width of the card. `getByLabel` still
+   * finds the input, which is the control; its parent is the control's box.
+   */
+  const box = (page: Page, label: string, wrapped = false) => {
+    const control = page.getByLabel(label);
+    return (wrapped ? control.locator('..') : control).boundingBox();
+  };
+
   test('a dropdown and a date field are the same box', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await seedSignedIn(page);
     await page.goto('/practice/flashcards');
     await expect(page.getByLabel('品詞')).toBeVisible();
 
-    const boxes = await Promise.all(
-      ['品詞', '語種', '開始日', '終了日'].map((label) => page.getByLabel(label).boundingBox()),
-    );
+    const boxes = await Promise.all([
+      box(page, '品詞'),
+      box(page, '語種'),
+      box(page, '開始日', true),
+      box(page, '終了日', true),
+    ]);
 
-    expect(boxes.map((box) => box?.height)).toEqual([
+    expect(boxes.map((each) => each?.height)).toEqual([
       CONTROL_HEIGHT,
       CONTROL_HEIGHT,
       CONTROL_HEIGHT,
@@ -525,7 +541,21 @@ test.describe('one control shape', () => {
     ]);
     // Stacked in one column at this width, so a widget refusing to shrink to
     // its track shows up as a width that is not the width of the others.
-    expect(new Set(boxes.map((box) => box?.width)).size).toBe(1);
+    expect(new Set(boxes.map((each) => each?.width)).size).toBe(1);
+
+    /*
+     * And none of them wider than the card. This is the assertion the reported
+     * bug wanted: a date field given `display: flex` sized itself to its widget
+     * content on iOS and grew past the panel, on a build where the width check
+     * above was green — desktop WebKit draws a segmented field where iOS draws
+     * a formatted date, so neither engine here can produce that width. It is
+     * kept because the claim is right even where this suite cannot break it,
+     * and `DateControl` is what makes it structural rather than hopeful.
+     */
+    const panel = await page.locator('main section').first().boundingBox();
+    for (const each of boxes) {
+      expect(each!.x + each!.width).toBeLessThanOrEqual(panel!.x + panel!.width);
+    }
   });
 
   /**
