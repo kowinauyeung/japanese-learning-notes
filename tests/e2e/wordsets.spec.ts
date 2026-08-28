@@ -24,6 +24,19 @@ const memberOrder = (page: Page) =>
 const memberHrefs = (page: Page) =>
   memberOrder(page).evaluateAll((rows) => rows.map((row) => row.getAttribute('href')));
 
+/**
+ * Enter edit mode, where the two drag panels live.
+ *
+ * A set opens on its words drawn as cards; 単語を探す, 収録語 and
+ * この単語集を削除 are all behind 編集, so every case below that changes what a
+ * set holds goes through here first. A reload lands back in view mode, which
+ * is why the cases that reload call this a second time.
+ */
+async function enterEditMode(page: Page): Promise<void> {
+  await page.getByRole('button', { name: '編集', exact: true }).click();
+  await expect(page.locator('[data-drop-list="members"]')).toBeVisible();
+}
+
 const LONG_SET_NAME = 'W'.repeat(200);
 const LONG_SET_DESCRIPTION = 'W'.repeat(5000);
 
@@ -119,8 +132,9 @@ test.describe('word sets', () => {
       await detailTitle.evaluate((element) => element.scrollWidth <= element.clientWidth),
     ).toBe(true);
 
-    const edit = page.getByRole('button', { name: '編集' });
-    await edit.click();
+    await enterEditMode(page);
+    const details = page.getByRole('button', { name: '名前と説明' });
+    await details.click();
     const dialog = page.getByRole('dialog', { name: '単語集を編集' });
     await expect(dialog.getByLabel(/名前/)).toBeFocused();
     await expect(page.locator('#root')).toHaveAttribute('inert', '');
@@ -133,7 +147,7 @@ test.describe('word sets', () => {
 
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
-    await expect(edit).toBeFocused();
+    await expect(details).toBeFocused();
     await expect(page.locator('#root')).not.toHaveAttribute('inert', '');
 
     await page.goto('/practice/flashcards');
@@ -153,6 +167,39 @@ test.describe('word sets', () => {
         );
       }),
     ).toBe(true);
+  });
+
+  /**
+   * The two screens a 単語集 has, and which one it opens on.
+   *
+   * Reading a set used to mean reading past a filter toolbar, a panel listing
+   * every other word in the notebook, and a red delete button: the words the
+   * set actually held were one column of a builder, drawn as bare rows. What is
+   * asserted here is the split — the cards are the default, the drag panels are
+   * not on the page at all until 編集, and 完了 puts them away again.
+   *
+   * `N2` is the assertion that says these are the notebook's cards and not
+   * 収録語's rows: a row carries the headword and its reading, and only the card
+   * carries the level.
+   */
+  test('opens a set on its words, and keeps the editor behind 編集', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
+    await page.goto('/wordsets/set-work');
+
+    const card = page.locator('a[href="/vocabulary/w-kiriwake"]');
+    await expect(card).toBeVisible();
+    await expect(card).toContainText('N2');
+    await expect(page.locator('[data-drop-list="members"]')).toBeHidden();
+    await expect(page.locator('[data-drop-list="candidates"]')).toBeHidden();
+    await expect(page.getByRole('button', { name: 'この単語集を削除' })).toBeHidden();
+
+    await enterEditMode(page);
+    await expect(page.locator('[data-drop-list="candidates"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'この単語集を削除' })).toBeVisible();
+
+    await page.getByRole('button', { name: '完了' }).click();
+    await expect(page.locator('[data-drop-list="members"]')).toBeHidden();
+    await expect(card).toContainText('N2');
   });
 
   test('rejects whitespace and over-limit names, but renders markup-shaped names as text', async ({
@@ -185,6 +232,7 @@ test.describe('word sets', () => {
       wordSetWriteDelayMs: 250,
     });
     await page.goto('/wordsets/set-stress');
+    await enterEditMode(page);
 
     const addAll = page.getByRole('button', { name: /表示中の \d+ 語を追加/ });
     const box = await addAll.boundingBox();
@@ -202,6 +250,7 @@ test.describe('word sets', () => {
     const hrefs = await memberHrefs(page);
     expect(new Set(hrefs).size).toBe(50);
     await page.reload();
+    await enterEditMode(page);
     await expect(memberOrder(page)).toHaveCount(50);
     expect(new Set(await memberHrefs(page)).size).toBe(50);
   });
@@ -214,6 +263,7 @@ test.describe('word sets', () => {
       wordSetWriteDelayMs: 250,
     });
     await page.goto('/wordsets/set-stress');
+    await enterEditMode(page);
 
     const addButtons = page.locator('[data-drop-list="candidates"] li button', {
       hasText: '＋ 追加',
@@ -232,6 +282,7 @@ test.describe('word sets', () => {
     expect(new Set(hrefs).size).toBe(hrefs.length);
 
     await page.reload();
+    await enterEditMode(page);
     await expect(memberOrder(page)).toHaveCount(hrefs.length);
     expect(await memberHrefs(page)).toEqual(hrefs);
   });
@@ -243,6 +294,7 @@ test.describe('word sets', () => {
       wordSets: [{ id: 'set-stress', name: '負荷試験', entryIds: MANY_IDS }],
     });
     await page.goto('/wordsets/set-stress');
+    await enterEditMode(page);
     await expect(memberOrder(page)).toHaveCount(50);
     const original = await memberHrefs(page);
 
@@ -259,6 +311,7 @@ test.describe('word sets', () => {
     }
 
     await page.reload();
+    await enterEditMode(page);
     await expect(memberOrder(page)).toHaveCount(50);
     expect(await memberHrefs(page)).toEqual(expected);
     expect(new Set(await memberHrefs(page)).size).toBe(50);
@@ -273,6 +326,7 @@ test.describe('word sets', () => {
       wordSets: [{ id: 'set-stress', name: '負荷試験', entryIds: MANY_IDS }],
     });
     await page.goto('/wordsets/set-stress');
+    await enterEditMode(page);
     await expect(memberOrder(page)).toHaveCount(50);
     const original = await memberHrefs(page);
     const grip = page
@@ -315,6 +369,14 @@ test.describe('word sets', () => {
 
     // Creating opens the new set: a 単語集 is worth nothing until it has words.
     await expect(page.getByRole('heading', { name: /会議の語/ })).toBeVisible();
+    // Read first, and an empty set says so in the words of the screen it is on
+    // — the drag prompt below belongs to 編集 and is not what a new set greets
+    // its author with.
+    await expect(
+      page.getByText('まだ単語がありません。「編集」から追加してください。'),
+    ).toBeVisible();
+
+    await enterEditMode(page);
     await expect(
       page.getByText('ここに単語をドラッグ、または「＋ 追加」で入れてください'),
     ).toBeVisible();
@@ -339,6 +401,7 @@ test.describe('word sets', () => {
     await page.goto('/wordsets');
     await page.getByRole('link', { name: /仕事セット/ }).click();
     await expect(page.getByRole('heading', { level: 1, name: /2 語/ })).toBeVisible();
+    await enterEditMode(page);
 
     await page
       .locator('li', { has: page.locator('a[href="/vocabulary/w-choukou"]') })
@@ -362,6 +425,7 @@ test.describe('word sets', () => {
 
     await page.getByLabel('新しい単語集の名前').fill('ニュースの語');
     await page.getByRole('button', { name: '作成' }).click();
+    await enterEditMode(page);
     await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill('ちょうこう');
     await page.getByRole('button', { name: '＋ 追加' }).click();
     await expect(page.getByRole('heading', { level: 1, name: /1 語/ })).toBeVisible();
@@ -409,6 +473,7 @@ test.describe('word sets', () => {
   test('drags a word from the notebook into the top of the set', async ({ page }) => {
     await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
     await page.goto('/wordsets/set-work');
+    await enterEditMode(page);
     await expect(memberOrder(page)).toHaveCount(2);
 
     await dragOnto(
@@ -430,6 +495,7 @@ test.describe('word sets', () => {
   test('drags a word by its body, not only by its grip', async ({ page }) => {
     await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
     await page.goto('/wordsets/set-work');
+    await enterEditMode(page);
 
     await dragOnto(
       page,
@@ -457,6 +523,7 @@ test.describe('word sets', () => {
   test('still opens the word when a press on a row drifts slightly', async ({ page }) => {
     await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
     await page.goto('/wordsets/set-work');
+    await enterEditMode(page);
 
     const row = await memberOrder(page).first().boundingBox();
     if (!row) throw new Error('the first member is not laid out');
@@ -477,6 +544,7 @@ test.describe('word sets', () => {
     await page.goto('/wordsets');
     await page.getByLabel('新しい単語集の名前').fill('全部');
     await page.getByRole('button', { name: '作成' }).click();
+    await enterEditMode(page);
 
     await page.getByRole('button', { name: '表示中の 3 語を追加' }).click();
 
@@ -503,6 +571,7 @@ test.describe('word sets', () => {
     await page.getByRole('button', { name: '削除する' }).click();
 
     await page.goto('/wordsets/set-all');
+    await enterEditMode(page);
     await expect
       .poll(() => memberHrefs(page))
       .toEqual(['/vocabulary/w-choukou', '/vocabulary/w-chotto']);
@@ -525,6 +594,7 @@ test.describe('word sets', () => {
     await page.getByRole('button', { name: '削除する' }).click();
 
     await page.goto('/wordsets/set-all');
+    await enterEditMode(page);
     await expect
       .poll(() => memberHrefs(page))
       .toEqual(['/vocabulary/w-choukou', '/vocabulary/w-chotto']);
@@ -546,6 +616,7 @@ test.describe('word sets', () => {
   test('removes the word when the press on 削除 drifts', async ({ page }) => {
     await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
     await page.goto('/wordsets/set-work');
+    await enterEditMode(page);
 
     const remove = page
       .locator('li', { has: page.locator('a[href="/vocabulary/w-choukou"]') })
@@ -571,6 +642,7 @@ test.describe('word sets', () => {
   test('empties the set only after confirming, and keeps the words', async ({ page }) => {
     await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
     await page.goto('/wordsets/set-work');
+    await enterEditMode(page);
 
     await page.getByRole('button', { name: '表示中の 2 語を削除' }).click();
     await page.getByRole('button', { name: 'キャンセル' }).click();
@@ -592,6 +664,7 @@ test.describe('word sets', () => {
   test('drags a member above another to change the study order', async ({ page }) => {
     await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
     await page.goto('/wordsets/set-work');
+    await enterEditMode(page);
 
     await dragOnto(
       page,
@@ -606,6 +679,7 @@ test.describe('word sets', () => {
     // And it survives a reload, so what moved was the stored order and not the
     // rows on screen.
     await page.reload();
+    await enterEditMode(page);
     await expect
       .poll(() => memberHrefs(page))
       .toEqual(['/vocabulary/w-choukou', '/vocabulary/w-kiriwake']);
@@ -621,6 +695,7 @@ test.describe('word sets', () => {
   test('adding a word does not blank the page it was added from', async ({ page }) => {
     await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
     await page.goto('/wordsets/set-work');
+    await enterEditMode(page);
     await expect(memberOrder(page)).toHaveCount(2);
 
     const blanked = await watchForBlanking(page);
@@ -634,6 +709,7 @@ test.describe('word sets', () => {
     await seed(page, { signedIn: true, entries: WORDS, wordSets: WORD_SETS });
     await page.goto('/wordsets');
     await page.getByRole('link', { name: /仕事セット/ }).click();
+    await enterEditMode(page);
 
     await page.getByRole('button', { name: 'この単語集を削除' }).click();
     await page.getByRole('button', { name: '削除する' }).click();
