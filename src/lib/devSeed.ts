@@ -319,6 +319,9 @@ export function devSeed(now: Date): E2ESeed {
     { id: 'dev-set-empty', name: '今週おぼえる語', description: '', entryIds: [] },
   ];
 
+  // `missed` is deliberately absent: a session stores the run and 間違えた語 is
+  // read out of it, so seeding both would demonstrate a document shape the app
+  // does not write.
   const sessions: SeedSession[] = [
     {
       id: 'dev-session-1',
@@ -326,7 +329,12 @@ export function devSeed(now: Date): E2ESeed {
       filterLabel: '単語集:仕事でよく聞く語',
       total: 4,
       correct: 3,
-      missed: ['dev-tetsuzuki'],
+      words: [
+        { entryId: 'dev-shimekiri', headword: '締め切り', reading: 'しめきり', correct: true },
+        { entryId: 'dev-tetsuzuki', headword: '手続き', reading: 'てつづき', correct: false },
+        { entryId: 'dev-uchiawase', headword: '打ち合わせ', reading: 'うちあわせ', correct: true },
+        { entryId: 'dev-kiriwake', headword: '切り分け', reading: 'きりわけ', correct: true },
+      ],
       startedAt: at(1, 21),
       finishedAt: at(1, 21),
     },
@@ -334,9 +342,19 @@ export function devSeed(now: Date): E2ESeed {
       id: 'dev-session-2',
       mode: 'dictation',
       filterLabel: '#日常',
-      total: 3,
+      total: 4,
       correct: 1,
-      missed: ['dev-ukkari', 'dev-sasuga'],
+      words: [
+        { entryId: 'dev-ukkari', headword: 'うっかり', reading: '', correct: false },
+        { entryId: 'dev-chotto', headword: 'ちょっと', reading: '', correct: true },
+        // Named by this session and absent from the notebook, because that is
+        // the one state 履歴 exists to hold and it cannot be reached in
+        // development otherwise: the word was drilled, got wrong, and deleted
+        // afterwards. It renders from the snapshot, marked 削除済み and not
+        // linked. See `devSeed.test.ts`, which expects this id and no other.
+        { entryId: 'dev-torikeshi', headword: '取り消し', reading: 'とりけし', correct: false },
+        { entryId: 'dev-sasuga', headword: 'さすが', reading: '', correct: false },
+      ],
       startedAt: at(3, 20),
       finishedAt: at(3, 20),
     },

@@ -50,11 +50,11 @@ test.describe('history', () => {
 
   /**
    * The row is a summary and the dialog is where the parts that do not fit go —
-   * chiefly the words that were missed, which the row can only count. The row
-   * became a single button to make it openable at all: a control cannot hold
-   * controls, so the links had to move somewhere with room for them.
+   * the words that were missed, which the row can only count, and the run in
+   * full. The row became a single button to make it openable at all: a control
+   * cannot hold controls, so the links had to move somewhere with room.
    */
-  test('opens a session to see which words were missed', async ({ page }) => {
+  test('opens a session to see the run and which words were missed', async ({ page }) => {
     await seedSignedIn(page);
     await page.goto('/practice/flashcards');
     await page.getByRole('button', { name: '#仕事' }).click();
@@ -68,7 +68,54 @@ test.describe('history', () => {
     const dialog = page.getByRole('dialog', { name: 'フラッシュカード' });
     await expect(dialog).toContainText('0 / 1');
     await expect(dialog).toContainText('0%');
-    await expect(dialog.locator('a[href="/vocabulary/w-kiriwake"]')).toBeVisible();
+
+    // The claim that needs a browser is that the run written by the practice
+    // screen is the run read back here. What the filter does to it, and how a
+    // deleted word draws, are covered in `tests/component`.
+    const run = dialog.locator('ol');
+    await expect(run.locator('a[href="/vocabulary/w-kiriwake"]')).toBeVisible();
+    await expect(run.getByRole('listitem')).toHaveCount(1);
+    await expect(run.getByRole('img', { name: '不正解' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'すべて 1' })).toBeVisible();
+  });
+
+  /**
+   * Two dialogs, and a stack rather than a swap.
+   *
+   * Opening a word closes the session dialog on purpose — two modals over each
+   * other is one Escape closing both and a backdrop belonging to neither — but
+   * closing the word used to leave the bare history page, so reading one word
+   * out of a drill cost the whole session you were reading.
+   *
+   * Here rather than in a component test because the two dialogs are driven by
+   * different things: the session by this route's own state, the word by a
+   * provider that pushes the address bar and listens for `popstate`.
+   */
+  test('returns to the session after closing a word opened from inside it', async ({ page }) => {
+    await seedSignedIn(page);
+    await page.goto('/practice/flashcards');
+    await page.getByRole('button', { name: '#仕事' }).click();
+    await page.getByRole('button', { name: '開始する' }).click();
+    await page.getByRole('button', { name: /裏を見る/ }).click();
+    await page.getByRole('button', { name: /もう一度/ }).click();
+
+    await page.goto('/history');
+    await sessionRows(page).first().getByRole('button').click();
+
+    const session = page.getByRole('dialog', { name: 'フラッシュカード' });
+    await session.locator('a[href="/vocabulary/w-kiriwake"]').click();
+
+    // Never both at once: the session steps back while the word is showing.
+    const word = page.getByRole('dialog', { name: '単語' });
+    await expect(word).toBeVisible();
+    await expect(session).toBeHidden();
+    await expect(page).toHaveURL(/\/vocabulary\/w-kiriwake$/);
+
+    await word.getByRole('button', { name: '閉じる' }).click();
+
+    await expect(word).toBeHidden();
+    await expect(session).toBeVisible();
+    await expect(page).toHaveURL(/\/history$/);
   });
 
   /**
@@ -121,7 +168,7 @@ test.describe('history', () => {
           filterLabel: '古い記録',
           total: 3,
           correct: 1,
-          missed: [],
+          words: [],
           startedAt: '2026-06-01T00:00:00.000Z',
           finishedAt: '2026-06-01T00:05:00.000Z',
         },
@@ -131,7 +178,7 @@ test.describe('history', () => {
           filterLabel: '新しい記録',
           total: 3,
           correct: 3,
-          missed: [],
+          words: [],
           startedAt: '2026-06-02T00:00:00.000Z',
           finishedAt: '2026-06-02T00:05:00.000Z',
         },

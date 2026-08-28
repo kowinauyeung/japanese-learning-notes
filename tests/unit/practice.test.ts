@@ -323,7 +323,25 @@ describe('mergeProgress', () => {
 });
 
 describe('summariseSession', () => {
-  it('counts the answers and lists the ids that were missed', () => {
+  const QUEUE = [
+    makeEntry({ id: 'a', headword: '切り分け', reading: 'きりわけ' }),
+    makeEntry({ id: 'b', headword: '兆候', reading: 'ちょうこう' }),
+    // No reading, which is an ordinary note and not a missing value.
+    makeEntry({ id: 'c', headword: 'さすが', reading: '' }),
+  ];
+
+  /**
+   * The headword is copied in, not only pointed at.
+   *
+   * An id alone made 履歴 rewritable by deleting a word: the row could only be
+   * drawn by resolving the id against today's notebook, so a deleted note took
+   * the record of getting it wrong with it.
+   *
+   * Every answer is recorded, not only the wrong ones, so the dialog can print
+   * the run as it happened. `missed` is derived from this on read rather than
+   * stored beside it — two copies of one list are two things that can be wrong.
+   */
+  it('copies the headword of every word dealt into the record, not just its id', () => {
     expect(
       summariseSession({
         mode: 'flashcard',
@@ -334,15 +352,40 @@ describe('summariseSession', () => {
           { entryId: 'c', correct: false },
         ],
         startedAt: '2026-06-24T09:59:00.000Z',
+        entries: QUEUE,
       }),
     ).toEqual({
       mode: 'flashcard',
       filterLabel: '#仕事',
       total: 3,
       correct: 1,
-      missed: ['b', 'c'],
+      // The whole run, in deal order, right answers included — `missed` is not
+      // stored beside it and is derived on read.
+      words: [
+        { entryId: 'a', headword: '切り分け', reading: 'きりわけ', correct: true },
+        { entryId: 'b', headword: '兆候', reading: 'ちょうこう', correct: false },
+        { entryId: 'c', headword: 'さすが', reading: '', correct: false },
+      ],
       startedAt: '2026-06-24T09:59:00.000Z',
     });
+  });
+
+  /**
+   * `words.length` is what the dialog numbers its rows from, and the score
+   * beside it is `total`. An answer the queue cannot name — which should not
+   * happen, and would mean the queue changed under the session — still gets a
+   * row, so the two can never disagree in the one record whose job is to say
+   * what happened. It reads back the way a pre-snapshot session does.
+   */
+  it('records an answer whose word is not in the queue rather than dropping it', () => {
+    const { words } = summariseSession({
+      mode: 'flashcard',
+      filterLabel: '#仕事',
+      answers: [{ entryId: 'ghost', correct: false }],
+      startedAt: '2026-06-24T09:59:00.000Z',
+      entries: QUEUE,
+    });
+    expect(words).toEqual([{ entryId: 'ghost', headword: '', reading: '', correct: false }]);
   });
 
   /**
@@ -363,6 +406,7 @@ describe('summariseSession', () => {
       filterLabel: label,
       answers: [],
       startedAt: '2026-06-24T09:59:00.000Z',
+      entries: [],
     });
 
     expect(filterLabel.length).toBeLessThanOrEqual(SESSION_LIMITS.filterLabel);
@@ -382,6 +426,7 @@ describe('summariseSession', () => {
         filterLabel: label,
         answers: [],
         startedAt: '2026-06-24T09:59:00.000Z',
+        entries: [],
       }).filterLabel,
     ).toBe(label);
   });

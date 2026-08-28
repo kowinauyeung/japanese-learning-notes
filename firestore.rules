@@ -239,9 +239,13 @@ service cloud.firestore {
       ];
     }
 
+    // `missed` is here for documents already written, not for new ones. A
+    // session records `words` — the whole run — and the wrong answers are
+    // derived from it on read, so nothing has written `missed` since. Removing
+    // it would refuse an update to a session written before that change.
     function sessionFields() {
       return [
-        'ownerUid', 'mode', 'filterLabel', 'total', 'correct', 'missed',
+        'ownerUid', 'mode', 'filterLabel', 'total', 'correct', 'missed', 'words',
         'startedAt', 'finishedAt'
       ];
     }
@@ -378,9 +382,12 @@ service cloud.firestore {
         && d.get('correct', 0) is int && d.get('correct', 0) >= 0
         && d.get('correct', 0) <= d.get('total', 0)
         // Element count only. Rules can index a known position, but cannot
-        // iterate across all 2,000 missed ids; see the `validWordSet` note for
-        // the accepted client-only tradeoff.
+        // iterate across all 2,000 recorded words; see the `validWordSet` note
+        // for the accepted client-only tradeoff. Both fields are bounded at the
+        // same 2,000 as `total`, because `words` holds one element per card
+        // dealt and `missed` held one per card missed.
         && list(d.get('missed', []), 2000)
+        && list(d.get('words', []), 2000)
         // Same again, and `mode` is bounded by length rather than by value on
         // purpose. `PRACTICE_MODES` in `src/domain/practice.ts` holds two words
         // today, and an earlier version of this comment said four — but writing

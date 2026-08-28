@@ -489,14 +489,19 @@ function sessionsFor(uid: string): PracticeSession[] {
   const existing = sessionStores.get(uid);
   if (existing) return existing;
 
-  const persisted = load<PracticeSession[] | null>(`sessions.${uid}`, null);
-  const restored =
-    persisted ??
-    (seed().sessions ?? []).map((raw, index) => {
-      const row = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
-      const id = typeof row.id === 'string' ? row.id : `e2e-session-${index + 1}`;
-      return sanitizeSession(id, row);
-    });
+  // Both branches go through `sanitizeSession`, because both are untrusted for
+  // the same reason the Firestore adapter's reads are: what came back was
+  // written by some earlier version of this code. `sessionStorage` outlives a
+  // rebuild in the same tab, so a session persisted before `words` existed
+  // reaches a build that expects it — and `JSON.parse` cast straight to
+  // `PracticeSession[]` would hand `words: undefined` to a reader whose type
+  // says the absence has already been normalised to null.
+  const persisted = load<unknown[] | null>(`sessions.${uid}`, null);
+  const restored = (persisted ?? seed().sessions ?? []).map((raw, index) => {
+    const row = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+    const id = typeof row.id === 'string' ? row.id : `e2e-session-${index + 1}`;
+    return sanitizeSession(id, row);
+  });
 
   for (const session of restored) {
     const n = Number(/^e2e-session-(\d+)$/.exec(session.id)?.[1]);
@@ -525,7 +530,17 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
 
     recordSession(session: PracticeSessionDraft, rows: EntryProgress[]): Promise<string> {
       const id = `e2e-session-${++sessionSequence}`;
-      sessions.push({ ...session, id, finishedAt: new Date().toISOString() });
+      // `missed` is derived on read from Firestore, so it is derived here too:
+      // a substitute that stored it would let the two disagree in the one place
+      // the end-to-end suite reads them both.
+      sessions.push({
+        ...session,
+        id,
+        finishedAt: new Date().toISOString(),
+        missed: session.words
+          .filter((word) => !word.correct)
+          .map(({ entryId, headword, reading }) => ({ entryId, headword, reading })),
+      });
       // Merging row by row, not replacing the map — the real adapter writes
       // with `merge: true` and a substitute that clobbered would hide it.
       for (const row of rows) progress.set(row.entryId, row);

@@ -92,6 +92,9 @@ function makeMonkeyEntry(index: number): SeedEntry {
 
 const MONKEY_ENTRIES = Array.from({ length: 50 }, (_, index) => makeMonkeyEntry(index));
 
+/** The 200-character headword, named because the session fixture snapshots it. */
+const MONKEY_WORD_1 = makeMonkeyEntry(0);
+
 const MONKEY_SET = {
   id: 'monkey-set',
   name: 'W'.repeat(200),
@@ -414,7 +417,16 @@ for (const scenario of SCENARIOS) {
           filterLabel: `単語集:${MONKEY_SET.name}`,
           total: 12,
           correct: 7,
-          missed: ['monkey-word-1'],
+          // Snapshot taken from the entry itself, so the 200-character headword
+          // this fixture exists to be hostile with reaches the history dialog
+          // too, not only the word list.
+          missed: [
+            {
+              entryId: MONKEY_WORD_1.id,
+              headword: MONKEY_WORD_1.headword ?? '',
+              reading: MONKEY_WORD_1.reading ?? '',
+            },
+          ],
           startedAt: '2026-06-23T00:00:00.000Z',
           finishedAt: '2026-06-23T00:05:00.000Z',
         },
