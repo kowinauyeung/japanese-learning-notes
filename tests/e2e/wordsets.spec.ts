@@ -34,6 +34,10 @@ const memberHrefs = (page: Page) =>
  */
 async function enterEditMode(page: Page): Promise<void> {
   await page.getByRole('button', { name: '編集', exact: true }).click();
+  // Waits for 収録語 to be laid out, not merely for the click to land: every
+  // caller below immediately drags a row or presses a button inside one of the
+  // two panels, and Playwright would find those on a panel that is still
+  // mid-render and act on coordinates that move under the pointer.
   await expect(page.locator('[data-drop-list="members"]')).toBeVisible();
 }
 
@@ -188,16 +192,36 @@ test.describe('word sets', () => {
 
     const card = page.locator('a[href="/vocabulary/w-kiriwake"]');
     await expect(card).toBeVisible();
+    // The card and not a 収録語 row: a row carries the headword and its reading,
+    // and only the card carries the level. Without this the test passes against
+    // the old screen, where the same word was on the page as a bare row.
     await expect(card).toContainText('N2');
+    // Gone from the DOM, not merely out of sight. `useListDrag` finds its drop
+    // target with `elementFromPoint` and walks up to `[data-drop-list]`
+    // (`src/lib/listDrag.ts`), so a panel left rendered and hidden still
+    // answers a hit test — a press that drifts over the reading screen would
+    // then rearrange the set with nothing on screen saying it could.
     await expect(page.locator('[data-drop-list="members"]')).toBeHidden();
+    // 単語を探す is the other half of the same claim, and the one a reader
+    // notices: it lists every word the set does *not* hold, so leaving it up
+    // makes the page look like it is listing the wrong words.
     await expect(page.locator('[data-drop-list="candidates"]')).toBeHidden();
+    // Nothing that destroys the set is one press away from reading it. The
+    // words in a set take dragging to order and nothing else records that order.
     await expect(page.getByRole('button', { name: 'この単語集を削除' })).toBeHidden();
 
     await enterEditMode(page);
+    // 編集 has to reach the *picker* as well, which is the panel words are
+    // added from. `enterEditMode` only waits for 収録語, so without this the
+    // door could open onto half a screen and every case below it would still
+    // pass.
     await expect(page.locator('[data-drop-list="candidates"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'この単語集を削除' })).toBeVisible();
 
     await page.getByRole('button', { name: '完了' }).click();
+    // 完了 is a door out and not a one-way trip. A mode that could be entered
+    // and not left would strand a reader in the builder for the rest of the
+    // visit, since nothing but this button puts the cards back.
     await expect(page.locator('[data-drop-list="members"]')).toBeHidden();
     await expect(card).toContainText('N2');
   });

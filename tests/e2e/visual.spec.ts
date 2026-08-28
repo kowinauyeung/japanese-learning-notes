@@ -323,6 +323,11 @@ test.describe('long values must not widen the page', () => {
       path: '/wordsets/set-oversize',
       prepare: async (page: import('@playwright/test').Page) => {
         await page.getByRole('button', { name: '編集', exact: true }).click();
+        // The measurement below is the test; this is what makes it measure
+        // anything. `overflow()` reads `documentElement.scrollWidth` the moment
+        // it is called, so a click that has not yet laid the panels out is
+        // measured as the card grid — a green result reported for a screen the
+        // long headword never reached.
         await expect(page.locator('[data-drop-list="members"]')).toBeVisible();
       },
     },
