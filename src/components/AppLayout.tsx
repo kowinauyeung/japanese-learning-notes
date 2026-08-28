@@ -96,11 +96,12 @@ function AuthenticatedLayout({
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [adding, setAdding] = useState(false);
 
   return (
-    <EntriesProvider uid={uid}>
+    <EntriesProvider key={uid} uid={uid} loadOnMount={location.pathname !== '/'}>
       <ProgressProvider uid={uid}>
         <WordSetsProvider uid={uid}>
           {/* Below the data providers because the dialog reads the notebook

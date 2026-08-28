@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { summarise } from '@/lib/stats';
+import { summarise, summaryFromDashboardStats } from '@/lib/stats';
 import { makeEntry } from '../fixtures/entry';
 
 /**
@@ -122,5 +122,31 @@ describe('summarise — distributions', () => {
   it('ignores an entry with no parts of speech rather than inventing a row', () => {
     const summary = summarise([on('2026-06-24', { pos: [] })], NOW);
     expect(summary.posRows).toEqual([]);
+  });
+});
+
+describe('summaryFromDashboardStats', () => {
+  it('builds the dashboard summary from persisted counters and live period counts', () => {
+    const summary = summaryFromDashboardStats(
+      {
+        ownerUid: 'u1',
+        total: 4,
+        countsByDay: { '2026-06-24': 2, '2026-06-23': 1, empty: 0 },
+        jlptCounts: { N3: 2, N1: 1 },
+        posCounts: { 名詞: 3, 動詞: 1 },
+      },
+      { inWeek: 2, inMonth: 3, inYear: 4 },
+    );
+
+    expect(summary.countsByDay.get('2026-06-24')).toBe(2);
+    expect([summary.inWeek, summary.inMonth, summary.inYear]).toEqual([2, 3, 4]);
+    expect(summary.jlptRows).toEqual([
+      { label: 'N1', count: 1 },
+      { label: 'N3', count: 2 },
+    ]);
+    expect(summary.posRows).toEqual([
+      { label: '名詞', count: 3 },
+      { label: '動詞', count: 1 },
+    ]);
   });
 });

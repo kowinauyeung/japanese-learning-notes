@@ -4,6 +4,7 @@ import type { FirebaseApp } from 'firebase/app';
 import {
   connectFirestoreEmulator,
   doc,
+  getDoc,
   getFirestore,
   setDoc,
   Timestamp,
@@ -253,6 +254,77 @@ describe('list — pagination', () => {
     } while (cursor);
 
     expect(new Set(seen).size).toBe(ids.length);
+  });
+});
+
+describe('dashboard reads', () => {
+  it('counts learned dates from Firestore without reading every entry document', async () => {
+    const repo = freshRepo();
+    await repo.create(draft({ headword: '今週', learnedOn: '2026-06-24' }));
+    await repo.create(draft({ headword: '先月', learnedOn: '2026-05-31' }));
+
+    expect(await repo.countLearnedSince('2026-06-01')).toBe(1);
+    expect(await repo.countLearnedSince('2026-01-01')).toBe(2);
+  });
+
+  it('returns the recent learned words without walking the whole notebook', async () => {
+    const repo = freshRepo();
+    await repo.create(draft({ headword: '古い', learnedOn: '2026-01-01' }));
+    await repo.create(draft({ headword: '新しい', learnedOn: '2026-06-24' }));
+    await repo.create(draft({ headword: '中間', learnedOn: '2026-03-15' }));
+
+    const recent = await repo.recentLearned(2);
+
+    expect(recent.map((entry) => entry.headword)).toEqual(['新しい', '中間']);
+  });
+
+  it('pages the selected heatmap day instead of filtering a full notebook in memory', async () => {
+    const repo = freshRepo();
+    await repo.create(draft({ headword: '一', learnedOn: '2026-06-24' }));
+    await repo.create(draft({ headword: '二', learnedOn: '2026-06-24' }));
+    await repo.create(draft({ headword: '三', learnedOn: '2026-06-24' }));
+    await repo.create(draft({ headword: '別日', learnedOn: '2026-06-23' }));
+
+    const first = await repo.listLearnedOn('2026-06-24', { limit: 2, cursor: null });
+    const second = await repo.listLearnedOn('2026-06-24', { limit: 2, cursor: first.cursor });
+
+    expect(first.items).toHaveLength(2);
+    expect(second.items).toHaveLength(1);
+    expect([...first.items, ...second.items].map((entry) => entry.learnedOn)).toEqual([
+      '2026-06-24',
+      '2026-06-24',
+      '2026-06-24',
+    ]);
+  });
+
+  it('returns null dashboard stats until the post-deploy backfill has written them', async () => {
+    expect(await freshRepo().dashboardStats()).toBeNull();
+  });
+
+  it('updates the dashboard stats document on writes after backfill has created it', async () => {
+    const uid = `it-stats-${randomUUID()}`;
+    const repo = createEntryRepository(db, uid);
+    const statsRef = doc(db, 'users', uid, 'stats', 'vocabulary');
+    await setDoc(statsRef, {
+      ownerUid: uid,
+      total: 0,
+      countsByDay: {},
+      jlptCounts: {},
+      posCounts: {},
+      updatedAt: Timestamp.fromDate(new Date('2026-06-24T09:00:00.000Z')),
+    });
+
+    const id = await repo.create(
+      draft({ learnedOn: '2026-06-24', jlpt: 'N2', pos: ['名詞', '動詞'] }),
+    );
+    await repo.update(id, draft({ learnedOn: '2026-06-25', jlpt: 'N1', pos: ['副詞'] }));
+    await repo.remove(id);
+
+    const stats = (await getDoc(statsRef)).data();
+    expect(stats?.total).toBe(0);
+    expect(stats?.countsByDay).toEqual({});
+    expect(stats?.jlptCounts).toEqual({});
+    expect(stats?.posCounts).toEqual({});
   });
 });
 

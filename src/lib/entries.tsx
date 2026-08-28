@@ -56,9 +56,17 @@ const PAGE_SIZE = 200;
  * is what lets `repository` be non-null, which removes a null branch from
  * every write site.
  */
-export function EntriesProvider({ uid, children }: { uid: string; children: ReactNode }) {
+export function EntriesProvider({
+  uid,
+  loadOnMount = true,
+  children,
+}: {
+  uid: string;
+  loadOnMount?: boolean;
+  children: ReactNode;
+}) {
   const [entries, setEntries] = useState<Entry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(loadOnMount);
   const [error, setError] = useState<LoadFailure | null>(null);
 
   // Rebuilt when the signed-in user changes, so the `users/{uid}` path baked
@@ -119,9 +127,10 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
   }, [repository]);
 
   useEffect(() => {
+    if (!loadOnMount) return;
     setLoading(true);
     void refresh();
-  }, [refresh]);
+  }, [loadOnMount, refresh]);
 
   /**
    * Denial does not belong here: signing back in is what clears it, not the

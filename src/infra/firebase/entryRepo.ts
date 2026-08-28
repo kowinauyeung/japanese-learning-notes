@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   documentId,
+  getCountFromServer,
   getDoc,
   getDocs,
   limit as limitTo,
@@ -10,14 +11,16 @@ import {
   query,
   serverTimestamp,
   startAfter,
+  startAt,
   setDoc,
   Timestamp,
   updateDoc,
   waitForPendingWrites,
+  where,
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
 import type { Entry, EntryDraft } from '@/domain/entry';
-import type { EntryRepository, Page, PageQuery } from '@/domain/ports';
+import type { EntryDashboardStats, EntryRepository, Page, PageQuery } from '@/domain/ports';
 import { sanitizeEntry } from '@/lib/sanitize';
 import { decodeCursor, encodeCursor } from './cursor';
 import { LocalWriteTracker } from './localWrite';
@@ -41,10 +44,37 @@ import { withIsoTimestamps } from './mappers';
  */
 export function createEntryRepository(db: Firestore, uid: string): EntryRepository {
   const entriesPath = () => collection(db, 'users', uid, 'entries');
+  const statsPath = () => doc(db, 'users', uid, 'stats', 'vocabulary');
   const writes = new LocalWriteTracker();
 
   const toEntry = (id: string, data: Record<string, unknown>): Entry =>
     sanitizeEntry(id, withIsoTimestamps(data));
+
+  const statsFrom = (data: Record<string, unknown>): EntryDashboardStats => ({
+    ownerUid: typeof data.ownerUid === 'string' ? data.ownerUid : uid,
+    total: numberRecord({ total: data.total }).total ?? 0,
+    countsByDay: numberRecord(data.countsByDay),
+    jlptCounts: numberRecord(data.jlptCounts),
+    posCounts: numberRecord(data.posCounts),
+  });
+
+  const updateStats = (stats: EntryDashboardStats, before: Entry | null, after: Entry | null) => {
+    if (before) adjustStats(stats, before, -1);
+    if (after) adjustStats(stats, after, 1);
+  };
+
+  const writeStatsDelta = async (before: Entry | null, after: Entry | null) => {
+    try {
+      const ref = statsPath();
+      const snapshot = await getDoc(ref);
+      if (!snapshot.exists()) return;
+      const stats = statsFrom(snapshot.data());
+      updateStats(stats, before, after);
+      await setDoc(ref, { ...stats, updatedAt: serverTimestamp() });
+    } catch (cause) {
+      if (!isUnavailable(cause)) console.error(cause);
+    }
+  };
 
   return {
     async list({ limit, cursor }: PageQuery): Promise<Page<Entry>> {
@@ -87,6 +117,60 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
       };
     },
 
+    async dashboardStats(): Promise<EntryDashboardStats | null> {
+      const snapshot = await getDoc(statsPath());
+      return snapshot.exists() ? statsFrom(snapshot.data()) : null;
+    },
+
+    async countLearnedSince(date: string): Promise<number> {
+      const snapshot = await getCountFromServer(
+        query(entriesPath(), where('learnedOn', '>=', date)),
+      );
+      return snapshot.data().count;
+    },
+
+    async recentLearned(limit: number): Promise<Entry[]> {
+      const snapshot = await getDocs(
+        query(
+          entriesPath(),
+          orderBy('learnedOn', 'desc'),
+          orderBy(documentId(), 'desc'),
+          limitTo(limit),
+        ),
+      );
+      return snapshot.docs.map((d) => toEntry(d.id, d.data()));
+    },
+
+    async listLearnedOn(day, { limit, cursor }: PageQuery): Promise<Page<Entry>> {
+      const constraints = [
+        where('learnedOn', '==', day),
+        orderBy(documentId(), 'desc'),
+        limitTo(limit + 1),
+      ];
+      const snapshot = await getDocs(
+        cursor
+          ? query(entriesPath(), ...constraints, startAfter(cursor))
+          : query(entriesPath(), ...constraints),
+      );
+      const page = snapshot.docs.slice(0, limit);
+      return {
+        items: page.map((d) => toEntry(d.id, d.data())),
+        cursor: snapshot.docs.length > limit ? (page[page.length - 1]?.id ?? null) : null,
+      };
+    },
+
+    async wordOfDay(seed: string): Promise<Entry | null> {
+      const afterSeed = await getDocs(
+        query(entriesPath(), orderBy(documentId()), startAt(seed), limitTo(1)),
+      );
+      const picked = afterSeed.docs[0];
+      if (picked) return toEntry(picked.id, picked.data());
+
+      const first = await getDocs(query(entriesPath(), orderBy(documentId()), limitTo(1)));
+      const wrapped = first.docs[0];
+      return wrapped ? toEntry(wrapped.id, wrapped.data()) : null;
+    },
+
     async get(id: string): Promise<Entry | null> {
       const snapshot = await getDoc(doc(db, 'users', uid, 'entries', id));
       return snapshot.exists() ? toEntry(snapshot.id, snapshot.data()) : null;
@@ -110,6 +194,10 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
           updatedAt: serverTimestamp(),
         }),
       );
+      await writeStatsDelta(
+        null,
+        toEntry(ref.id, { ...draft, createdAt: new Date(), updatedAt: new Date(), ownerUid: uid }),
+      );
       return ref.id;
     },
 
@@ -119,21 +207,58 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
      */
     async update(id: string, draft: EntryDraft): Promise<void> {
       const ref = doc(db, 'users', uid, 'entries', id);
+      const before = await getDoc(ref)
+        .then((snapshot) => (snapshot.exists() ? toEntry(snapshot.id, snapshot.data()) : null))
+        .catch(() => null);
       await writes.write(ref, () =>
         updateDoc(ref, {
           ...draft,
           updatedAt: serverTimestamp(),
         }),
       );
+      if (before) await writeStatsDelta(before, { ...before, ...draft });
     },
 
     async remove(id: string): Promise<void> {
       const ref = doc(db, 'users', uid, 'entries', id);
+      const before = await getDoc(ref)
+        .then((snapshot) => (snapshot.exists() ? toEntry(snapshot.id, snapshot.data()) : null))
+        .catch(() => null);
       await writes.write(ref, () => deleteDoc(ref));
+      if (before) await writeStatsDelta(before, null);
     },
 
     async settlePendingWrites(): Promise<void> {
       await writes.settle(() => waitForPendingWrites(db));
     },
   };
+}
+
+function numberRecord(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(raw)
+      .filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value > 0)
+      .map(([key, value]) => [key, value as number]),
+  );
+}
+
+function adjust(stats: Record<string, number>, key: string, delta: number) {
+  if (!key) return;
+  const next = (stats[key] ?? 0) + delta;
+  if (next > 0) stats[key] = next;
+  else delete stats[key];
+}
+
+function adjustStats(stats: EntryDashboardStats, entry: Entry, delta: 1 | -1) {
+  stats.total = Math.max(0, stats.total + delta);
+  adjust(stats.countsByDay, entry.learnedOn, delta);
+  adjust(stats.jlptCounts, entry.jlpt, delta);
+  for (const part of entry.pos) adjust(stats.posCounts, part, delta);
+}
+
+function isUnavailable(cause: unknown): boolean {
+  return (
+    typeof cause === 'object' && cause !== null && 'code' in cause && cause.code === 'unavailable'
+  );
 }

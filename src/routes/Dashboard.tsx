@@ -5,23 +5,43 @@ import { Heatmap } from '@/components/dashboard/Heatmap';
 import { RecentPractice } from '@/components/dashboard/RecentPractice';
 import { StatTiles } from '@/components/dashboard/StatTiles';
 import { TodayWord, pickWordOfDay } from '@/components/dashboard/TodayWord';
+import type { Entry } from '@/domain/entry';
+import type { EntryRepository } from '@/domain/ports';
 import type { PracticeMode, PracticeSession } from '@/domain/practice';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
-import { dateKey } from '@/lib/dates';
+import { dateKey, startOfISOWeek, startOfMonth, startOfYear } from '@/lib/dates';
 import { useEntries } from '@/lib/entries';
 import { latestByMode, RECENT_WINDOW } from '@/lib/history';
+import { captureLoadFailure } from '@/lib/loadError';
+import type { LoadFailure } from '@/lib/loadError';
 import { useProgress } from '@/lib/progress';
-import { summarise } from '@/lib/stats';
+import { summarise, summaryFromDashboardStats } from '@/lib/stats';
+import type { Summary } from '@/lib/stats';
+
+const ENTRY_PAGE_SIZE = 200;
+const RECENT_WORDS = 8;
+const SELECTED_DAY_PAGE_SIZE = 50;
 
 export function Component() {
   const { locale, t } = useI18n();
   const entryLabel = useEntryLabel();
-  const { entries, loading, error } = useEntries();
+  const { repository: entriesRepository } = useEntries();
+  const [dashboard, setDashboard] = useState<{
+    stats: Summary;
+    recent: Entry[];
+    wordOfDay: Entry | null;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<LoadFailure | null>(null);
   const errorMessage = useLoadErrorMessage(error);
-  const { repository } = useProgress();
+  const { repository: progressRepository } = useProgress();
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedEntries, setSelectedEntries] = useState<{
+    day: string;
+    entries: Entry[];
+  } | null>(null);
 
   /**
    * The newest session of each mode, or nulls while it is being read.
@@ -39,7 +59,7 @@ export function Component() {
 
   useEffect(() => {
     let cancelled = false;
-    repository
+    progressRepository
       .listSessions({ limit: RECENT_WINDOW, cursor: null })
       .then((page) => {
         if (!cancelled) setLatest(latestByMode(page.items));
@@ -50,19 +70,96 @@ export function Component() {
     return () => {
       cancelled = true;
     };
-  }, [repository]);
+  }, [progressRepository]);
 
-  const stats = useMemo(() => summarise(entries, new Date()), [entries]);
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      const now = new Date();
+      try {
+        const [storedStats, inWeek, inMonth, inYear, recent, wordOfDay] = await Promise.all([
+          entriesRepository.dashboardStats(),
+          entriesRepository.countLearnedSince(dateKey(startOfISOWeek(now))),
+          entriesRepository.countLearnedSince(dateKey(startOfMonth(now))),
+          entriesRepository.countLearnedSince(dateKey(startOfYear(now))),
+          entriesRepository.recentLearned(RECENT_WORDS),
+          entriesRepository.wordOfDay(wordOfDaySeed(dateKey(now))),
+        ]);
 
-  const recent = useMemo(() => {
-    const sorted = [...entries].sort((a, b) => b.learnedOn.localeCompare(a.learnedOn));
-    return selectedDay ? sorted.filter((e) => e.learnedOn === selectedDay) : sorted.slice(0, 8);
-  }, [entries, selectedDay]);
+        if (cancelled) return;
+        if (storedStats) {
+          setDashboard({
+            stats: summaryFromDashboardStats(storedStats, { inWeek, inMonth, inYear }),
+            recent,
+            wordOfDay,
+          });
+          setError(null);
+          return;
+        }
 
-  const wordOfDay = useMemo(() => pickWordOfDay(entries, dateKey(new Date())), [entries]);
+        const all = await drainEntries(entriesRepository);
+        if (cancelled) return;
+        const stats = summarise(all, now);
+        const fallbackRecent = [...all]
+          .sort((a, b) => b.learnedOn.localeCompare(a.learnedOn))
+          .slice(0, RECENT_WORDS);
+        setDashboard({
+          stats,
+          recent: fallbackRecent,
+          wordOfDay: pickWordOfDay(all, dateKey(now)),
+        });
+        setError(null);
+      } catch (cause) {
+        console.error(cause);
+        if (!cancelled) setError(captureLoadFailure(cause, 'load.entries'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [entriesRepository]);
+
+  useEffect(() => {
+    if (!selectedDay) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const page = await entriesRepository.listLearnedOn(selectedDay, {
+          limit: SELECTED_DAY_PAGE_SIZE,
+          cursor: null,
+        });
+        if (!cancelled) setSelectedEntries({ day: selectedDay, entries: page.items });
+      } catch (cause) {
+        console.error(cause);
+        if (!cancelled) setError(captureLoadFailure(cause, 'load.entries'));
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [entriesRepository, selectedDay]);
+
+  const stats = dashboard?.stats;
+  const recent = useMemo(
+    () =>
+      selectedDay
+        ? selectedEntries?.day === selectedDay
+          ? selectedEntries.entries
+          : []
+        : (dashboard?.recent ?? []),
+    [dashboard?.recent, selectedDay, selectedEntries],
+  );
+  const wordOfDay = dashboard?.wordOfDay ?? null;
 
   if (loading) return <p className="py-16 text-center text-sm text-muted">{t('common.loading')}</p>;
   if (errorMessage) return <p className="py-16 text-center text-sm text-danger">{errorMessage}</p>;
+  if (!stats) return <p className="py-16 text-center text-sm text-muted">{t('common.loading')}</p>;
 
   return (
     <div className="space-y-4">
@@ -77,7 +174,9 @@ export function Component() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Distribution
-          title={t('dashboard.jlpt', { count: entries.length })}
+          title={t('dashboard.jlpt', {
+            count: stats.jlptRows.reduce((sum, row) => sum + row.count, 0),
+          })}
           rows={stats.jlptRows}
         />
         <Distribution
@@ -120,4 +219,21 @@ export function Component() {
       </section>
     </div>
   );
+}
+
+async function drainEntries(repository: EntryRepository): Promise<Entry[]> {
+  const all: Entry[] = [];
+  let cursor: string | null = null;
+  do {
+    const page = await repository.list({ limit: ENTRY_PAGE_SIZE, cursor });
+    all.push(...page.items);
+    cursor = page.cursor;
+  } while (cursor);
+  return all;
+}
+
+function wordOfDaySeed(todayKey: string) {
+  let hash = 0;
+  for (const char of todayKey) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return hash.toString(36).padStart(20, '0').slice(0, 20);
 }

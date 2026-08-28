@@ -371,6 +371,54 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
       };
     },
 
+    dashboardStats() {
+      const stats = {
+        ownerUid: uid,
+        total: store.size,
+        countsByDay: {} as Record<string, number>,
+        jlptCounts: {} as Record<string, number>,
+        posCounts: {} as Record<string, number>,
+      };
+      for (const entry of store.values()) {
+        stats.countsByDay[entry.learnedOn] = (stats.countsByDay[entry.learnedOn] ?? 0) + 1;
+        stats.jlptCounts[entry.jlpt] = (stats.jlptCounts[entry.jlpt] ?? 0) + 1;
+        for (const part of entry.pos) stats.posCounts[part] = (stats.posCounts[part] ?? 0) + 1;
+      }
+      return Promise.resolve(stats);
+    },
+
+    countLearnedSince(date: string) {
+      return Promise.resolve([...store.values()].filter((entry) => entry.learnedOn >= date).length);
+    },
+
+    recentLearned(limit: number) {
+      return Promise.resolve(
+        [...store.values()]
+          .sort((a, b) => b.learnedOn.localeCompare(a.learnedOn) || b.id.localeCompare(a.id))
+          .slice(0, limit),
+      );
+    },
+
+    listLearnedOn(day: string, { limit, cursor }: PageQuery): Promise<Page<Entry>> {
+      const all = [...store.values()]
+        .filter((entry) => entry.learnedOn === day)
+        .sort((a, b) => b.id.localeCompare(a.id));
+      const start = cursor ? all.findIndex((entry) => entry.id === cursor) + 1 : 0;
+      const items = all.slice(start, start + limit);
+      const more = start + items.length < all.length;
+      return Promise.resolve({
+        items,
+        cursor: more ? (items[items.length - 1]?.id ?? null) : null,
+      });
+    },
+
+    wordOfDay(seed: string) {
+      const all = [...store.values()].sort((a, b) => a.id.localeCompare(b.id));
+      return Promise.resolve(
+        all.find((entry) => entry.id.localeCompare(seed) >= 0) ?? all[0] ?? null,
+      );
+    },
+
     get(id: string): Promise<Entry | null> {
       return Promise.resolve(store.get(id) ?? null);
     },

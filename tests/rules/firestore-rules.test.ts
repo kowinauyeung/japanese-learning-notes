@@ -94,6 +94,16 @@ const session = (ownerUid: string, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+const dashboardStats = (ownerUid: string, over: Record<string, unknown> = {}) => ({
+  ownerUid,
+  total: 2,
+  countsByDay: { '2026-08-13': 2 },
+  jlptCounts: { N1: 1, N2: 1 },
+  posCounts: { 名詞: 2 },
+  updatedAt: new Date('2026-08-13T00:01:00.000Z'),
+  ...over,
+});
+
 const profile = (uid: string, over: Record<string, unknown> = {}) => ({
   uid,
   nickname: 'Alice',
@@ -178,6 +188,7 @@ describe('private data under users/{uid}', () => {
     await assertFails(db.doc(`users/${ALICE}/progress/entries`).get());
     await assertFails(db.doc(`users/${ALICE}/progress/entries`).set({ entries: {} }));
     await assertFails(db.doc(`users/${ALICE}/practiceSessions/p1`).set(session(BOB)));
+    await assertFails(db.doc(`users/${ALICE}/stats/vocabulary`).set(dashboardStats(BOB)));
   });
 
   it('denies an unauthenticated client', async () => {
@@ -219,6 +230,7 @@ describe("a deleted account's token", () => {
     await assertFails(
       db.doc(`users/${ALICE}/progress/entries`).set({ ownerUid: ALICE, entries: {} }),
     );
+    await assertFails(db.doc(`users/${ALICE}/stats/vocabulary`).set(dashboardStats(ALICE)));
     await assertFails(db.doc(`users/${ALICE}`).set(profile(ALICE)));
   });
 
@@ -466,6 +478,7 @@ describe('bounds on what an owner may write', () => {
     await assertSucceeds(db.doc(`users/${ALICE}/entries/ok`).set(entry(ALICE)));
     await assertSucceeds(db.doc(`users/${ALICE}/wordSets/ok`).set(wordSet(ALICE)));
     await assertSucceeds(db.doc(`users/${ALICE}/practiceSessions/ok`).set(session(ALICE)));
+    await assertSucceeds(db.doc(`users/${ALICE}/stats/vocabulary`).set(dashboardStats(ALICE)));
   });
 
   /**
@@ -716,6 +729,9 @@ describe('bounds on what an owner may write', () => {
     await assertFails(db.doc(`users/${ALICE}/wordSets/x`).set(wordSet(ALICE, { junk: 'x' })));
     await assertFails(
       db.doc(`users/${ALICE}/practiceSessions/x`).set(session(ALICE, { junk: 'x' })),
+    );
+    await assertFails(
+      db.doc(`users/${ALICE}/stats/vocabulary`).set(dashboardStats(ALICE, { junk: 'x' })),
     );
     await assertFails(
       db.doc(`users/${ALICE}/progress/entries`).set({ ownerUid: ALICE, entries: {}, junk: 'x' }),

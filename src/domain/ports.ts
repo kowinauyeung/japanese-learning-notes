@@ -34,8 +34,21 @@ export interface PageQuery {
   cursor: string | null;
 }
 
+export interface EntryDashboardStats {
+  ownerUid: string;
+  total: number;
+  countsByDay: Record<string, number>;
+  jlptCounts: Record<string, number>;
+  posCounts: Record<string, number>;
+}
+
 export interface EntryRepository {
   list(q: PageQuery): Promise<Page<Entry>>;
+  dashboardStats(): Promise<EntryDashboardStats | null>;
+  countLearnedSince(date: string): Promise<number>;
+  recentLearned(limit: number): Promise<Entry[]>;
+  listLearnedOn(day: string, q: PageQuery): Promise<Page<Entry>>;
+  wordOfDay(seed: string): Promise<Entry | null>;
   get(id: string): Promise<Entry | null>;
   create(draft: EntryDraft): Promise<string>;
   update(id: string, draft: EntryDraft): Promise<void>;

@@ -1,5 +1,6 @@
 import { JLPT_LEVELS } from '@/domain/entry';
 import type { Entry } from '@/domain/entry';
+import type { EntryDashboardStats } from '@/domain/ports';
 import { parseLocalDate, startOfISOWeek, startOfMonth, startOfYear } from './dates';
 
 /**
@@ -26,6 +27,12 @@ export interface Summary {
   jlptRows: DistributionRow[];
   /** Descending by count, since there is no natural order over 品詞. */
   posRows: DistributionRow[];
+}
+
+export interface PeriodCounts {
+  inWeek: number;
+  inMonth: number;
+  inYear: number;
 }
 
 export function summarise(entries: Entry[], now: Date): Summary {
@@ -63,6 +70,28 @@ export function summarise(entries: Entry[], now: Date): Summary {
       count: jlpt.get(level) ?? 0,
     })),
     posRows: [...pos.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count),
+  };
+}
+
+export function summaryFromDashboardStats(
+  stats: EntryDashboardStats,
+  periods: PeriodCounts,
+): Summary {
+  return {
+    countsByDay: new Map(
+      Object.entries(stats.countsByDay).filter(([, count]) => Number.isFinite(count) && count > 0),
+    ),
+    inWeek: periods.inWeek,
+    inMonth: periods.inMonth,
+    inYear: periods.inYear,
+    jlptRows: JLPT_LEVELS.map((level) => ({
+      label: level,
+      count: stats.jlptCounts[level] ?? 0,
+    })).filter((row) => row.count > 0),
+    posRows: Object.entries(stats.posCounts)
+      .filter(([, count]) => Number.isFinite(count) && count > 0)
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count),
   };

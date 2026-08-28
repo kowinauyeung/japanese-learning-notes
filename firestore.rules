@@ -246,6 +246,13 @@ service cloud.firestore {
       ];
     }
 
+    function dashboardStatsFields() {
+      return [
+        'ownerUid', 'total', 'countsByDay', 'jlptCounts', 'posCounts',
+        'updatedAt'
+      ];
+    }
+
     function str(value, max) {
       return value is string && value.size() <= max;
     }
@@ -322,6 +329,20 @@ service cloud.firestore {
         && d.get('usage', {}).size() <= 20
         && (d.get('posInfo', null) == null || d.get('posInfo', {}).size() <= 20)
         && (d.get('copiedFrom', null) == null || d.get('copiedFrom', {}).size() <= 10);
+    }
+
+    function validDashboardStats(uid) {
+      let d = request.resource.data;
+      return ownedBy(uid)
+        && d.keys().hasOnly(dashboardStatsFields())
+        && d.total is int && d.total >= 0 && d.total <= 50000
+        // These maps are client-maintained cached counters. Rules can bound
+        // their shape and size, but cannot prove every delta matches the entry
+        // mutation in the same transaction.
+        && d.get('countsByDay', {}).size() <= 5000
+        && d.get('jlptCounts', {}).size() <= 20
+        && d.get('posCounts', {}).size() <= 50
+        && d.updatedAt is timestamp;
     }
 
     function validUser(uid) {
@@ -434,6 +455,11 @@ service cloud.firestore {
       match /practiceSessions/{sessionId} {
         allow read, delete: if mine();
         allow create, update: if mine() && validSession(uid) && keepsCreatedAt() && notDeleted(uid);
+      }
+
+      match /stats/vocabulary {
+        allow read, delete: if mine();
+        allow create, update: if mine() && validDashboardStats(uid) && notDeleted(uid);
       }
 
       // One document holding every entry's progress — see ProgressRepository
