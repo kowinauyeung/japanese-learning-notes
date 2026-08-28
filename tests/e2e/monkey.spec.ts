@@ -212,6 +212,25 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
       run: async () => {
         const button = buttons.nth(chosen.index);
         const label = await labelOf(button);
+        /*
+         * The index is from a snapshot, and the snapshot can be of the previous
+         * page. `available()` rejects anything a reader could not press —
+         * `display: none` included — but it runs while the action is being
+         * chosen, and the step before this one may have been a click on a link:
+         * every route here is `lazy`, so the old page is still mounted while the
+         * new one loads and the DOM under a given index changes out from under
+         * the choice. Seed 33181645649 hit it exactly: 003 clicked 単語, 004
+         * resolved index 2 against the vocabulary page it had become, where that
+         * position holds a filter toggle that is `nav:hidden` on a desktop
+         * width, and the run failed on a four second click timeout.
+         *
+         * Rechecking is the whole fix, because clicking it is not something this
+         * suite may report: a control the browser is not painting is one no
+         * reader can reach, so a monkey that presses it is testing nothing and
+         * failing anyway. The skip goes into the history, so a run that keeps
+         * doing this is visible rather than quietly shorter.
+         */
+        if (!(await button.isVisible())) return `skipped “${label}”, no longer on screen`;
         await test.step(`resolved button “${label}”`, () => button.click({ timeout: 4000 }));
         return `click button “${label}”`;
       },
@@ -228,6 +247,8 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
       run: async () => {
         const link = links.nth(chosen.index);
         const label = await labelOf(link);
+        // Same staleness as the button above, and the same answer.
+        if (!(await link.isVisible())) return `skipped “${label}”, no longer on screen`;
         await test.step(`resolved link “${label}”`, () => link.click({ timeout: 4000 }));
         return `click link “${label}”`;
       },

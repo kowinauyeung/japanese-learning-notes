@@ -120,6 +120,7 @@ test('keeps the tabs and the notices above the home indicator', async ({ page, c
   const { add, bar, notice } = elements(page);
   const floor = PORTRAIT.viewport.height - PORTRAIT.bottom;
 
+  const barBox = (await bar.boundingBox())!;
   /*
    * Two halves of one rule, and they pull in opposite directions.
    *
@@ -128,13 +129,13 @@ test('keeps the tabs and the notices above the home indicator', async ({ page, c
    * showing beneath it — the home indicator's strip drawn in the wrong colour,
    * which is what `index.css` says about the header for the same reason.
    */
-  const barBox = (await bar.boundingBox())!;
   expect(barBox, 'the bar is `nav:hidden`, so a phone width must find it').not.toBeNull();
   expect(barBox.y + barBox.height).toBe(PORTRAIT.viewport.height);
 
-  // And the tabs inside it must not: they are the things being pressed, and
-  // the strip they would sit on is where the swipe that leaves the app starts.
   const addBox = (await add.boundingBox())!;
+  // And the tabs inside it must not reach it: they are the things being
+  // pressed, and the strip they would sit on is where the swipe that leaves
+  // the app starts.
   expect(addBox.y + addBox.height).toBeLessThanOrEqual(floor);
 
   const noticeBox = (await notice.boundingBox())!;
@@ -195,11 +196,11 @@ test('leaves the layout exactly where it was when the device asks for nothing', 
   await page.setViewportSize({ width: 390, height: 844 });
 
   const { bar, add, notice } = elements(page);
+  const barBox = (await bar.boundingBox())!;
+  const addBox = (await add.boundingBox())!;
   // The bar still ends at the bottom edge, and now so do its tabs: `pb-safe`
   // is a padding of zero here, not a gap someone hard-coded.
-  const barBox = (await bar.boundingBox())!;
   expect(barBox.y + barBox.height).toBe(844);
-  const addBox = (await add.boundingBox())!;
   expect(addBox.y + addBox.height).toBe(844);
 
   const noticeBox = (await notice.boundingBox())!;
