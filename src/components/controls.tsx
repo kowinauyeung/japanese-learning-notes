@@ -92,10 +92,19 @@ export function SelectControl({
  * The inner input keeps `text-sm` because the coarse-pointer rule in
  * `index.css` selects on it by name to hold form text at 16px, which is what
  * stops iOS zooming the page on focus.
+ *
+ * The focus ring moves to the wrapper for the same reason the border did. The
+ * input's own outline is turned off — drawn around a bare 19px line of text
+ * inside a 44px pill it marks the wrong box — so without `focus-within` here a
+ * keyboard reader tabbing through the filters would see the ring vanish when
+ * it reached a date. A ring rather than an outline: box-shadow is painted
+ * outside the border box, where `overflow-hidden` cannot clip it.
  */
 export function DateControl({ className = '', ...input }: InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <span className={`${controlClass} flex items-center overflow-hidden ${className}`}>
+    <span
+      className={`${controlClass} flex items-center overflow-hidden focus-within:ring-2 focus-within:ring-accent ${className}`}
+    >
       <input
         type="date"
         {...input}

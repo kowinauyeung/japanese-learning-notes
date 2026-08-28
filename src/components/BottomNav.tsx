@@ -85,6 +85,7 @@ export function BottomNav({ onAdd }: { onAdd: () => void }) {
           />
           <MoreTab
             onClick={() => setMoreOpen(true)}
+            expanded={moreOpen}
             active={
               moreOpen ||
               ['/wordsets', '/history', '/account', '/settings'].some((path) => active(path))
@@ -152,12 +153,35 @@ function AddTab({ onClick }: { onClick: () => void }) {
   );
 }
 
-function MoreTab({ onClick, active }: { onClick: () => void; active: boolean }) {
+/**
+ * `expanded` and `active` are two different facts, and one attribute may only
+ * carry the first.
+ *
+ * The tab lights up on the four routes the sheet leads to, so a reader on
+ * 単語集 can see where they are — but they got there by *closing* the sheet.
+ * Reading `active` into `aria-expanded` therefore announced a dialog as open on
+ * every one of those screens, to the readers who cannot see that it is not.
+ */
+function MoreTab({
+  onClick,
+  active,
+  expanded,
+}: {
+  onClick: () => void;
+  active: boolean;
+  expanded: boolean;
+}) {
   const { t } = useI18n();
   const { user } = useAuth();
   const initial = (user?.displayName || user?.email || '?').charAt(0).toUpperCase();
   return (
-    <button type="button" onClick={onClick} aria-expanded={active} className={tabClass(active)}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className={tabClass(active)}
+    >
       {/* Decorative: the label below it names the tab, and the account it
           pictures is named inside the sheet it opens. */}
       <Avatar photoUrl={user?.photoUrl} initial={initial} alt="" className="h-6 w-6 text-[10px]" />

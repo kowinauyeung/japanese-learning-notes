@@ -533,6 +533,9 @@ test.describe('one control shape', () => {
       box(page, '終了日', true),
     ]);
 
+    // The row a thumb reads down: four controls asking to be the same size and
+    // arriving at different ones is a column of boxes that steps, and a step
+    // is what the reader sees before they see anything wrong with the app.
     expect(boxes.map((each) => each?.height)).toEqual([
       CONTROL_HEIGHT,
       CONTROL_HEIGHT,
