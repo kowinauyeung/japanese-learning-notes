@@ -122,6 +122,20 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
       return snapshot.exists() ? statsFrom(snapshot.data()) : null;
     },
 
+    async saveDashboardStats(stats: Omit<EntryDashboardStats, 'ownerUid'>): Promise<void> {
+      const ref = statsPath();
+      await writes.write(ref, () =>
+        setDoc(ref, {
+          ownerUid: uid,
+          total: stats.total,
+          countsByDay: stats.countsByDay,
+          jlptCounts: stats.jlptCounts,
+          posCounts: stats.posCounts,
+          updatedAt: serverTimestamp(),
+        }),
+      );
+    },
+
     async countLearnedSince(date: string): Promise<number> {
       const snapshot = await getCountFromServer(
         query(entriesPath(), where('learnedOn', '>=', date)),
@@ -194,7 +208,7 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
           updatedAt: serverTimestamp(),
         }),
       );
-      void writeStatsDelta(
+      await writeStatsDelta(
         null,
         toEntry(ref.id, { ...draft, createdAt: new Date(), updatedAt: new Date(), ownerUid: uid }),
       );
@@ -216,7 +230,7 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
           updatedAt: serverTimestamp(),
         }),
       );
-      if (before) void writeStatsDelta(before, { ...before, ...draft });
+      if (before) await writeStatsDelta(before, { ...before, ...draft });
     },
 
     async remove(id: string): Promise<void> {
@@ -225,7 +239,7 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
         .then((snapshot) => (snapshot.exists() ? toEntry(snapshot.id, snapshot.data()) : null))
         .catch(() => null);
       await writes.write(ref, () => deleteDoc(ref));
-      if (before) void writeStatsDelta(before, null);
+      if (before) await writeStatsDelta(before, null);
     },
 
     async removeDashboardStats(): Promise<void> {

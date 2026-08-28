@@ -300,6 +300,27 @@ describe('dashboard reads', () => {
     expect(await freshRepo().dashboardStats()).toBeNull();
   });
 
+  it('bootstraps a complete dashboard stats document from a fallback summary', async () => {
+    const uid = `it-stats-bootstrap-${randomUUID()}`;
+    const repo = createEntryRepository(db, uid);
+
+    await repo.saveDashboardStats({
+      total: 2,
+      countsByDay: { '2026-06-24': 1, '2026-06-23': 1 },
+      jlptCounts: { N2: 1, N3: 1 },
+      posCounts: { 名詞: 1, 動詞: 1 },
+    });
+
+    const stats = await repo.dashboardStats();
+    expect(stats).toEqual({
+      ownerUid: uid,
+      total: 2,
+      countsByDay: { '2026-06-24': 1, '2026-06-23': 1 },
+      jlptCounts: { N2: 1, N3: 1 },
+      posCounts: { 名詞: 1, 動詞: 1 },
+    });
+  });
+
   it('updates the dashboard stats document on writes after backfill has created it', async () => {
     const uid = `it-stats-${randomUUID()}`;
     const repo = createEntryRepository(db, uid);
@@ -316,35 +337,29 @@ describe('dashboard reads', () => {
     const id = await repo.create(
       draft({ learnedOn: '2026-06-24', jlpt: 'N2', pos: ['名詞', '動詞'] }),
     );
-    await expect
-      .poll(() => repo.dashboardStats())
-      .toMatchObject({
-        total: 1,
-        countsByDay: { '2026-06-24': 1 },
-        jlptCounts: { N2: 1 },
-        posCounts: { 名詞: 1, 動詞: 1 },
-      });
+    expect(await repo.dashboardStats()).toMatchObject({
+      total: 1,
+      countsByDay: { '2026-06-24': 1 },
+      jlptCounts: { N2: 1 },
+      posCounts: { 名詞: 1, 動詞: 1 },
+    });
 
     await repo.update(id, draft({ learnedOn: '2026-06-25', jlpt: 'N1', pos: ['副詞'] }));
-    await expect
-      .poll(() => repo.dashboardStats())
-      .toMatchObject({
-        total: 1,
-        countsByDay: { '2026-06-25': 1 },
-        jlptCounts: { N1: 1 },
-        posCounts: { 副詞: 1 },
-      });
+    expect(await repo.dashboardStats()).toMatchObject({
+      total: 1,
+      countsByDay: { '2026-06-25': 1 },
+      jlptCounts: { N1: 1 },
+      posCounts: { 副詞: 1 },
+    });
 
     await repo.remove(id);
 
-    await expect
-      .poll(() => repo.dashboardStats())
-      .toMatchObject({
-        total: 0,
-        countsByDay: {},
-        jlptCounts: {},
-        posCounts: {},
-      });
+    expect(await repo.dashboardStats()).toMatchObject({
+      total: 0,
+      countsByDay: {},
+      jlptCounts: {},
+      posCounts: {},
+    });
   });
 
   it('does not leave inflated dashboard stats after a non-counter edit is followed by a date move', async () => {

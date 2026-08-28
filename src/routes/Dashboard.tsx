@@ -11,13 +11,13 @@ import type { PracticeMode, PracticeSession } from '@/domain/practice';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { useLoadErrorMessage } from '@/i18n/useLoadErrorMessage';
-import { dateKey, startOfISOWeek, startOfMonth, startOfYear } from '@/lib/dates';
+import { dateKey } from '@/lib/dates';
 import { useEntries } from '@/lib/entries';
 import { latestByMode, RECENT_WINDOW } from '@/lib/history';
 import { captureLoadFailure } from '@/lib/loadError';
 import type { LoadFailure } from '@/lib/loadError';
 import { useProgress } from '@/lib/progress';
-import { summarise, summaryFromDashboardStats } from '@/lib/stats';
+import { dashboardStatsFromSummary, summarise, summaryFromDashboardStats } from '@/lib/stats';
 import type { Summary } from '@/lib/stats';
 
 const ENTRY_PAGE_SIZE = 200;
@@ -79,11 +79,8 @@ export function Component() {
       setLoading(true);
       const now = new Date();
       try {
-        const [storedStats, inWeek, inMonth, inYear, recent, wordOfDay] = await Promise.all([
+        const [storedStats, recent, wordOfDay] = await Promise.all([
           entriesRepository.dashboardStats(),
-          entriesRepository.countLearnedSince(dateKey(startOfISOWeek(now))),
-          entriesRepository.countLearnedSince(dateKey(startOfMonth(now))),
-          entriesRepository.countLearnedSince(dateKey(startOfYear(now))),
           entriesRepository.recentLearned(RECENT_WORDS),
           entriesRepository.wordOfDay(wordOfDaySeed(dateKey(now))),
         ]);
@@ -91,7 +88,7 @@ export function Component() {
         if (cancelled) return;
         if (storedStats) {
           setDashboard({
-            stats: summaryFromDashboardStats(storedStats, { inWeek, inMonth, inYear }),
+            stats: summaryFromDashboardStats(storedStats, now),
             recent,
             wordOfDay,
           });
@@ -102,6 +99,8 @@ export function Component() {
         const all = await drainEntries(entriesRepository);
         if (cancelled) return;
         const stats = summarise(all, now);
+        await entriesRepository.saveDashboardStats(dashboardStatsFromSummary(stats, all.length));
+        if (cancelled) return;
         const fallbackRecent = [...all]
           .sort((a, b) => b.learnedOn.localeCompare(a.learnedOn))
           .slice(0, RECENT_WORDS);

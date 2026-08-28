@@ -387,6 +387,10 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
       return Promise.resolve(stats);
     },
 
+    saveDashboardStats(): Promise<void> {
+      return Promise.resolve();
+    },
+
     countLearnedSince(date: string) {
       return Promise.resolve([...store.values()].filter((entry) => entry.learnedOn >= date).length);
     },

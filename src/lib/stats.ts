@@ -1,7 +1,7 @@
 import { JLPT_LEVELS } from '@/domain/entry';
 import type { Entry } from '@/domain/entry';
 import type { EntryDashboardStats } from '@/domain/ports';
-import { parseLocalDate, startOfISOWeek, startOfMonth, startOfYear } from './dates';
+import { dateKey, parseLocalDate, startOfISOWeek, startOfMonth, startOfYear } from './dates';
 
 /**
  * The dashboard's aggregation, lifted out of the route so it can be tested
@@ -27,12 +27,6 @@ export interface Summary {
   jlptRows: DistributionRow[];
   /** Descending by count, since there is no natural order over 品詞. */
   posRows: DistributionRow[];
-}
-
-export interface PeriodCounts {
-  inWeek: number;
-  inMonth: number;
-  inYear: number;
 }
 
 export function summarise(entries: Entry[], now: Date): Summary {
@@ -75,14 +69,13 @@ export function summarise(entries: Entry[], now: Date): Summary {
   };
 }
 
-export function summaryFromDashboardStats(
-  stats: EntryDashboardStats,
-  periods: PeriodCounts,
-): Summary {
+export function summaryFromDashboardStats(stats: EntryDashboardStats, now: Date): Summary {
+  const countsByDay = new Map(
+    Object.entries(stats.countsByDay).filter(([, count]) => Number.isFinite(count) && count > 0),
+  );
+  const periods = periodCountsFromDays(countsByDay, now);
   return {
-    countsByDay: new Map(
-      Object.entries(stats.countsByDay).filter(([, count]) => Number.isFinite(count) && count > 0),
-    ),
+    countsByDay,
     inWeek: periods.inWeek,
     inMonth: periods.inMonth,
     inYear: periods.inYear,
@@ -95,4 +88,33 @@ export function summaryFromDashboardStats(
       .map(([label, count]) => ({ label, count }))
       .sort((a, b) => b.count - a.count),
   };
+}
+
+export function dashboardStatsFromSummary(
+  summary: Summary,
+  total: number,
+): Omit<EntryDashboardStats, 'ownerUid'> {
+  return {
+    total,
+    countsByDay: Object.fromEntries(summary.countsByDay),
+    jlptCounts: Object.fromEntries(summary.jlptRows.map((row) => [row.label, row.count])),
+    posCounts: Object.fromEntries(summary.posRows.map((row) => [row.label, row.count])),
+  };
+}
+
+function periodCountsFromDays(countsByDay: Map<string, number>, now: Date) {
+  const weekStart = dateKey(startOfISOWeek(now));
+  const monthStart = dateKey(startOfMonth(now));
+  const yearStart = dateKey(startOfYear(now));
+  let inWeek = 0;
+  let inMonth = 0;
+  let inYear = 0;
+
+  for (const [day, count] of countsByDay) {
+    if (day >= weekStart) inWeek += count;
+    if (day >= monthStart) inMonth += count;
+    if (day >= yearStart) inYear += count;
+  }
+
+  return { inWeek, inMonth, inYear };
 }

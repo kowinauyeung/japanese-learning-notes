@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { summarise, summaryFromDashboardStats } from '@/lib/stats';
+import { dashboardStatsFromSummary, summarise, summaryFromDashboardStats } from '@/lib/stats';
 import { makeEntry } from '../fixtures/entry';
 
 /**
@@ -126,20 +126,26 @@ describe('summarise — distributions', () => {
 });
 
 describe('summaryFromDashboardStats', () => {
-  it('builds the dashboard summary from persisted counters and live period counts', () => {
+  it('builds period totals from persisted day counters without aggregate reads', () => {
     const summary = summaryFromDashboardStats(
       {
         ownerUid: 'u1',
-        total: 4,
-        countsByDay: { '2026-06-24': 2, '2026-06-23': 1, empty: 0 },
+        total: 5,
+        countsByDay: {
+          '2026-06-24': 2,
+          '2026-06-23': 1,
+          '2026-06-01': 1,
+          '2025-12-31': 1,
+          empty: 0,
+        },
         jlptCounts: { N3: 2, N1: 1 },
         posCounts: { 名詞: 3, 動詞: 1 },
       },
-      { inWeek: 2, inMonth: 3, inYear: 4 },
+      NOW,
     );
 
     expect(summary.countsByDay.get('2026-06-24')).toBe(2);
-    expect([summary.inWeek, summary.inMonth, summary.inYear]).toEqual([2, 3, 4]);
+    expect([summary.inWeek, summary.inMonth, summary.inYear]).toEqual([3, 4, 4]);
     expect(summary.jlptRows).toEqual([
       { label: 'N1', count: 1 },
       { label: 'N3', count: 2 },
@@ -148,5 +154,19 @@ describe('summaryFromDashboardStats', () => {
       { label: '名詞', count: 3 },
       { label: '動詞', count: 1 },
     ]);
+  });
+
+  it('converts a fallback summary into a complete stats document payload', () => {
+    const summary = summarise(
+      [on('2026-06-24', { jlpt: 'N2', pos: ['名詞'] }), on('2026-06-23', { pos: ['動詞'] })],
+      NOW,
+    );
+
+    expect(dashboardStatsFromSummary(summary, 2)).toEqual({
+      total: 2,
+      countsByDay: { '2026-06-24': 1, '2026-06-23': 1 },
+      jlptCounts: { N2: 2 },
+      posCounts: { 名詞: 1, 動詞: 1 },
+    });
   });
 });

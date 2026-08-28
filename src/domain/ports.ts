@@ -45,6 +45,7 @@ export interface EntryDashboardStats {
 export interface EntryRepository {
   list(q: PageQuery): Promise<Page<Entry>>;
   dashboardStats(): Promise<EntryDashboardStats | null>;
+  saveDashboardStats(stats: Omit<EntryDashboardStats, 'ownerUid'>): Promise<void>;
   countLearnedSince(date: string): Promise<number>;
   recentLearned(limit: number): Promise<Entry[]>;
   listLearnedOn(day: string, q: PageQuery): Promise<Page<Entry>>;
