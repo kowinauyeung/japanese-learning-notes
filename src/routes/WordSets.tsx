@@ -113,7 +113,11 @@ export function Component() {
       </form>
 
       {sets.length ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+        /* One set per row, full width. A grid of 240px cells clamped the name
+           and the description of every set to two short lines, and a reader
+           scanning for one set was reading the halves that all of them share.
+           There are rarely enough sets for the density to be worth that. */
+        <div className="flex flex-col gap-3">
           {sets.map((set) => (
             <WordSetCard key={set.id} set={set} count={counts.get(set.id) ?? 0} />
           ))}

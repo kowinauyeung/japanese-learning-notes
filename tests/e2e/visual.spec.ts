@@ -310,14 +310,34 @@ test.describe('long values must not widen the page', () => {
     headword carried the whole page with it. A per-screen loop is what stops the
     next one being found in a screenshot instead.
   */
-  for (const { name, path } of [
+  for (const { name, path, prepare } of [
     { name: 'the dashboard', path: '/' },
     { name: 'the vocabulary grid', path: '/vocabulary' },
     { name: 'the word set list', path: '/wordsets' },
     { name: 'the word set detail page', path: '/wordsets/set-oversize' },
+    {
+      // The 6,115-pixel case was the picker and member panels, and both are
+      // behind 編集 now — reached without it this row measures the card grid
+      // and the panels it exists for are never laid out at all.
+      name: 'the word set editor',
+      path: '/wordsets/set-oversize',
+      prepare: async (page: import('@playwright/test').Page) => {
+        await page.getByRole('button', { name: '編集', exact: true }).click();
+        // The measurement below is the test; this is what makes it measure
+        // anything. `overflow()` reads `documentElement.scrollWidth` the moment
+        // it is called, so a click that has not yet laid the panels out is
+        // measured as the card grid — a green result reported for a screen the
+        // long headword never reached.
+        await expect(page.locator('[data-drop-list="members"]')).toBeVisible();
+      },
+    },
     { name: 'the flashcard setup', path: '/practice/flashcards' },
     { name: 'the dictation setup', path: '/practice/dictation' },
-  ]) {
+  ] as {
+    name: string;
+    path: string;
+    prepare?: (page: import('@playwright/test').Page) => Promise<void>;
+  }[]) {
     for (const width of [375, 1280]) {
       test(`${name} does not scroll sideways at ${width}`, async ({ page }) => {
         await page.setViewportSize({ width, height: 800 });
@@ -328,6 +348,7 @@ test.describe('long values must not widen the page', () => {
         });
         await page.goto(path);
         await expect(page.locator('main')).toBeVisible();
+        await prepare?.(page);
 
         expect(await overflow(page)).toBeLessThanOrEqual(1);
       });

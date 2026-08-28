@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { EntryCard } from '@/components/browse/EntryCard';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { MemberList } from '@/components/wordsets/MemberList';
 import { MemberPicker } from '@/components/wordsets/MemberPicker';
@@ -52,6 +53,18 @@ export function Component() {
 
   const [busy, setBusy] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
+  /**
+   * Which of the two screens this page is: the set as it is read, or the set
+   * as it is built.
+   *
+   * Reading a 単語集 and editing one are different tasks, and the page used to
+   * only offer the second — two drag panels, a filter toolbar and a delete
+   * button, on the way to every word in the set. Opening a set to study it now
+   * lands on the words themselves, drawn exactly as they are on 単語一覧, and
+   * the machinery for changing what is in the set is behind 編集.
+   */
+  const [mode, setMode] = useState<'view' | 'edit'>('view');
+  /** The name-and-description dialog. Reachable from edit mode only. */
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   /**
@@ -233,68 +246,116 @@ export function Component() {
             </h1>
             {set.description && <SetDescription description={set.description} />}
           </div>
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="min-h-9 shrink-0 rounded-pill bg-bg-alt px-4 text-xs font-semibold text-ink"
-          >
-            {t('common.edit')}
-          </button>
+          {/* One control in view mode and two in edit mode, both in the same
+              corner: 編集 is the door in, 完了 is the door out, and the dialog
+              that renames the set sits behind the door rather than beside it.
+              Naming and reordering are the same job — changing the set — and
+              splitting them across two always-visible buttons made the page
+              ask which kind of edit before it asked whether to edit at all. */}
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {mode === 'edit' && (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="min-h-9 rounded-pill bg-bg-alt px-4 text-xs font-semibold text-ink"
+              >
+                {t('wordSets.details')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setMode(mode === 'edit' ? 'view' : 'edit')}
+              className={
+                mode === 'edit'
+                  ? 'min-h-9 rounded-pill bg-accent px-4 text-xs font-semibold text-on-accent'
+                  : 'min-h-9 rounded-pill bg-bg-alt px-4 text-xs font-semibold text-ink'
+              }
+            >
+              {mode === 'edit' ? t('wordSets.done') : t('common.edit')}
+            </button>
+          </div>
         </div>
       </header>
 
       {writeError && <p className="text-sm text-danger">{writeError}</p>}
 
-      <PickerToolbar filters={filters} allTags={allTags} onChange={setFilters} />
+      {mode === 'edit' ? (
+        <>
+          <PickerToolbar filters={filters} allTags={allTags} onChange={setFilters} />
 
-      {/*
-        Source on the left, destination on the right, and both bounded so they
-        scroll inside themselves. Stacked one above the other they drifted
-        apart as soon as either had a few rows in it, and a drag whose start and
-        end are never on screen together cannot be performed. Below the nav
-        breakpoint they stack, which is why the cap is a fraction of the
-        viewport rather than a fixed height: two of them still fit.
-      */}
-      <div className="grid min-w-0 gap-4 nav:grid-cols-2">
-        <div className="flex max-h-[46vh] min-h-64 min-w-0 nav:max-h-[62vh]">
-          <MemberPicker
-            shown={candidates.shown}
-            total={candidates.total}
-            list={CANDIDATES}
-            drag={drag}
-            busy={busy}
-            onAdd={(entryId) => applyOrder(insertMemberAt(entryIds, entryId, entryIds.length))}
-            onAddAll={(ids) =>
-              applyOrder(ids.reduce<readonly string[]>((so, id) => withMember(so, id), entryIds))
-            }
-          />
-        </div>
-        <div className="flex max-h-[46vh] min-h-64 min-w-0 nav:max-h-[62vh]">
-          <MemberList
-            members={members}
-            list={MEMBERS}
-            drag={drag}
-            busy={busy}
-            onRemove={(entryId) =>
-              void write({ ...toDraft(set), entryIds: withoutMember(entryIds, entryId) })
-            }
-            onRemoveAll={setClearing}
-            onMoveBy={(index, delta) =>
-              applyOrder(
-                reorderMembers(entryIds, stored(index), stored(delta < 0 ? index - 1 : index + 2)),
-              )
-            }
-          />
-        </div>
-      </div>
+          {/*
+            Source on the left, destination on the right, and both bounded so
+            they scroll inside themselves. Stacked one above the other they
+            drifted apart as soon as either had a few rows in it, and a drag
+            whose start and end are never on screen together cannot be
+            performed. Below the nav breakpoint they stack, which is why the cap
+            is a fraction of the viewport rather than a fixed height: two of
+            them still fit.
+          */}
+          <div className="grid min-w-0 gap-4 nav:grid-cols-2">
+            <div className="flex max-h-[46vh] min-h-64 min-w-0 nav:max-h-[62vh]">
+              <MemberPicker
+                shown={candidates.shown}
+                total={candidates.total}
+                list={CANDIDATES}
+                drag={drag}
+                busy={busy}
+                onAdd={(entryId) => applyOrder(insertMemberAt(entryIds, entryId, entryIds.length))}
+                onAddAll={(ids) =>
+                  applyOrder(
+                    ids.reduce<readonly string[]>((so, id) => withMember(so, id), entryIds),
+                  )
+                }
+              />
+            </div>
+            <div className="flex max-h-[46vh] min-h-64 min-w-0 nav:max-h-[62vh]">
+              <MemberList
+                members={members}
+                list={MEMBERS}
+                drag={drag}
+                busy={busy}
+                onRemove={(entryId) =>
+                  void write({ ...toDraft(set), entryIds: withoutMember(entryIds, entryId) })
+                }
+                onRemoveAll={setClearing}
+                onMoveBy={(index, delta) =>
+                  applyOrder(
+                    reorderMembers(
+                      entryIds,
+                      stored(index),
+                      stored(delta < 0 ? index - 1 : index + 2),
+                    ),
+                  )
+                }
+              />
+            </div>
+          </div>
 
-      <button
-        type="button"
-        onClick={() => setConfirmingDelete(true)}
-        className="min-h-10 w-full rounded-pill bg-danger-soft text-sm font-semibold text-danger"
-      >
-        {t('wordSets.deleteSet')}
-      </button>
+          {/* Inside edit mode with the rest of what changes the set. On the
+              reading screen it was a red button under every word in the set,
+              one press from a list nothing else in the app can rebuild. */}
+          <button
+            type="button"
+            onClick={() => setConfirmingDelete(true)}
+            className="min-h-10 w-full rounded-pill bg-danger-soft text-sm font-semibold text-danger"
+          >
+            {t('wordSets.deleteSet')}
+          </button>
+        </>
+      ) : members.length ? (
+        /* The same card and the same grid as 単語一覧, deliberately: a word in
+           a set is the same word, and a reader who has learned to scan those
+           cards should not have to learn a second shape here. The order is the
+           set's own — `members` follows `entryIds` — which the grid preserves
+           left to right. */
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
+          {members.map((entry) => (
+            <EntryCard key={entry.id} entry={entry} />
+          ))}
+        </div>
+      ) : (
+        <p className="py-16 text-center text-sm text-muted">{t('wordSets.emptyView')}</p>
+      )}
 
       <WordSetEditModal
         open={editing}
