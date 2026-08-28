@@ -28,7 +28,7 @@ const AUTO_ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01
 export function Component() {
   const { locale, t } = useI18n();
   const entryLabel = useEntryLabel();
-  const { repository: entriesRepository } = useEntries();
+  const { mutationVersion, repository: entriesRepository } = useEntries();
   const [dashboard, setDashboard] = useState<{
     stats: Summary;
     recent: Entry[];
@@ -123,7 +123,7 @@ export function Component() {
     return () => {
       cancelled = true;
     };
-  }, [entriesRepository]);
+  }, [entriesRepository, mutationVersion]);
 
   useEffect(() => {
     if (!selectedDay) return;
@@ -141,7 +141,7 @@ export function Component() {
     return () => {
       cancelled = true;
     };
-  }, [entriesRepository, selectedDay]);
+  }, [entriesRepository, mutationVersion, selectedDay]);
 
   const stats = dashboard?.stats;
   const recent = useMemo(

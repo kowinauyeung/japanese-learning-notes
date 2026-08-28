@@ -36,7 +36,7 @@ export function EntryFormModal({
   onClose: () => void;
   onSaved?: (id: string) => void;
 }) {
-  const { refresh, repository } = useEntries();
+  const { repository, syncAfterMutation } = useEntries();
   const { t } = useI18n();
   const tabs: { id: Tab; label: string }[] = [
     { id: 'simple', label: t('form.simple') },
@@ -170,7 +170,7 @@ export function EntryFormModal({
       const id = entry
         ? (await repository.update(entry.id, draft), entry.id)
         : await repository.create(draft);
-      await refresh();
+      await syncAfterMutation();
       onSaved?.(id);
       onClose();
     } catch (cause) {

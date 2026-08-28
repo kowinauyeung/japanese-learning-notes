@@ -249,18 +249,29 @@ function numberRecord(raw: unknown): Record<string, number> {
 }
 
 function statsDelta(before: Entry | null, after: Entry | null): Record<string, unknown> {
-  const delta: Record<string, unknown> = { updatedAt: serverTimestamp() };
-  if (!before && after) delta.total = increment(1);
-  if (before && !after) delta.total = increment(-1);
-  if (before) addEntryDelta(delta, before, -1);
-  if (after) addEntryDelta(delta, after, 1);
-  return delta;
+  const amounts: Record<string, number> = {};
+  if (!before && after) addAmount(amounts, 'total', 1);
+  if (before && !after) addAmount(amounts, 'total', -1);
+  if (before) addEntryDelta(amounts, before, -1);
+  if (after) addEntryDelta(amounts, after, 1);
+
+  const delta = Object.fromEntries(
+    Object.entries(amounts)
+      .filter(([, amount]) => amount !== 0)
+      .map(([path, amount]) => [path, increment(amount)]),
+  );
+  if (Object.keys(delta).length === 0) return {};
+  return { ...delta, updatedAt: serverTimestamp() };
 }
 
-function addEntryDelta(delta: Record<string, unknown>, entry: Entry, by: 1 | -1) {
-  delta[`countsByDay.${entry.learnedOn}`] = increment(by);
-  delta[`jlptCounts.${entry.jlpt}`] = increment(by);
-  for (const part of entry.pos) delta[`posCounts.${part}`] = increment(by);
+function addEntryDelta(amounts: Record<string, number>, entry: Entry, by: 1 | -1) {
+  addAmount(amounts, `countsByDay.${entry.learnedOn}`, by);
+  addAmount(amounts, `jlptCounts.${entry.jlpt}`, by);
+  for (const part of entry.pos) addAmount(amounts, `posCounts.${part}`, by);
+}
+
+function addAmount(amounts: Record<string, number>, path: string, by: number) {
+  amounts[path] = (amounts[path] ?? 0) + by;
 }
 
 function isUnavailable(cause: unknown): boolean {

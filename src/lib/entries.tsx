@@ -20,6 +20,8 @@ interface EntriesValue {
   loading: boolean;
   error: LoadFailure | null;
   refresh: () => Promise<void>;
+  syncAfterMutation: () => Promise<void>;
+  mutationVersion: number;
   /**
    * Exposed so the form and the detail page write through the same instance the
    * list was read from, instead of each building their own. It is the only
@@ -68,6 +70,7 @@ export function EntriesProvider({
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(loadOnMount);
   const [error, setError] = useState<LoadFailure | null>(null);
+  const [mutationVersion, setMutationVersion] = useState(0);
 
   // Rebuilt when the signed-in user changes, so the `users/{uid}` path baked
   // into the repository can never outlive the session it belongs to.
@@ -126,6 +129,11 @@ export function EntriesProvider({
     }
   }, [repository]);
 
+  const syncAfterMutation = useCallback(async () => {
+    if (loadOnMount) await refresh();
+    setMutationVersion((version) => version + 1);
+  }, [loadOnMount, refresh]);
+
   useEffect(() => {
     if (!loadOnMount) return;
     setLoading(true);
@@ -139,8 +147,8 @@ export function EntriesProvider({
   useRetryOnReconnect(error !== null && isUnreachable(error.cause), refresh);
 
   const value = useMemo(
-    () => ({ entries, loading, error, refresh, repository }),
-    [entries, loading, error, refresh, repository],
+    () => ({ entries, loading, error, refresh, syncAfterMutation, mutationVersion, repository }),
+    [entries, loading, error, refresh, syncAfterMutation, mutationVersion, repository],
   );
   return <EntriesContext.Provider value={value}>{children}</EntriesContext.Provider>;
 }

@@ -21,16 +21,14 @@ import { useVocabDialog } from '@/lib/vocabDialog';
  * `bg-card`, so the sections are separated by a border instead of by a card.
  *
  * Editing is here and deleting is not, and the two are not the same call.
- * Both write through `EntriesProvider`, which every screen reads from, so a
- * saved edit reaches the page underneath on the next render rather than leaving
- * it stale. A delete would leave this dialog sitting over a word that no longer
- * exists, showing 「単語が見つかりません」 above the list it was deleted from;
- * that belongs on the detail page, which can navigate away afterwards.
+ * Both write through `EntriesProvider`, so a saved edit invalidates the page
+ * underneath even when that page chose dashboard-sized reads over holding the
+ * whole notebook. A delete would leave this dialog sitting over a word that no
+ * longer exists, showing 「単語が見つかりません」 above the list it was deleted
+ * from; that belongs on the detail page, which can navigate away afterwards.
  *
- * Read out of `EntriesProvider` rather than fetched, because every screen that
- * can open this already holds the whole notebook. A word that is not there is
- * one deleted in another tab, and the dialog says so rather than showing a
- * frame with nothing in it.
+ * Prefer `EntriesProvider` when it holds the whole notebook, and fall back to a
+ * single-entry read for dashboard-sized pages that deliberately do not.
  */
 export function VocabDialog() {
   const { t } = useI18n();
@@ -100,7 +98,22 @@ export function VocabDialog() {
    * reading the entry the save refreshed.
    */
   if (editingId === entry.id) {
-    return <EntryFormModal open entry={entry} onClose={() => setEditingId(null)} />;
+    return (
+      <EntryFormModal
+        open
+        entry={entry}
+        onClose={() => setEditingId(null)}
+        onSaved={(id) => {
+          void repository
+            .get(id)
+            .then((item) => setFetched({ id, entry: item }))
+            .catch((cause: unknown) => {
+              console.error(cause);
+              setFetched({ id, entry: null });
+            });
+        }}
+      />
+    );
   }
 
   return (

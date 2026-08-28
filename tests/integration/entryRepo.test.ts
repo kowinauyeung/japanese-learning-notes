@@ -347,6 +347,99 @@ describe('dashboard reads', () => {
       });
   });
 
+  it('does not leave inflated dashboard stats after a non-counter edit is followed by a date move', async () => {
+    const uid = `it-stats-stable-edit-${randomUUID()}`;
+    const repo = createEntryRepository(db, uid);
+    await setDoc(doc(db, 'users', uid, 'stats', 'vocabulary'), {
+      ownerUid: uid,
+      total: 0,
+      countsByDay: {},
+      jlptCounts: {},
+      posCounts: {},
+      updatedAt: Timestamp.fromDate(new Date('2026-06-24T09:00:00.000Z')),
+    });
+    const id = await repo.create(
+      draft({ learnedOn: '2026-06-24', jlpt: 'N2', pos: ['名詞', '動詞'] }),
+    );
+    await expect
+      .poll(() => repo.dashboardStats())
+      .toMatchObject({
+        total: 1,
+        countsByDay: { '2026-06-24': 1 },
+        jlptCounts: { N2: 1 },
+        posCounts: { 名詞: 1, 動詞: 1 },
+      });
+
+    await repo.update(
+      id,
+      draft({
+        headword: '前兆',
+        learnedOn: '2026-06-24',
+        jlpt: 'N2',
+        pos: ['名詞', '動詞'],
+      }),
+    );
+    await repo.update(
+      id,
+      draft({
+        headword: '前兆',
+        learnedOn: '2026-06-25',
+        jlpt: 'N2',
+        pos: ['名詞', '動詞'],
+      }),
+    );
+
+    await expect
+      .poll(() => repo.dashboardStats())
+      .toEqual({
+        ownerUid: uid,
+        total: 1,
+        countsByDay: { '2026-06-25': 1 },
+        jlptCounts: { N2: 1 },
+        posCounts: { 名詞: 1, 動詞: 1 },
+      });
+  });
+
+  it('only moves dashboard pos counters whose keys changed during a partial-overlap edit', async () => {
+    const uid = `it-stats-pos-overlap-${randomUUID()}`;
+    const repo = createEntryRepository(db, uid);
+    await setDoc(doc(db, 'users', uid, 'stats', 'vocabulary'), {
+      ownerUid: uid,
+      total: 0,
+      countsByDay: {},
+      jlptCounts: {},
+      posCounts: {},
+      updatedAt: Timestamp.fromDate(new Date('2026-06-24T09:00:00.000Z')),
+    });
+    const id = await repo.create(
+      draft({ learnedOn: '2026-06-24', jlpt: 'N2', pos: ['名詞', '動詞'] }),
+    );
+    await expect
+      .poll(() => repo.dashboardStats())
+      .toMatchObject({
+        posCounts: { 名詞: 1, 動詞: 1 },
+      });
+
+    await repo.update(
+      id,
+      draft({
+        learnedOn: '2026-06-24',
+        jlpt: 'N2',
+        pos: ['名詞', '副詞'],
+      }),
+    );
+
+    await expect
+      .poll(() => repo.dashboardStats())
+      .toEqual({
+        ownerUid: uid,
+        total: 1,
+        countsByDay: { '2026-06-24': 1 },
+        jlptCounts: { N2: 1 },
+        posCounts: { 名詞: 1, 副詞: 1 },
+      });
+  });
+
   it('removes dashboard stats explicitly because account deletion cannot rely on cascades', async () => {
     const uid = `it-stats-delete-${randomUUID()}`;
     const repo = createEntryRepository(db, uid);
