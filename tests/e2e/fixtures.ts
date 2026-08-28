@@ -303,8 +303,15 @@ export function makeSessions(count: number): SeedSession[] {
     mode: index % 2 === 0 ? 'flashcard' : 'dictation',
     filterLabel: `記録 ${index + 1}`,
     total: 3,
-    correct: index % 3,
-    words: [],
+    // Three cards, of which `index % 3` went right — so the run agrees with the
+    // score printed above it. An empty list beside `total: 3` would claim a
+    // drill that dealt no cards, which is the one thing `words` cannot mean.
+    words: Array.from({ length: 3 }, (_, card) => ({
+      entryId: `w-${index}-${card}`,
+      headword: `記録${index + 1}の${card + 1}`,
+      reading: '',
+      correct: card < index % 3,
+    })),
     startedAt: new Date(Date.UTC(2026, 5, 1, index)).toISOString(),
     finishedAt: new Date(Date.UTC(2026, 5, 1, index, 5)).toISOString(),
   })) satisfies SeedSession[];

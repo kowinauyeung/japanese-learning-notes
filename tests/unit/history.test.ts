@@ -45,16 +45,21 @@ const wrong = (entry: Entry): MissedWord => {
 const legacyWrong = (entryId: string): MissedWord => ({ entryId, headword: '', reading: '' });
 
 /**
- * A session as `sanitizeSession` hands it over: `words` is the whole run, and
- * `missed` has already been derived from it. Overriding one without the other
- * is how these tests describe a session written before `words` existed.
+ * A session as `sanitizeSession` hands it over: `words` is the whole run,
+ * `missed` has already been derived from it, and the score agrees with both.
+ *
+ * A case that overrides one list and not the other is describing a document
+ * neither reader would meet in production. That is deliberate — each of these
+ * exercises one reader with input built by hand, the way `makeEntry` is — but
+ * the default has to be a session that could have happened, or every case
+ * starts from a contradiction it did not ask for.
  */
 const makeSession = (overrides: Partial<PracticeSession> = {}): PracticeSession => ({
   id: 's1',
   mode: 'flashcard',
   filterLabel: 'すべての語',
-  total: 3,
-  correct: 1,
+  total: 2,
+  correct: 0,
   words: [dealt(KIRIWAKE, false), dealt(CHOUKOU, false)],
   missed: [wrong(KIRIWAKE), wrong(CHOUKOU)],
   startedAt: '2026-06-24T09:00:00.000Z',
@@ -112,7 +117,12 @@ describe('missedWords', () => {
   });
 
   it('has nothing to show for a perfect session', () => {
-    expect(missedWords(makeSession({ missed: [], correct: 3 }), NOTEBOOK)).toEqual([]);
+    const perfect = makeSession({
+      words: [dealt(KIRIWAKE, true), dealt(CHOUKOU, true)],
+      missed: [],
+      correct: 2,
+    });
+    expect(missedWords(perfect, NOTEBOOK)).toEqual([]);
   });
 });
 

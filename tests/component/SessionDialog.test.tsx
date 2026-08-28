@@ -123,6 +123,11 @@ describe('SessionDialog — the run, printed in full', () => {
   const run = () =>
     renderDialog(
       {
+        // The score agrees with the outcomes below it. The dialog prints both —
+        // `2 / 3` above the chips that count 正解 2 — so a fixture where they
+        // disagree describes a session that cannot happen and renders as one.
+        total: 3,
+        correct: 2,
         words: [
           { entryId: 'w2', headword: '兆候', reading: 'ちょうこう', correct: true },
           { entryId: 'w1', headword: '切り分け', reading: 'きりわけ', correct: false },
@@ -187,6 +192,10 @@ describe('SessionDialog — the run, printed in full', () => {
 
   it('opens on the whole run, so nothing it claims to show starts hidden', () => {
     run();
+    // `aria-pressed` is what a screen reader announces as the active chip, and
+    // it is the only thing that says so: the selected chip is otherwise told
+    // apart by its fill. Wrong here and the list shows every word while the
+    // control claims something narrower is selected.
     expect(screen.getByRole('button', { name: 'すべて 3' })).toHaveAttribute(
       'aria-pressed',
       'true',

@@ -55,7 +55,7 @@ const sessionDraft = () => ({
   filterLabel: 'すべての語',
   total: 1,
   correct: 1,
-  words: [],
+  words: [{ entryId: 'e1', headword: '切り分け', reading: 'きりわけ', correct: true }],
   startedAt: '2026-08-25T10:00:00.000Z',
 });
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Modal } from '@/components/Modal';
 import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
@@ -65,15 +66,7 @@ function DeletedBadge() {
  * the same ones: 間違えた語 is a list of words and ends in the JLPT level, while
  * the run is a list of *answers* and ends in how each one went.
  */
-function WordLine({
-  row,
-  lead,
-  trail,
-}: {
-  row: WordRow;
-  lead?: React.ReactNode;
-  trail?: React.ReactNode;
-}) {
+function WordLine({ row, lead, trail }: { row: WordRow; lead?: ReactNode; trail?: ReactNode }) {
   const body = (
     <>
       {lead}

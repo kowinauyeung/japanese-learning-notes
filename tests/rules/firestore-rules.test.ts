@@ -88,8 +88,8 @@ const session = (ownerUid: string, over: Record<string, unknown> = {}) => ({
   ownerUid,
   finishedAt: new Date('2026-08-13T00:01:00.000Z'),
   filterLabel: 'すべて',
-  total: 10,
-  correct: 8,
+  total: 1,
+  correct: 0,
   words: [{ entryId: 'e1', headword: '切り分け', reading: 'きりわけ', correct: false }],
   ...over,
 });
@@ -613,6 +613,39 @@ describe('bounds on what an owner may write', () => {
     const db = as(ALICE);
     const ids = Array.from({ length: 1001 }, (_, i) => `e${i}`);
     await assertFails(db.doc(`users/${ALICE}/wordSets/big`).set(wordSet(ALICE, { entryIds: ids })));
+  });
+
+  /**
+   * The same for a session, which grows by one element per card dealt.
+   *
+   * Both sides of the bound, because a denial on its own does not say *where*
+   * the line is: a rule that refused every list would pass it. 2,000 is the
+   * ceiling `total` already carries, so a run longer than that describes a
+   * drill the same document says did not happen.
+   */
+  it('refuses a session recording more words than a drill could have dealt', async () => {
+    const db = as(ALICE);
+    const run = (length: number) =>
+      Array.from({ length }, (_, i) => ({
+        entryId: `e${i}`,
+        headword: 'x',
+        reading: '',
+        correct: false,
+      }));
+
+    // `total` moves with the run: rules do not compare the two, but a fixture
+    // that says one card was dealt and lists two thousand is describing a
+    // document the app cannot write.
+    await assertSucceeds(
+      db
+        .doc(`users/${ALICE}/practiceSessions/at-limit`)
+        .set(session(ALICE, { total: 2000, correct: 0, words: run(2000) })),
+    );
+    await assertFails(
+      db
+        .doc(`users/${ALICE}/practiceSessions/over`)
+        .set(session(ALICE, { total: 2000, correct: 0, words: run(2001) })),
+    );
   });
 
   /**
