@@ -76,3 +76,26 @@ export function SelectControl({
     </span>
   );
 }
+
+/**
+ * A chip: a pill-shaped toggle, for the filters and the multi-valued fields
+ * where a dropdown would hide what is selected.
+ *
+ * `max-w-full` with `truncate` rather than letting it wrap: a word set named by
+ * 400 characters otherwise turned one chip into a six-line paragraph with a
+ * rounded border, which reads as broken layout rather than as something
+ * pressable, and pushed every chip after it off the fold. Not `max-w-[N]`: a
+ * name of ordinary length must still show in full, and the only width worth
+ * capping against is whatever the row has left.
+ *
+ * `pointer-coarse` is where the touch target is stated. `px-3 py-1` around
+ * 12px text measures 24px tall — fine under a mouse, and a bit over half the
+ * 44px every other control in this app is now sized to. The variant rather
+ * than a flat size because these rows are long: 18 parts of speech at 44px
+ * each is a wall of buttons on a desktop that has no touch problem to solve.
+ */
+export function chipClass(active: boolean): string {
+  return `max-w-full truncate rounded-pill px-3 py-1 text-xs font-medium transition pointer-coarse:min-h-11 pointer-coarse:px-4 ${
+    active ? 'bg-accent text-on-accent' : 'bg-bg-alt text-muted hover:text-ink'
+  }`;
+}

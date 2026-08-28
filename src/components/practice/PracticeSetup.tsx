@@ -1,4 +1,4 @@
-import { SelectControl, controlClass } from '@/components/controls';
+import { chipClass, SelectControl, controlClass } from '@/components/controls';
 import { JLPT_LEVELS, POS, WORD_ORIGINS } from '@/domain/entry';
 import type { PracticeMode } from '@/domain/practice';
 import { useI18n } from '@/i18n/context';
@@ -22,23 +22,6 @@ export interface SetChip {
 
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
-}
-
-/**
- * A chip is a control and has to keep a control's shape.
- *
- * `max-w-full` with `truncate` rather than letting it wrap: a word set named by
- * 400 characters otherwise turned one chip into a six-line paragraph with a
- * rounded border, which reads as broken layout rather than as something
- * pressable, and pushed every chip after it off the fold.
- *
- * Not `max-w-[N]`: a name of ordinary length must still show in full, and the
- * only width worth capping against is whatever the row has left.
- */
-function chipClass(active: boolean) {
-  return `max-w-full truncate rounded-pill px-3 py-1 text-xs font-medium transition ${
-    active ? 'bg-accent text-on-accent' : 'bg-bg-alt text-muted hover:text-ink'
-  }`;
 }
 
 /**

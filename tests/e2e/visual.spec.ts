@@ -527,4 +527,22 @@ test.describe('one control shape', () => {
     // its track shows up as a width that is not the width of the others.
     expect(new Set(boxes.map((box) => box?.width)).size).toBe(1);
   });
+
+  /**
+   * The chips are controls too, and they were the smallest thing on the screen
+   * to press: measured on the reverted code, 24px tall in both engines against
+   * the 44 every dropdown and date field beside them is now sized to. They
+   * stay 24 under a mouse — `chipClass` raises them only on a coarse pointer,
+   * which is why this describe declares one.
+   */
+  test('a chip is as pressable as the controls beside it', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedSignedIn(page);
+    await page.goto('/practice/flashcards');
+
+    const chip = page.getByRole('button', { name: 'N1' });
+    await expect(chip).toBeVisible();
+
+    expect((await chip.boundingBox())?.height).toBe(CONTROL_HEIGHT);
+  });
 });

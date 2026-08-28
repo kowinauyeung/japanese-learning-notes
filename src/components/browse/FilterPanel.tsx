@@ -1,4 +1,4 @@
-import { SelectControl, controlClass } from '@/components/controls';
+import { chipClass, SelectControl, controlClass } from '@/components/controls';
 import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
@@ -6,12 +6,6 @@ import type { Filters, SortKey } from '@/lib/filters';
 
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
-}
-
-function chipClass(active: boolean) {
-  return `rounded-pill px-3 py-1 text-xs font-medium transition ${
-    active ? 'bg-accent text-on-accent' : 'bg-bg-alt text-muted hover:text-ink'
-  }`;
 }
 
 export function FilterPanel({
