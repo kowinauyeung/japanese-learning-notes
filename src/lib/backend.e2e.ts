@@ -15,6 +15,7 @@ import { EntryDraftingError } from '@/domain/ports';
 import type { EntryProgress, PracticeSession, PracticeSessionDraft } from '@/domain/practice';
 import type { UserProfile, UserProfileDraft } from '@/domain/user';
 import type { WordSet, WordSetDraft } from '@/domain/wordSet';
+import { devSeed } from './devSeed';
 import type { E2ESeed } from './e2eSeed';
 import { sanitizeEntry, sanitizeSession, sanitizeWordSet } from './sanitize';
 
@@ -42,7 +43,40 @@ declare global {
   }
 }
 
-const seed = (): E2ESeed => (typeof window === 'undefined' ? {} : (window.__GOITEI_E2E__ ?? {}));
+/**
+ * The default a hand-driven `vite dev --mode e2e` falls back to, and nothing
+ * else. See `devSeed`.
+ *
+ * Both conjuncts are load-bearing, and each excludes a different caller that
+ * has to keep seeing an empty notebook:
+ *
+ * - `DEV` excludes Playwright, which serves `vite build --mode e2e` (see
+ *   `playwright.config.ts`). That is a production build, so this is statically
+ *   false there and every spec keeps the fixtures it seeds by hand.
+ * - `MODE === 'e2e'` excludes vitest, whose mode is `test`. `vitest.config.ts`
+ *   aliases this module into the component project, and `JsonImport.test.tsx`
+ *   deletes `window.__GOITEI_E2E__` between cases — so a `DEV`-only check would
+ *   hand thirteen words and four word sets to a test that had just asked for
+ *   none.
+ *
+ * Built once at module load rather than inside `seed()`. Two reasons, and the
+ * second is the one that bites: `devSeed` reads the clock, so a per-call value
+ * would have the notebook and the heatmap disagree about the date across
+ * midnight — and `entryDraftingPort` compares the seed **by identity** to know
+ * whether it is still in the same test, which a fresh object every call defeats.
+ */
+const DEV_FALLBACK: E2ESeed =
+  import.meta.env.DEV && import.meta.env.MODE === 'e2e' ? devSeed(new Date()) : {};
+
+/**
+ * The seed every store below reads.
+ *
+ * An injected seed always wins, and `addInitScript` runs before any of this, so
+ * a spec that seeds `{}` gets `{}` — a case asserting an empty notebook cannot
+ * be handed a full one.
+ */
+const seed = (): E2ESeed =>
+  typeof window === 'undefined' ? {} : (window.__GOITEI_E2E__ ?? DEV_FALLBACK);
 
 function countRead(store: 'entries' | 'progress' | 'wordSets'): void {
   if (typeof window === 'undefined') return;
