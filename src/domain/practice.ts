@@ -80,8 +80,19 @@ export interface PracticeSession {
  * hour fast would file its sessions above everything and repeat or skip rows at
  * every page boundary. `startedAt` stays a device value because that is what it
  * honestly is: the session had already begun before any write happened.
+ *
+ * **`words` is narrowed rather than inherited.** Null is a *read* state — it
+ * says a stored session predates the field — and it is not a thing any caller
+ * may send. `validSession` in `firestore.rules` asks that `words` is a list,
+ * and `get('words', [])` falls back to the default only when the key is absent,
+ * so an explicit null reaches `null is list` and the write is refused. Inheriting
+ * the nullable type would let a draft typecheck that production rejects, with
+ * nothing between the two to say so.
  */
-export type PracticeSessionDraft = Omit<PracticeSession, 'id' | 'finishedAt' | 'missed'>;
+export type PracticeSessionDraft = Omit<
+  PracticeSession,
+  'id' | 'finishedAt' | 'missed' | 'words'
+> & { words: PractisedWord[] };
 
 /**
  * Per-entry practice state.

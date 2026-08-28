@@ -532,7 +532,7 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
         ...session,
         id,
         finishedAt: new Date().toISOString(),
-        missed: (session.words ?? [])
+        missed: session.words
           .filter((word) => !word.correct)
           .map(({ entryId, headword, reading }) => ({ entryId, headword, reading })),
       });
