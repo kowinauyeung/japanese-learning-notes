@@ -55,7 +55,7 @@ const sessionDraft = () => ({
   filterLabel: 'すべての語',
   total: 1,
   correct: 1,
-  missed: [],
+  words: [],
   startedAt: '2026-08-25T10:00:00.000Z',
 });
 

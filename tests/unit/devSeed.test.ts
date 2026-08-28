@@ -28,9 +28,26 @@ describe('devSeed', () => {
     expect(dangling).toEqual([]);
   });
 
-  it('names only words the notebook has in 苦手 and in every missed list', () => {
-    const missed = (seed.sessions ?? []).flatMap((session) => session.missed ?? []);
-    expect([...(seed.weak ?? []), ...missed].filter((id) => !ids.has(id))).toEqual([]);
+  /**
+   * 苦手な語 is resolved against the notebook, so an id with nothing behind it
+   * makes the list one shorter than the drill the button under it starts.
+   */
+  it('names only words the notebook has in 苦手, which would otherwise list short', () => {
+    expect((seed.weak ?? []).filter((id) => !ids.has(id))).toEqual([]);
+  });
+
+  /**
+   * A session is the one place a dangling id is not a defect: 履歴 records a day
+   * that has happened, and deleting the note afterwards cannot unhappen it. The
+   * seed carries exactly one such word on purpose, because it is the only way
+   * to see the 削除済み row in development — so this pins *which* id, rather
+   * than allowing any number of them and no longer catching a typo.
+   */
+  it('names one deliberately deleted word in the run, and no other stray id', () => {
+    const dealt = (seed.sessions ?? []).flatMap((session) =>
+      (session.words ?? []).map((word) => word.entryId),
+    );
+    expect([...new Set(dealt.filter((id) => !ids.has(id)))]).toEqual(['dev-torikeshi']);
   });
 
   /**

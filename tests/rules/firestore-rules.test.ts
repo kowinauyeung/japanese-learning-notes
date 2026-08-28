@@ -90,7 +90,7 @@ const session = (ownerUid: string, over: Record<string, unknown> = {}) => ({
   filterLabel: 'すべて',
   total: 10,
   correct: 8,
-  missed: ['e1'],
+  words: [{ entryId: 'e1', headword: '切り分け', reading: 'きりわけ', correct: false }],
   ...over,
 });
 
@@ -810,9 +810,9 @@ describe('bounds on what an owner may write', () => {
       ),
     );
     await assertSucceeds(
-      db.doc(`users/${ALICE}/practiceSessions/short-missed-id`).set(
+      db.doc(`users/${ALICE}/practiceSessions/short-recorded-word`).set(
         session(ALICE, {
-          missed: [shortNestedString],
+          words: [shortNestedString],
         }),
       ),
     );
@@ -825,9 +825,9 @@ describe('bounds on what an owner may write', () => {
       ),
     );
     await assertSucceeds(
-      db.doc(`users/${ALICE}/practiceSessions/large-missed-id`).set(
+      db.doc(`users/${ALICE}/practiceSessions/large-recorded-word`).set(
         session(ALICE, {
-          missed: [largeNestedString],
+          words: [largeNestedString],
         }),
       ),
     );
@@ -1077,7 +1077,10 @@ describe('what the adapters write is what the rules accept', () => {
       filterLabel: 'すべて',
       total: 10,
       correct: 8,
-      missed: ['e1', 'e2'],
+      words: [
+        { entryId: 'e1', headword: '切り分け', reading: 'きりわけ', correct: false },
+        { entryId: 'e2', headword: '兆候', reading: 'ちょうこう', correct: false },
+      ],
       startedAt: '2026-08-13T00:00:00.000Z',
     };
     await assertSucceeds(

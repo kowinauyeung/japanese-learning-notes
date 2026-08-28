@@ -47,7 +47,7 @@ const session = (overrides: Partial<PracticeSessionDraft> = {}): PracticeSession
   filterLabel: 'すべての語',
   total: 1,
   correct: 1,
-  missed: [],
+  words: [{ entryId: 'e1', headword: '切り分け', reading: 'きりわけ', correct: true }],
   startedAt: '2026-06-24T09:59:00.000Z',
   ...overrides,
 });

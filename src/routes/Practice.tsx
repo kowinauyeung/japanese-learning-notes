@@ -194,6 +194,7 @@ function Practice({ mode }: { mode: PracticeMode }) {
         filterLabel: finished.filterLabel,
         answers,
         startedAt: finished.startedAt,
+        entries: finished.queue,
       }),
       mergeProgress(progress, answers, mode, at),
     )

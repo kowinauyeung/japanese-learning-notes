@@ -50,11 +50,11 @@ test.describe('history', () => {
 
   /**
    * The row is a summary and the dialog is where the parts that do not fit go —
-   * chiefly the words that were missed, which the row can only count. The row
-   * became a single button to make it openable at all: a control cannot hold
-   * controls, so the links had to move somewhere with room for them.
+   * the words that were missed, which the row can only count, and the run in
+   * full. The row became a single button to make it openable at all: a control
+   * cannot hold controls, so the links had to move somewhere with room.
    */
-  test('opens a session to see which words were missed', async ({ page }) => {
+  test('opens a session to see the run and which words were missed', async ({ page }) => {
     await seedSignedIn(page);
     await page.goto('/practice/flashcards');
     await page.getByRole('button', { name: '#仕事' }).click();
@@ -68,7 +68,15 @@ test.describe('history', () => {
     const dialog = page.getByRole('dialog', { name: 'フラッシュカード' });
     await expect(dialog).toContainText('0 / 1');
     await expect(dialog).toContainText('0%');
-    await expect(dialog.locator('a[href="/vocabulary/w-kiriwake"]')).toBeVisible();
+
+    // The claim that needs a browser is that the run written by the practice
+    // screen is the run read back here. What the filter does to it, and how a
+    // deleted word draws, are covered in `tests/component`.
+    const run = dialog.locator('ol');
+    await expect(run.locator('a[href="/vocabulary/w-kiriwake"]')).toBeVisible();
+    await expect(run.getByRole('listitem')).toHaveCount(1);
+    await expect(run.getByRole('img', { name: '不正解' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'すべて 1' })).toBeVisible();
   });
 
   /**
@@ -121,7 +129,7 @@ test.describe('history', () => {
           filterLabel: '古い記録',
           total: 3,
           correct: 1,
-          missed: [],
+          words: [],
           startedAt: '2026-06-01T00:00:00.000Z',
           finishedAt: '2026-06-01T00:05:00.000Z',
         },
@@ -131,7 +139,7 @@ test.describe('history', () => {
           filterLabel: '新しい記録',
           total: 3,
           correct: 3,
-          missed: [],
+          words: [],
           startedAt: '2026-06-02T00:00:00.000Z',
           finishedAt: '2026-06-02T00:05:00.000Z',
         },

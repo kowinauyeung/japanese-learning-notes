@@ -95,6 +95,12 @@ const en = {
   'history.finished': 'Finished',
   'history.filters': 'Filters',
   'history.missedCount': '{count} missed',
+  'history.deletedWord': 'Deleted',
+  'history.practisedWords': 'Every word in this session',
+  'history.answerFilter': 'Filter by answer',
+  'history.filterAll': 'All',
+  'history.answeredCorrect': 'Correct',
+  'history.answeredWrong': 'Missed',
   'history.none': 'None',
 } as const;
 
@@ -199,6 +205,12 @@ const ja: LearningMessages = {
   'history.finished': '終了',
   'history.filters': '条件',
   'history.missedCount': '間違えた語 {count}',
+  'history.deletedWord': '削除済み',
+  'history.practisedWords': '出題した語',
+  'history.answerFilter': '正誤で絞り込み',
+  'history.filterAll': 'すべて',
+  'history.answeredCorrect': '正解',
+  'history.answeredWrong': '不正解',
   'history.none': 'ありません',
 };
 
@@ -298,6 +310,12 @@ const zhHant: LearningMessages = {
   'history.finished': '完成時間',
   'history.filters': '篩選條件',
   'history.missedCount': '答錯 {count} 個',
+  'history.deletedWord': '已刪除',
+  'history.practisedWords': '本次練習的單字',
+  'history.answerFilter': '依答題結果篩選',
+  'history.filterAll': '全部',
+  'history.answeredCorrect': '答對',
+  'history.answeredWrong': '答錯',
   'history.none': '沒有',
 };
 
@@ -397,6 +415,12 @@ const ko: LearningMessages = {
   'history.finished': '완료',
   'history.filters': '조건',
   'history.missedCount': '오답 {count}개',
+  'history.deletedWord': '삭제됨',
+  'history.practisedWords': '출제된 단어',
+  'history.answerFilter': '정답 여부로 필터',
+  'history.filterAll': '전체',
+  'history.answeredCorrect': '정답',
+  'history.answeredWrong': '오답',
   'history.none': '없음',
 };
 
@@ -497,6 +521,12 @@ const es: LearningMessages = {
   'history.finished': 'Finalizada',
   'history.filters': 'Filtros',
   'history.missedCount': '{count} fallos',
+  'history.deletedWord': 'Eliminada',
+  'history.practisedWords': 'Palabras de esta sesión',
+  'history.answerFilter': 'Filtrar por resultado',
+  'history.filterAll': 'Todas',
+  'history.answeredCorrect': 'Acierto',
+  'history.answeredWrong': 'Fallo',
   'history.none': 'Ninguna',
 };
 

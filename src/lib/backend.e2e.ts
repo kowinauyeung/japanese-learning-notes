@@ -525,7 +525,17 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
 
     recordSession(session: PracticeSessionDraft, rows: EntryProgress[]): Promise<string> {
       const id = `e2e-session-${++sessionSequence}`;
-      sessions.push({ ...session, id, finishedAt: new Date().toISOString() });
+      // `missed` is derived on read from Firestore, so it is derived here too:
+      // a substitute that stored it would let the two disagree in the one place
+      // the end-to-end suite reads them both.
+      sessions.push({
+        ...session,
+        id,
+        finishedAt: new Date().toISOString(),
+        missed: (session.words ?? [])
+          .filter((word) => !word.correct)
+          .map(({ entryId, headword, reading }) => ({ entryId, headword, reading })),
+      });
       // Merging row by row, not replacing the map — the real adapter writes
       // with `merge: true` and a substitute that clobbered would hide it.
       for (const row of rows) progress.set(row.entryId, row);

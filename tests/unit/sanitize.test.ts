@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { toDraft } from '@/lib/draft';
-import { isValidIsoDate, sanitizeDraft, sanitizeEntry, sanitizeProgressMap } from '@/lib/sanitize';
+import {
+  isValidIsoDate,
+  sanitizeDraft,
+  sanitizeEntry,
+  sanitizeProgressMap,
+  sanitizeSession,
+} from '@/lib/sanitize';
 import { makeEntry } from '../fixtures/entry';
 
 /**
@@ -450,5 +456,128 @@ describe('sanitizeProgressMap', () => {
       status: 'wrong',
       attempts: 0,
     });
+  });
+});
+
+/**
+ * The one place the two shapes of `missed` meet.
+ *
+ * Sessions written before `MissedWord` existed hold a bare id, and there is no
+ * backfill that could fix that — a headword for a word already deleted cannot
+ * be recovered. So the reader takes both, and the old shape reads back as a
+ * snapshot with nothing in it, which is what it is.
+ */
+describe('sanitizeSession — the missed list, in both shapes it is stored in', () => {
+  const stored = (missed: unknown) => ({
+    mode: 'flashcard',
+    filterLabel: 'すべて',
+    total: 3,
+    correct: 1,
+    missed,
+    startedAt: '2026-06-24T09:00:00.000Z',
+    finishedAt: '2026-06-24T09:04:00.000Z',
+  });
+
+  it('reads the snapshot a session records now', () => {
+    expect(
+      sanitizeSession('s1', stored([{ entryId: 'w1', headword: '切り分け', reading: 'きりわけ' }]))
+        .missed,
+    ).toEqual([{ entryId: 'w1', headword: '切り分け', reading: 'きりわけ' }]);
+  });
+
+  /**
+   * A session recorded before this field existed. Read as anything other than
+   * a `MissedWord`, every history row it holds throws on `.entryId`.
+   */
+  it('reads a pre-snapshot session, whose missed list is bare ids', () => {
+    expect(sanitizeSession('s1', stored(['w1', 'w2'])).missed).toEqual([
+      { entryId: 'w1', headword: '', reading: '' },
+      { entryId: 'w2', headword: '', reading: '' },
+    ]);
+  });
+
+  /**
+   * The id is what makes a surviving word a link, so a row without one can
+   * never be anything but dead text. Dropped rather than rendered, the same
+   * way a pre-snapshot id with no word behind it is.
+   */
+  it('drops an element with no entry id, which could never link anywhere', () => {
+    expect(
+      sanitizeSession('s1', stored([{ headword: '切り分け' }, null, 42, '', { entryId: 'w1' }]))
+        .missed,
+    ).toEqual([{ entryId: 'w1', headword: '', reading: '' }]);
+  });
+
+  it('reads a missed list that is not a list at all as empty', () => {
+    expect(sanitizeSession('s1', stored('w1')).missed).toEqual([]);
+  });
+});
+
+/**
+ * The full run, and the missed list that is read out of it.
+ *
+ * Nothing writes `missed` any more — it is `words` with the correct answers
+ * taken out — so a session recorded now has no such field, and reading one
+ * without deriving it leaves every history row's missed list empty.
+ */
+describe('sanitizeSession — the run', () => {
+  const stored = (over: Record<string, unknown>) => ({
+    mode: 'flashcard',
+    filterLabel: 'すべて',
+    total: 2,
+    correct: 1,
+    startedAt: '2026-06-24T09:00:00.000Z',
+    finishedAt: '2026-06-24T09:04:00.000Z',
+    ...over,
+  });
+
+  const RUN = [
+    { entryId: 'w1', headword: '切り分け', reading: 'きりわけ', correct: true },
+    { entryId: 'w2', headword: '兆候', reading: 'ちょうこう', correct: false },
+  ];
+
+  it('derives the missed list from the run, since nothing stores it any more', () => {
+    expect(sanitizeSession('s1', stored({ words: RUN })).missed).toEqual([
+      { entryId: 'w2', headword: '兆候', reading: 'ちょうこう' },
+    ]);
+  });
+
+  /**
+   * A document that somehow holds both. The run is the record of what happened
+   * and the other is a list that was derived from something; trusting the
+   * stored copy would let a stale one outrank the answers themselves.
+   */
+  it('reads the missed list out of the run even when a stored one sits beside it', () => {
+    const session = sanitizeSession(
+      's1',
+      stored({ words: RUN, missed: [{ entryId: 'w9', headword: '曖昧', reading: 'あいまい' }] }),
+    );
+    expect(session.missed).toEqual([{ entryId: 'w2', headword: '兆候', reading: 'ちょうこう' }]);
+  });
+
+  /**
+   * Null and `[]` are different claims, and the dialog leans on the difference:
+   * null means the session never recorded a run, which is every session written
+   * before the field existed. An empty list would claim a drill that dealt no
+   * cards, and the dialog would print a heading over nothing.
+   */
+  it('reports no run at all, rather than an empty one, when the field is absent', () => {
+    expect(sanitizeSession('s1', stored({ missed: ['w2'] })).words).toBeNull();
+  });
+
+  /**
+   * The direction `sanitizeProgressMap` already defaults in, for the same
+   * reason: a word shown as missed gets looked at again, one shown as correct
+   * does not. So anything that is not exactly `true` reads as a wrong answer.
+   */
+  it('reads an unusable answer as wrong, so the word surfaces rather than hides', () => {
+    const session = sanitizeSession(
+      's1',
+      stored({ words: [{ entryId: 'w1', headword: '切り分け', reading: '', correct: 'yes' }] }),
+    );
+    expect(session.words).toEqual([
+      { entryId: 'w1', headword: '切り分け', reading: '', correct: false },
+    ]);
+    expect(session.missed).toHaveLength(1);
   });
 });

@@ -304,7 +304,7 @@ export function makeSessions(count: number): SeedSession[] {
     filterLabel: `記録 ${index + 1}`,
     total: 3,
     correct: index % 3,
-    missed: [],
+    words: [],
     startedAt: new Date(Date.UTC(2026, 5, 1, index)).toISOString(),
     finishedAt: new Date(Date.UTC(2026, 5, 1, index, 5)).toISOString(),
   })) satisfies SeedSession[];
