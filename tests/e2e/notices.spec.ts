@@ -3,7 +3,9 @@ import { seed } from './fixtures';
 
 /**
  * The bottom of the viewport, where three fixed elements compete for the same
- * corner: the offline pill, the update prompt, and the add button.
+ * strip: the offline pill, the update prompt, and — below the `nav` breakpoint
+ * — the navigation bar itself. It was the floating add button until the bar
+ * replaced it; the competition is the same one, over more of the edge.
  *
  * Each of the first two used to place itself, and a comment on each said it was
  * clear of the others. Measured, none of that held. At 360 the offline pill
@@ -39,8 +41,10 @@ function intersection(a: Box, b: Box): { width: number; height: number } | null 
 async function boxesOf(named: Record<string, Locator>): Promise<[string, Box][]> {
   const found: [string, Box][] = [];
   for (const [name, locator] of Object.entries(named)) {
-    // The add button is `nav:hidden`, so above the breakpoint it is absent by
-    // design rather than missing.
+    // The bottom bar is `nav:hidden`, so above the breakpoint it is absent by
+    // design rather than missing. A role query does not match an element
+    // hidden from the accessibility tree, so this is a count of zero and not a
+    // box that fails to measure.
     if ((await locator.count()) === 0) continue;
     const box = await locator.first().boundingBox();
     if (box) found.push([name, box]);
@@ -69,7 +73,7 @@ test.describe('the bottom of the viewport', () => {
       const panels = {
         prompt: page.getByRole('status').filter({ hasText: '新しいバージョン' }),
         notice: page.getByRole('status').filter({ hasText: 'オフライン' }),
-        add: page.getByRole('button', { name: '単語を追加' }),
+        bar: page.getByRole('navigation', { name: 'メニュー' }),
       };
 
       for (const width of WIDTHS) {
@@ -77,7 +81,7 @@ test.describe('the bottom of the viewport', () => {
         const expectedPanels = [
           'notice',
           ...(updateWaiting ? ['prompt'] : []),
-          ...(width < 700 ? ['add'] : []),
+          ...(width < 700 ? ['bar'] : []),
         ].sort();
         // Wait until each visible UI panel can be measured; otherwise the
         // overlap checks can run before the offline notice, update prompt, or

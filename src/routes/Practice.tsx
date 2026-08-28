@@ -14,6 +14,7 @@ import { useEntries } from '@/lib/entries';
 import {
   describeFilters,
   practiceFiltersFromParams,
+  practiceFiltersToParams,
   matchesPractice,
   mergeProgress,
   scopeFor,
@@ -37,6 +38,12 @@ import { useWordSets } from '@/lib/wordSets';
  */
 const MODE_BY_SEGMENT: Record<string, PracticeMode> = {
   flashcards: 'flashcard',
+  dictation: 'dictation',
+};
+
+/** The same table read the other way, for the mode switch on the setup screen. */
+const SEGMENT_BY_MODE: Record<PracticeMode, string> = {
+  flashcard: 'flashcards',
   dictation: 'dictation',
 };
 
@@ -246,6 +253,19 @@ function Practice({ mode }: { mode: PracticeMode }) {
               : 'ready'
         }
         onChange={setFilters}
+        /*
+         * The filters go into the URL on the way out, and that is not
+         * decoration: `Component` keys this screen on `mode`, so switching
+         * drill remounts it and the state seeded from the query string is all
+         * that survives. Without this, choosing 書き取り after narrowing to a
+         * word set would silently hand back the whole notebook.
+         */
+        onModeChange={(next) =>
+          void navigate({
+            pathname: `/practice/${SEGMENT_BY_MODE[next]}`,
+            search: practiceFiltersToParams(filters).toString(),
+          })
+        }
         onStart={() =>
           start(shuffle(matches, Math.random), describeFilters(filters, sets, filterLabels))
         }

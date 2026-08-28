@@ -1,4 +1,5 @@
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from 'react';
+import { controlClass, textAreaClass } from '@/components/controls';
 import { INPUT_LIMITS } from '@/domain/limits';
 import { EntryDraftingError, type EntryDraftingFailure } from '@/domain/ports';
 import type { TranslationLanguage } from '@/domain/user';
@@ -6,7 +7,7 @@ import { useI18n } from '@/i18n/context';
 import type { MessageKey } from '@/i18n/messages';
 import { entryDraftingPort } from '@/lib/backend';
 import { buildPrompt, promptLanguageName, SCHEMA } from '@/lib/jsonImport';
-import { Area, Field, inputClass } from './fields';
+import { Area, Field } from './fields';
 
 /**
  * What to say for each way the drafting can fail.
@@ -287,7 +288,7 @@ export function JsonImport({
             disabled={drafting}
             maxLength={INPUT_LIMITS.importWord}
             placeholder="兆候"
-            className={inputClass}
+            className={controlClass}
           />
         </Field>
         <Field label={t('import.translationLanguage')}>
@@ -297,7 +298,7 @@ export function JsonImport({
             onChange={(event) => set('language', event.target.value)}
             disabled={drafting}
             maxLength={INPUT_LIMITS.importLanguage}
-            className={inputClass}
+            className={controlClass}
           />
         </Field>
       </div>
@@ -321,7 +322,7 @@ export function JsonImport({
           disabled={drafting}
           maxLength={INPUT_LIMITS.importSource}
           placeholder="会議、同僚、小説「海辺のカフカ」…"
-          className={inputClass}
+          className={controlClass}
         />
       </Field>
 
@@ -377,7 +378,7 @@ export function JsonImport({
               readOnly
               value={prompt}
               rows={8}
-              className={`${inputClass} prose-cjk py-2 leading-relaxed`}
+              className={`${textAreaClass} prose-cjk leading-relaxed`}
             />
           </Field>
         </div>

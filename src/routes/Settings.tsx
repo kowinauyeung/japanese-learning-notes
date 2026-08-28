@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useBlocker } from 'react-router-dom';
+import { SelectControl, controlClass } from '@/components/controls';
 import { USER_LIMITS } from '@/domain/limits';
 import { THEME_PREFERENCES, TRANSLATION_LANGUAGES, UI_LANGUAGES } from '@/domain/user';
 import type {
@@ -154,7 +155,7 @@ function SettingsForm({
             disabled={saving}
             maxLength={USER_LIMITS.nickname}
             onChange={(event) => update('nickname', cleanNickname(event.target.value))}
-            className="min-h-11 w-full rounded-panel border border-line bg-bg px-4 text-sm"
+            className={controlClass}
           />
         </Field>
 
@@ -179,18 +180,17 @@ function SettingsForm({
         </Field>
 
         <Field label={t('settings.theme')}>
-          <select
+          <SelectControl
             value={draft.theme}
             disabled={saving}
             onChange={(event) => update('theme', event.target.value as ThemePreference)}
-            className="min-h-11 w-full rounded-panel border border-line bg-bg px-4 text-sm"
           >
             {THEME_PREFERENCES.map((value) => (
               <option key={value} value={value}>
                 {t(THEME_LABEL_KEYS[value])}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </Field>
 
         <button
@@ -233,18 +233,17 @@ function LanguageSelect<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <select
+    <SelectControl
       value={value}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value as T)}
-      className="min-h-11 w-full rounded-panel border border-line bg-bg px-4 text-sm"
     >
       {options.map((language) => (
         <option key={language} value={language}>
           {labels[language]}
         </option>
       ))}
-    </select>
+    </SelectControl>
   );
 }
 

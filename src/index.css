@@ -246,6 +246,42 @@ body {
 }
 
 /*
+ * `input[type="date"]` is a widget, not a text box, and it will not be trusted
+ * with the size of the box around it.
+ *
+ * It was given `display: flex` here to centre its value, on the reasoning that
+ * Chrome's own UA stylesheet already makes it an `inline-flex`. On iOS Safari
+ * that made the control size itself to its widget content instead of to the
+ * 100% width it was given, and the field grew wider than the card holding it
+ * — reported from a phone, on a build where every test in this repository was
+ * green, including the one that measures these four controls to the same width
+ * and the ones that check the page does not scroll sideways. Neither desktop
+ * engine reproduces it: Playwright's WebKit draws the segmented desktop field,
+ * where iOS draws a formatted date and a wheel.
+ *
+ * So the box is drawn by a wrapper now — see `DateControl` in
+ * `src/components/controls.tsx` — and what is left here applies to the input
+ * inside it. `max-width` because a `width` a widget may decline is not a
+ * constraint, and this one it cannot exceed.
+ */
+input[type='date'] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/*
+ * Safari centres the printed date in whatever width is left over. Every other
+ * control starts its value at the left padding edge, and a row where one value
+ * floats in the middle of its box reads as a different kind of field. It is
+ * also what decides which end of an over-wide field the wrapper clips: the
+ * date stays readable and the empty space goes.
+ */
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+
+/*
  * The CJK face, and the two ways to ask for it.
  *
  * `.cjk-face` is the face alone. `.prose-cjk` is the face plus the leading that
