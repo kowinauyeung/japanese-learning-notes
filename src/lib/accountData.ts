@@ -235,6 +235,7 @@ export async function deleteEverything({
 
   const entryList = await drain((q) => entries.list(q));
   for (const entry of entryList) await entries.remove(entry.id);
+  await entries.removeDashboardStats();
 
   // The progress map and every session, which the count above does not cover:
   // the map is one document and the sessions are a collection, and neither is

@@ -460,6 +460,10 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
       return Promise.resolve();
     },
 
+    removeDashboardStats(): Promise<void> {
+      return Promise.resolve();
+    },
+
     settlePendingWrites(): Promise<void> {
       return Promise.resolve();
     },

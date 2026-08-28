@@ -23,6 +23,7 @@ import type { Summary } from '@/lib/stats';
 const ENTRY_PAGE_SIZE = 200;
 const RECENT_WORDS = 8;
 const SELECTED_DAY_PAGE_SIZE = 50;
+const AUTO_ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
 export function Component() {
   const { locale, t } = useI18n();
@@ -129,11 +130,8 @@ export function Component() {
     let cancelled = false;
     const load = async () => {
       try {
-        const page = await entriesRepository.listLearnedOn(selectedDay, {
-          limit: SELECTED_DAY_PAGE_SIZE,
-          cursor: null,
-        });
-        if (!cancelled) setSelectedEntries({ day: selectedDay, entries: page.items });
+        const entries = await drainLearnedOn(entriesRepository, selectedDay);
+        if (!cancelled) setSelectedEntries({ day: selectedDay, entries });
       } catch (cause) {
         console.error(cause);
         if (!cancelled) setError(captureLoadFailure(cause, 'load.entries'));
@@ -232,8 +230,28 @@ async function drainEntries(repository: EntryRepository): Promise<Entry[]> {
   return all;
 }
 
+async function drainLearnedOn(repository: EntryRepository, day: string): Promise<Entry[]> {
+  const all: Entry[] = [];
+  let cursor: string | null = null;
+  do {
+    const page = await repository.listLearnedOn(day, {
+      limit: SELECTED_DAY_PAGE_SIZE,
+      cursor,
+    });
+    all.push(...page.items);
+    cursor = page.cursor;
+  } while (cursor);
+  return all;
+}
+
 function wordOfDaySeed(todayKey: string) {
   let hash = 0;
   for (const char of todayKey) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return hash.toString(36).padStart(20, '0').slice(0, 20);
+  let state = hash || 1;
+  let seed = '';
+  for (let i = 0; i < 20; i += 1) {
+    state = (state * 1_664_525 + 1_013_904_223) >>> 0;
+    seed += AUTO_ID_ALPHABET[state % AUTO_ID_ALPHABET.length];
+  }
+  return seed;
 }

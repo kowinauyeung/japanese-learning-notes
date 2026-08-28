@@ -4,7 +4,6 @@ import type { FirebaseApp } from 'firebase/app';
 import {
   connectFirestoreEmulator,
   doc,
-  getDoc,
   getFirestore,
   setDoc,
   Timestamp,
@@ -317,14 +316,52 @@ describe('dashboard reads', () => {
     const id = await repo.create(
       draft({ learnedOn: '2026-06-24', jlpt: 'N2', pos: ['名詞', '動詞'] }),
     );
+    await expect
+      .poll(() => repo.dashboardStats())
+      .toMatchObject({
+        total: 1,
+        countsByDay: { '2026-06-24': 1 },
+        jlptCounts: { N2: 1 },
+        posCounts: { 名詞: 1, 動詞: 1 },
+      });
+
     await repo.update(id, draft({ learnedOn: '2026-06-25', jlpt: 'N1', pos: ['副詞'] }));
+    await expect
+      .poll(() => repo.dashboardStats())
+      .toMatchObject({
+        total: 1,
+        countsByDay: { '2026-06-25': 1 },
+        jlptCounts: { N1: 1 },
+        posCounts: { 副詞: 1 },
+      });
+
     await repo.remove(id);
 
-    const stats = (await getDoc(statsRef)).data();
-    expect(stats?.total).toBe(0);
-    expect(stats?.countsByDay).toEqual({});
-    expect(stats?.jlptCounts).toEqual({});
-    expect(stats?.posCounts).toEqual({});
+    await expect
+      .poll(() => repo.dashboardStats())
+      .toMatchObject({
+        total: 0,
+        countsByDay: {},
+        jlptCounts: {},
+        posCounts: {},
+      });
+  });
+
+  it('removes dashboard stats explicitly because account deletion cannot rely on cascades', async () => {
+    const uid = `it-stats-delete-${randomUUID()}`;
+    const repo = createEntryRepository(db, uid);
+    await setDoc(doc(db, 'users', uid, 'stats', 'vocabulary'), {
+      ownerUid: uid,
+      total: 1,
+      countsByDay: { '2026-06-24': 1 },
+      jlptCounts: { N2: 1 },
+      posCounts: { 名詞: 1 },
+      updatedAt: Timestamp.fromDate(new Date('2026-06-24T09:00:00.000Z')),
+    });
+
+    await repo.removeDashboardStats();
+
+    expect(await repo.dashboardStats()).toBeNull();
   });
 });
 

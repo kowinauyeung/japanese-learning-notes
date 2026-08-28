@@ -25,6 +25,7 @@ const ports = (entryCount: number, setCount: number, sessionCount: number) => {
   const entries = {
     list: paged(rows(entryCount, 'e')),
     remove: vi.fn(() => Promise.resolve()),
+    removeDashboardStats: vi.fn(() => Promise.resolve()),
     settlePendingWrites: vi.fn(() => Promise.resolve()),
   };
   const wordSets = {
@@ -137,6 +138,13 @@ describe('deleteEverything', () => {
     await deleteEverything(p);
 
     expect((p.progress.removeAll as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+  });
+
+  it('removes dashboard stats, whose cached counts are private notebook data', async () => {
+    const p = ports(1, 0, 0);
+    await deleteEverything(p);
+
+    expect((p.entries.removeDashboardStats as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
   });
 
   it('deletes the account itself, not only its data', async () => {

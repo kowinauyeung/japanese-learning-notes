@@ -6,6 +6,7 @@ import {
   getCountFromServer,
   getDoc,
   getDocs,
+  increment,
   limit as limitTo,
   orderBy,
   query,
@@ -23,7 +24,7 @@ import type { Entry, EntryDraft } from '@/domain/entry';
 import type { EntryDashboardStats, EntryRepository, Page, PageQuery } from '@/domain/ports';
 import { sanitizeEntry } from '@/lib/sanitize';
 import { decodeCursor, encodeCursor } from './cursor';
-import { LocalWriteTracker } from './localWrite';
+import { LocalWriteTracker, waitForLocalWrite } from './localWrite';
 import { withIsoTimestamps } from './mappers';
 
 /**
@@ -58,21 +59,20 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
     posCounts: numberRecord(data.posCounts),
   });
 
-  const updateStats = (stats: EntryDashboardStats, before: Entry | null, after: Entry | null) => {
-    if (before) adjustStats(stats, before, -1);
-    if (after) adjustStats(stats, after, 1);
-  };
-
   const writeStatsDelta = async (before: Entry | null, after: Entry | null) => {
+    const delta = statsDelta(before, after);
+    if (Object.keys(delta).length === 0) return;
     try {
       const ref = statsPath();
       const snapshot = await getDoc(ref);
       if (!snapshot.exists()) return;
-      const stats = statsFrom(snapshot.data());
-      updateStats(stats, before, after);
-      await setDoc(ref, { ...stats, updatedAt: serverTimestamp() });
+      await waitForLocalWrite(ref, () => updateDoc(ref, delta), {
+        onLateRejection: (error) => {
+          if (!isExpectedStatsRejection(error)) console.error(error);
+        },
+      });
     } catch (cause) {
-      if (!isUnavailable(cause)) console.error(cause);
+      if (!isExpectedStatsRejection(cause)) console.error(cause);
     }
   };
 
@@ -194,7 +194,7 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
           updatedAt: serverTimestamp(),
         }),
       );
-      await writeStatsDelta(
+      void writeStatsDelta(
         null,
         toEntry(ref.id, { ...draft, createdAt: new Date(), updatedAt: new Date(), ownerUid: uid }),
       );
@@ -216,7 +216,7 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
           updatedAt: serverTimestamp(),
         }),
       );
-      if (before) await writeStatsDelta(before, { ...before, ...draft });
+      if (before) void writeStatsDelta(before, { ...before, ...draft });
     },
 
     async remove(id: string): Promise<void> {
@@ -225,7 +225,12 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
         .then((snapshot) => (snapshot.exists() ? toEntry(snapshot.id, snapshot.data()) : null))
         .catch(() => null);
       await writes.write(ref, () => deleteDoc(ref));
-      if (before) await writeStatsDelta(before, null);
+      if (before) void writeStatsDelta(before, null);
+    },
+
+    async removeDashboardStats(): Promise<void> {
+      const ref = statsPath();
+      await writes.write(ref, () => deleteDoc(ref));
     },
 
     async settlePendingWrites(): Promise<void> {
@@ -243,22 +248,30 @@ function numberRecord(raw: unknown): Record<string, number> {
   );
 }
 
-function adjust(stats: Record<string, number>, key: string, delta: number) {
-  if (!key) return;
-  const next = (stats[key] ?? 0) + delta;
-  if (next > 0) stats[key] = next;
-  else delete stats[key];
+function statsDelta(before: Entry | null, after: Entry | null): Record<string, unknown> {
+  const delta: Record<string, unknown> = { updatedAt: serverTimestamp() };
+  if (!before && after) delta.total = increment(1);
+  if (before && !after) delta.total = increment(-1);
+  if (before) addEntryDelta(delta, before, -1);
+  if (after) addEntryDelta(delta, after, 1);
+  return delta;
 }
 
-function adjustStats(stats: EntryDashboardStats, entry: Entry, delta: 1 | -1) {
-  stats.total = Math.max(0, stats.total + delta);
-  adjust(stats.countsByDay, entry.learnedOn, delta);
-  adjust(stats.jlptCounts, entry.jlpt, delta);
-  for (const part of entry.pos) adjust(stats.posCounts, part, delta);
+function addEntryDelta(delta: Record<string, unknown>, entry: Entry, by: 1 | -1) {
+  delta[`countsByDay.${entry.learnedOn}`] = increment(by);
+  delta[`jlptCounts.${entry.jlpt}`] = increment(by);
+  for (const part of entry.pos) delta[`posCounts.${part}`] = increment(by);
 }
 
 function isUnavailable(cause: unknown): boolean {
   return (
     typeof cause === 'object' && cause !== null && 'code' in cause && cause.code === 'unavailable'
+  );
+}
+
+function isExpectedStatsRejection(cause: unknown): boolean {
+  return (
+    isUnavailable(cause) ||
+    (typeof cause === 'object' && cause !== null && 'code' in cause && cause.code === 'not-found')
   );
 }

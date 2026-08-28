@@ -53,6 +53,7 @@ export interface EntryRepository {
   create(draft: EntryDraft): Promise<string>;
   update(id: string, draft: EntryDraft): Promise<void>;
   remove(id: string): Promise<void>;
+  removeDashboardStats(): Promise<void>;
   /** Waits until locally accepted writes have either reached durable storage or failed. */
   settlePendingWrites(): Promise<void>;
 }
