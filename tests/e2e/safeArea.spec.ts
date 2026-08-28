@@ -59,7 +59,7 @@ function elements(page: Page) {
     /** The bar that occupies the strip the home indicator is drawn on. */
     bar: page.getByRole('navigation', { name: 'メニュー' }),
     /** A tab inside it — the one the reader reaches for most. */
-    add: page.getByRole('navigation', { name: 'メニュー' }).getByRole('button', { name: '＋追加' }),
+    add: page.getByRole('navigation', { name: 'メニュー' }).getByRole('button', { name: '追加' }),
     /** The bottom stack, which places itself with `inset-x-4 bottom-24 mx-safe mb-safe`. */
     notice: page.getByRole('status').filter({ hasText: 'オフライン' }),
     /** Header contents. The bar itself stays full bleed; only what is in it moves. */

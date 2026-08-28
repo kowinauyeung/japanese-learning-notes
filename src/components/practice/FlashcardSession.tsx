@@ -19,7 +19,7 @@ const isEditable = (node: unknown): boolean => {
  * Whether the session still owns the keyboard.
  *
  * It does not while anything is layered over it, and the session cannot be
- * told about all of them: `AppLayout` renders ＋追加 and the mobile ＋ button
+ * told about all of them: `AppLayout` renders ＋追加 and the phone's 追加 tab
  * on **every** route, `/practice/:mode` included, so the add-word sheet can be
  * open over a running card without this component ever hearing about it. A
  * document-level listener then sees every keystroke typed into that form —

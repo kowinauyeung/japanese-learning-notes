@@ -144,7 +144,10 @@ function AddTab({ onClick }: { onClick: () => void }) {
       <span className="grid h-7 w-7 place-items-center rounded-pill bg-accent text-on-accent">
         <PlusIcon />
       </span>
-      <span className="max-w-full truncate">{t('action.add')}</span>
+      {/* Its own message rather than `action.add`, which is the header
+          button's 「＋追加」: the ＋ belongs to a button with no icon on it,
+          and printing it under a plus in a circle says the same thing twice. */}
+      <span className="max-w-full truncate">{t('nav.add')}</span>
     </button>
   );
 }
