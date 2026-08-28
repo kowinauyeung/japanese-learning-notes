@@ -33,6 +33,31 @@ const editDialog = (page: Page) => page.getByRole('dialog', { name: '単語を�
 const previewDialog = (page: Page) => page.getByRole('dialog', { name: '単語', exact: true });
 
 test.describe('browsing', () => {
+  /**
+   * The filters are around 480px of a 390px screen, so on a phone they start
+   * folded — otherwise the first word of the notebook is two scrolls below the
+   * page the reader opened to read it.
+   *
+   * The second half is what makes the first half safe: folding hides the
+   * controls, and it must never hide the fact that a filter is on. The
+   * removable chips are outside the panel for that reason, and this is what
+   * says so — a narrowed list that looks unnarrowed is the failure mode of
+   * every collapsed filter panel.
+   */
+  test('folds the filters on a phone, but not what is narrowing the list', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/vocabulary?jlpt=N1');
+
+    const panel = page.getByText('最近のタグ');
+    await expect(page.getByText('1 語')).toBeVisible();
+    await expect(panel).toBeHidden();
+    await expect(page.getByRole('button', { name: 'N1 ✕' })).toBeVisible();
+
+    await page.getByRole('button', { name: /絞り込み/ }).click();
+
+    await expect(panel).toBeVisible();
+  });
+
   test('lists every word, then narrows on a substring', async ({ page }) => {
     await page.goto('/vocabulary');
     await expect(page.getByText('3 語')).toBeVisible();
