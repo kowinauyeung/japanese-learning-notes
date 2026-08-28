@@ -2,6 +2,7 @@ import { chipClass, DateControl, SelectControl } from '@/components/controls';
 import { JLPT_LEVELS, POS, WORD_ORIGINS } from '@/domain/entry';
 import type { PracticeMode } from '@/domain/practice';
 import { useI18n } from '@/i18n/context';
+import type { MessageKey } from '@/i18n/messages';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { activeQuickRange, QUICK_RANGES, quickRangeStart } from '@/lib/practice';
 import type { PracticeFilters } from '@/lib/practice';
@@ -19,6 +20,11 @@ export interface SetChip {
   name: string;
   count: number;
 }
+
+const MODES = [
+  { mode: 'flashcard', label: 'nav.flashcards' },
+  { mode: 'dictation', label: 'nav.dictation' },
+] satisfies ReadonlyArray<{ mode: PracticeMode; label: MessageKey }>;
 
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
@@ -44,6 +50,7 @@ export function PracticeSetup({
   weakCount,
   weakState,
   onChange,
+  onModeChange,
   onStart,
   onCancel,
 }: {
@@ -74,6 +81,12 @@ export function PracticeSetup({
    */
   weakState: 'ready' | 'loading' | { error: string };
   onChange: (next: PracticeFilters) => void;
+  /**
+   * Switching drill keeps the filters, which is the whole reason this is a
+   * callback rather than a link: the route remounts on `mode`, so the caller
+   * carries the current filters into the new URL.
+   */
+  onModeChange: (mode: PracticeMode) => void;
   onStart: () => void;
   onCancel: () => void;
 }) {
@@ -97,11 +110,40 @@ export function PracticeSetup({
 
   return (
     <section className="mx-auto max-w-2xl space-y-5 rounded-card bg-card p-6 shadow-panel">
-      <header>
-        <h1 className="font-display text-2xl font-bold">
-          {t(mode === 'flashcard' ? 'practice.flashcard' : 'practice.dictation')}
-        </h1>
-        <p className="mt-1 text-sm text-muted">
+      <header className="space-y-3">
+        {/* The screen is 「練習」 and the drill is a choice inside it, so the
+            heading names the screen: the mode is already announced by the
+            selected tab below, and printing it twice was what a title plus a
+            switch would do. */}
+        <h1 className="font-display text-2xl font-bold">{t('nav.practice')}</h1>
+        {/*
+          The two drills, as one choice rather than two destinations.
+          They differ only in what a card asks for, and everything below this
+          row — the sets, the tags, the level, the dates — is the same question
+          in both. The phone's navigation has one 練習 tab for that reason, so
+          this is also the only way to reach the other drill there.
+        */}
+        <div
+          role="tablist"
+          aria-label={t('nav.practice')}
+          className="flex gap-1 rounded-pill bg-bg-alt p-1"
+        >
+          {MODES.map((option) => (
+            <button
+              key={option.mode}
+              type="button"
+              role="tab"
+              aria-selected={mode === option.mode}
+              onClick={() => onModeChange(option.mode)}
+              className={`min-h-11 flex-1 rounded-pill px-3 text-sm font-semibold transition ${
+                mode === option.mode ? 'bg-card text-ink shadow-panel' : 'text-muted'
+              }`}
+            >
+              {t(option.label)}
+            </button>
+          ))}
+        </div>
+        <p className="text-sm text-muted">
           {t(
             mode === 'flashcard'
               ? 'practice.flashcardDescription'

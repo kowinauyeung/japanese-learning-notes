@@ -12,6 +12,11 @@ import { seed } from './fixtures';
  * button sat under the home indicator — on top of the swipe that leaves the
  * app, so the control the reader reaches for most was the one hardest to hit.
  *
+ * That button is now a tab in the bottom navigation, and the claim moved with
+ * it rather than going away: the bar reaches the bottom edge, because a bar
+ * inset by its own margin leaves a strip of page under it, and the row of tabs
+ * inside it clears the home indicator.
+ *
  * The insets are set through the DevTools protocol, so what these tests measure
  * is the real thing: `Emulation.setSafeAreaInsetsOverride` makes
  * `env(safe-area-inset-*)` resolve to the given values, and the layout is then
@@ -51,8 +56,10 @@ async function applyInsets(page: Page, insets: Insets) {
 
 function elements(page: Page) {
   return {
-    /** The one control pinned to the corner the home indicator occupies. */
-    add: page.getByRole('button', { name: '単語を追加' }),
+    /** The bar that occupies the strip the home indicator is drawn on. */
+    bar: page.getByRole('navigation', { name: 'メニュー' }),
+    /** A tab inside it — the one the reader reaches for most. */
+    add: page.getByRole('navigation', { name: 'メニュー' }).getByRole('button', { name: '＋追加' }),
     /** The bottom stack, which places itself with `inset-x-4 bottom-24 mx-safe mb-safe`. */
     notice: page.getByRole('status').filter({ hasText: 'オフライン' }),
     /** Header contents. The bar itself stays full bleed; only what is in it moves. */
@@ -106,18 +113,29 @@ test('sets insets the page can actually see, so the rest is not measuring zero',
   expect(seen).toEqual({ top: `${PORTRAIT.top}px`, bottom: `${PORTRAIT.bottom}px` });
 });
 
-test('keeps the add button and the notices above the home indicator', async ({ page, context }) => {
+test('keeps the tabs and the notices above the home indicator', async ({ page, context }) => {
   await openSignedInApp(page, context);
   await applyInsets(page, PORTRAIT);
 
-  const { add, notice } = elements(page);
+  const { add, bar, notice } = elements(page);
   const floor = PORTRAIT.viewport.height - PORTRAIT.bottom;
 
+  /*
+   * Two halves of one rule, and they pull in opposite directions.
+   *
+   * The bar's own box must reach the very bottom of the screen: it is a
+   * surface, and a surface that stops at the inset leaves a band of page
+   * showing beneath it — the home indicator's strip drawn in the wrong colour,
+   * which is what `index.css` says about the header for the same reason.
+   */
+  const barBox = (await bar.boundingBox())!;
+  expect(barBox, 'the bar is `nav:hidden`, so a phone width must find it').not.toBeNull();
+  expect(barBox.y + barBox.height).toBe(PORTRAIT.viewport.height);
+
+  // And the tabs inside it must not: they are the things being pressed, and
+  // the strip they would sit on is where the swipe that leaves the app starts.
   const addBox = (await add.boundingBox())!;
-  expect(addBox, 'the add button is `nav:hidden`, so a phone width must find it').not.toBeNull();
-  // Its own 20px offset is still there on top of the inset — the inset is added
-  // to the design's spacing, not substituted for it.
-  expect(addBox.y + addBox.height).toBeLessThanOrEqual(floor - 20);
+  expect(addBox.y + addBox.height).toBeLessThanOrEqual(floor);
 
   const noticeBox = (await notice.boundingBox())!;
   expect(noticeBox.y + noticeBox.height).toBeLessThanOrEqual(floor);
@@ -153,8 +171,10 @@ test('clears the notch and the rounded corners when the phone is turned sideways
     expect(box.x + box.width, `${name} runs past the right inset`).toBeLessThanOrEqual(rightEdge);
   }
 
-  // 844px is above the `nav` breakpoint, where the add button is hidden and the
-  // header's own 単語を追加 takes over — so the corner it defended is empty.
+  // 844px is above the `nav` breakpoint, where the bar is hidden and the
+  // header's own row takes over — so the strip it defended is empty. A role
+  // query does not match what is hidden from the accessibility tree, which is
+  // why this is a count rather than a visibility check.
   expect(await add.count()).toBe(0);
 });
 
@@ -163,9 +183,9 @@ test('clears the notch and the rounded corners when the phone is turned sideways
  *
  * `env()` is zero everywhere except an installed app on a notched device, so
  * these declarations are inert for almost every reader — and inert has to mean
- * *unchanged*, not "shifted by a few pixels nobody measured". A `bottom` that
- * had been rewritten as an inset rather than added to one would put the add
- * button flat against the edge here.
+ * *unchanged*, not "shifted by a few pixels nobody measured". A `pb-safe`
+ * written as a fixed offset rather than as the device's own inset would leave
+ * a gap under the tab row on every phone that reports nothing.
  */
 test('leaves the layout exactly where it was when the device asks for nothing', async ({
   page,
@@ -174,10 +194,13 @@ test('leaves the layout exactly where it was when the device asks for nothing', 
   await openSignedInApp(page, context);
   await page.setViewportSize({ width: 390, height: 844 });
 
-  const { add, notice } = elements(page);
+  const { bar, add, notice } = elements(page);
+  // The bar still ends at the bottom edge, and now so do its tabs: `pb-safe`
+  // is a padding of zero here, not a gap someone hard-coded.
+  const barBox = (await bar.boundingBox())!;
+  expect(barBox.y + barBox.height).toBe(844);
   const addBox = (await add.boundingBox())!;
-  expect(addBox.x + addBox.width).toBe(390 - 20);
-  expect(addBox.y + addBox.height).toBe(844 - 20);
+  expect(addBox.y + addBox.height).toBe(844);
 
   const noticeBox = (await notice.boundingBox())!;
   expect(noticeBox.x).toBe(16);

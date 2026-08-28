@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { BottomNav } from '@/components/BottomNav';
 import { VocabDialog } from '@/components/VocabDialog';
 import type { TranslationLanguage } from '@/domain/user';
 import { useI18n } from '@/i18n/context';
@@ -96,7 +97,6 @@ function AuthenticatedLayout({
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
   const [adding, setAdding] = useState(false);
 
   return (
@@ -112,9 +112,14 @@ function AuthenticatedLayout({
             <div className="flex min-h-dvh flex-col bg-bg text-ink">
               <header className="sticky top-0 z-30 border-b border-line bg-card/85 pt-safe px-safe backdrop-blur">
                 <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
+                  {/* Centred below the `nav` breakpoint, because the bar at
+                      the bottom of the screen now holds everything the header
+                      used to: with the hamburger and the avatar gone there is
+                      nothing else in this row, and a brand pinned left with
+                      empty space beside it reads as a row that lost something. */}
                   <NavLink
                     to="/"
-                    className="mr-1 flex items-center gap-1.5 font-display text-lg font-bold text-accent"
+                    className="mx-auto flex items-center gap-1.5 font-display text-lg font-bold text-accent nav:mx-0 nav:mr-1"
                   >
                     <LogoMark className="h-7 w-7" />
                     {t('brand.name')}
@@ -129,28 +134,17 @@ function AuthenticatedLayout({
                     ))}
                   </nav>
 
-                  <div className="flex flex-1 items-center justify-end gap-2 nav:flex-none">
-                    <button
-                      type="button"
-                      onClick={() => setMenuOpen((open) => !open)}
-                      aria-label={t('nav.menu')}
-                      aria-expanded={menuOpen}
-                      className="grid h-11 w-11 place-items-center rounded-pill text-xl hover:bg-bg-alt nav:hidden"
-                    >
-                      {menuOpen ? '✕' : '☰'}
-                    </button>
+                  <div className="hidden items-center justify-end gap-2 nav:flex">
                     <button
                       type="button"
                       onClick={() => setAdding(true)}
-                      className="hidden rounded-pill bg-accent px-4 py-2 text-sm font-semibold text-on-accent nav:block"
+                      className="rounded-pill bg-accent px-4 py-2 text-sm font-semibold text-on-accent"
                     >
                       {t('action.add')}
                     </button>
                     <AvatarMenu />
                   </div>
                 </div>
-
-                {menuOpen && <MobileNav onNavigate={() => setMenuOpen(false)} />}
               </header>
 
               {/* Two boxes rather than one, because `px-4` and the side inset
@@ -159,10 +153,14 @@ function AuthenticatedLayout({
                   gutter and the width — so the page centres inside the space
                   the screen actually gives, not inside the notch.
 
-                  `pb-safe nav:pb-0`, because below the `nav` breakpoint this is
-                  the last thing on the page: the footer is `nav:block` and the
-                  home indicator would otherwise sit on the final row of cards.
-                  Above it the footer follows and carries its own. */}
+                  `pb-28` below the `nav` breakpoint is the bottom bar's
+                  clearance: the bar is fixed, so it is out of flow and the last
+                  card would otherwise end underneath it. `pb-safe` on top of
+                  that is the device's own strip — the bar covers it today, and
+                  the padding is what keeps the page correct on a phone that
+                  reports an inset with the bar hidden, which is every landscape
+                  width above the breakpoint. Above it the footer follows and
+                  carries its own. */}
               <main className="w-full flex-1 px-safe pb-safe nav:pb-0">
                 <div className="mx-auto max-w-5xl px-4 py-6 pb-28 nav:pb-10">
                   <Outlet />
@@ -177,14 +175,7 @@ function AuthenticatedLayout({
                 <PublicFooter width="max-w-5xl" />
               </div>
 
-              <button
-                type="button"
-                onClick={() => setAdding(true)}
-                aria-label={t('action.addVocabulary')}
-                className="fixed right-5 bottom-5 z-20 mr-safe mb-safe grid h-14 w-14 place-items-center rounded-pill bg-accent text-2xl text-on-accent shadow-panel nav:hidden"
-              >
-                ＋
-              </button>
+              <BottomNav onAdd={() => setAdding(true)} />
 
               <EntryFormModal
                 open={adding}
@@ -206,29 +197,6 @@ function pillClass({ isActive }: { isActive: boolean }) {
   return `rounded-pill px-3.5 py-1.5 text-sm font-medium transition ${
     isActive ? 'bg-accent text-on-accent' : 'text-muted hover:bg-bg-alt'
   }`;
-}
-
-function MobileNav({ onNavigate }: { onNavigate: () => void }) {
-  const { t } = useI18n();
-  return (
-    <nav className="border-t border-line bg-card px-3 py-2 nav:hidden">
-      {NAV.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          end={item.end}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            `flex min-h-11 items-center rounded-panel px-4 text-base font-medium ${
-              isActive ? 'bg-accent-soft text-accent' : 'text-ink'
-            }`
-          }
-        >
-          {t(item.label)}
-        </NavLink>
-      ))}
-    </nav>
-  );
 }
 
 function AvatarMenu() {
