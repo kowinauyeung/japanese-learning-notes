@@ -246,6 +246,44 @@ body {
 }
 
 /*
+ * `input[type="date"]` is a widget, not a text box, and the widget is what put
+ * the date fields out of line with the dropdowns beside them.
+ *
+ * The measured problem is vertical: Safari lays the printed value out at the
+ * top of any box taller than the text, and every control in the app is now a
+ * fixed 44px — taller than the text — so the date sat against the top border
+ * while the dropdown beside it centred its value.
+ *
+ * `min-width: 0` is not from a bug seen here; it is because a date field
+ * carries an intrinsic width for the longest date it can print, and a grid
+ * track narrower than that is one screen rotation away. The width half of the
+ * assertion in `visual.spec.ts` is what would report it.
+ *
+ * `display: flex` is what a date input already is in Chrome's own UA
+ * stylesheet (`inline-flex`, `align-items: center`), so this states for Safari
+ * what one engine had all along rather than imposing a new layout on both.
+ *
+ * On the element rather than a class: every date field in the app wants this,
+ * and the failure mode of forgetting the class is a control that looks nearly
+ * right, which is the kind of drift nobody files.
+ */
+input[type='date'] {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/*
+ * Safari centres the printed date in whatever width is left over. Every other
+ * control starts its value at the left padding edge, and a row where one value
+ * floats in the middle of its box reads as a different kind of field.
+ */
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+
+/*
  * The CJK face, and the two ways to ask for it.
  *
  * `.cjk-face` is the face alone. `.prose-cjk` is the face plus the leading that

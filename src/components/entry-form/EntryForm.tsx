@@ -1,3 +1,4 @@
+import { SelectControl, controlBoxClass } from '@/components/controls';
 import type { EntryDraft, Pos } from '@/domain/entry';
 import { JLPT_LEVELS, POLITENESS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import { ENTRY_LIMITS, TAG_INPUT_MAX } from '@/domain/limits';
@@ -77,6 +78,11 @@ export function EntryForm({
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label={t('vocabulary.partOfSpeech')} hint={t('form.multiple')}>
+          {/* The one control that must not take the shared fixed height:
+              `size={5}` is the whole point of a list box. It keeps the shared
+              box and its own minimum — which iOS collapses to a single-line
+              picker regardless, and that is the reason to replace it with the
+              toggle chips the filter panel already uses. */}
           <select
             multiple
             size={5}
@@ -87,7 +93,7 @@ export function EntryForm({
                 [...event.target.selectedOptions].map((o) => o.value as Pos),
               )
             }
-            className={`${inputClass} min-h-28 py-1`}
+            className={`${controlBoxClass} min-h-28 py-1`}
           >
             {POS.map((part) => (
               <option key={part} value={part}>
@@ -139,10 +145,9 @@ export function EntryForm({
       </div>
 
       <Field label={t('form.frequency')}>
-        <select
+        <SelectControl
           value={draft.freq}
           onChange={(event) => set('freq', Number(event.target.value) as EntryDraft['freq'])}
-          className={inputClass}
         >
           {[1, 2, 3, 4, 5].map((value) => (
             <option key={value} value={value}>
@@ -150,7 +155,7 @@ export function EntryForm({
               {'☆'.repeat(5 - value)}
             </option>
           ))}
-        </select>
+        </SelectControl>
       </Field>
 
       <div className="space-y-3">

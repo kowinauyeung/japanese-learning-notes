@@ -1,3 +1,4 @@
+import { SelectControl, controlClass } from '@/components/controls';
 import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
@@ -12,8 +13,6 @@ function chipClass(active: boolean) {
     active ? 'bg-accent text-on-accent' : 'bg-bg-alt text-muted hover:text-ink'
   }`;
 }
-
-const selectClass = 'rounded-panel border-line bg-bg text-ink min-h-9 border px-2 text-xs w-full';
 
 export function FilterPanel({
   filters,
@@ -79,26 +78,21 @@ export function FilterPanel({
       <div className="grid gap-2 sm:grid-cols-3">
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.partOfSpeech')}</span>
-          <select
-            value={filters.pos}
-            onChange={(event) => set('pos', event.target.value)}
-            className={selectClass}
-          >
+          <SelectControl value={filters.pos} onChange={(event) => set('pos', event.target.value)}>
             <option value="">{t('vocabulary.all')}</option>
             {POS.map((part) => (
               <option key={part} value={part}>
                 {entryLabel(part)}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </label>
 
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.origin')}</span>
-          <select
+          <SelectControl
             value={filters.origin}
             onChange={(event) => set('origin', event.target.value)}
-            className={selectClass}
           >
             <option value="">{t('vocabulary.all')}</option>
             {WORD_ORIGINS.map((origin) => (
@@ -106,15 +100,14 @@ export function FilterPanel({
                 {entryLabel(origin)}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </label>
 
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.style')}</span>
-          <select
+          <SelectControl
             value={filters.style}
             onChange={(event) => set('style', event.target.value)}
-            className={selectClass}
           >
             <option value="">{t('vocabulary.all')}</option>
             {STYLES.map((style) => (
@@ -122,15 +115,14 @@ export function FilterPanel({
                 {entryLabel(style)}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </label>
 
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.frequencyAtLeast')}</span>
-          <select
+          <SelectControl
             value={filters.minFreq}
             onChange={(event) => set('minFreq', Number(event.target.value))}
-            className={selectClass}
           >
             <option value={0}>{t('vocabulary.all')}</option>
             {[1, 2, 3, 4, 5].map((value) => (
@@ -139,7 +131,7 @@ export function FilterPanel({
                 {'☆'.repeat(5 - value)}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </label>
 
         <label className="space-y-1">
@@ -148,7 +140,7 @@ export function FilterPanel({
             type="date"
             value={filters.from}
             onChange={(event) => set('from', event.target.value)}
-            className={selectClass}
+            className={controlClass}
           />
         </label>
 
@@ -158,24 +150,23 @@ export function FilterPanel({
             type="date"
             value={filters.to}
             onChange={(event) => set('to', event.target.value)}
-            className={selectClass}
+            className={controlClass}
           />
         </label>
       </div>
 
       <label className="block space-y-1">
         <span className="text-[11px] text-muted">{t('vocabulary.sort')}</span>
-        <select
+        <SelectControl
           value={filters.sort}
           onChange={(event) => set('sort', event.target.value as SortKey)}
-          className={selectClass}
         >
           {sorts.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </SelectControl>
       </label>
     </div>
   );

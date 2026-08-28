@@ -476,3 +476,55 @@ test.describe('a ruby wrapper may never be laid out as a -webkit-box', () => {
     });
   }
 });
+
+/**
+ * Every control on a screen is the same box, measured rather than shot.
+ *
+ * The controls were declared with `min-h-*`, and a native widget treats that
+ * as a floor it may exceed — or, in WebKit, as nothing at all. Measured on the
+ * reverted code, on the practice setup at 390px with a coarse pointer: the two
+ * dropdowns came back **25px** tall and the two date fields beside them 36px,
+ * against a `min-h-9` that asked for 36 from all four. So the row stepped, and
+ * the halves of it that stepped were the halves the reader touches.
+ *
+ * **The Chromium copy of this test cannot see that.** On the same reverted
+ * code Chromium reports 36, 36, 36, 36 — every control at the floor, the row
+ * aligned, the bug invisible. It fails here only on the height being 36 rather
+ * than the 44 a touch target has to be. As with the `line-clamp` case above,
+ * the second engine is the mechanism and not redundancy.
+ *
+ * `isMobile` and `hasTouch` are what make the measurement the phone's one: the
+ * coarse-pointer rule in `index.css` raises control text to 16px to stop iOS
+ * zooming the page, which is what grows each widget past its declared floor by
+ * its own different amount. Without them this measures a laptop.
+ *
+ * A measurement and not a baseline, for the reason the WebKit project exists:
+ * a screenshot here would compare against — and `--update-snapshots` would
+ * overwrite — the Chromium PNG beside it. `boundingBox()` is browser
+ * independent, so the same claim can be made in both engines.
+ */
+test.describe('one control shape', () => {
+  test.use({ isMobile: true, hasTouch: true });
+  const CONTROL_HEIGHT = 44;
+
+  test('a dropdown and a date field are the same box', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedSignedIn(page);
+    await page.goto('/practice/flashcards');
+    await expect(page.getByLabel('品詞')).toBeVisible();
+
+    const boxes = await Promise.all(
+      ['品詞', '語種', '開始日', '終了日'].map((label) => page.getByLabel(label).boundingBox()),
+    );
+
+    expect(boxes.map((box) => box?.height)).toEqual([
+      CONTROL_HEIGHT,
+      CONTROL_HEIGHT,
+      CONTROL_HEIGHT,
+      CONTROL_HEIGHT,
+    ]);
+    // Stacked in one column at this width, so a widget refusing to shrink to
+    // its track shows up as a width that is not the width of the others.
+    expect(new Set(boxes.map((box) => box?.width)).size).toBe(1);
+  });
+});

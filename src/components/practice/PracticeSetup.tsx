@@ -1,3 +1,4 @@
+import { SelectControl, controlClass } from '@/components/controls';
 import { JLPT_LEVELS, POS, WORD_ORIGINS } from '@/domain/entry';
 import type { PracticeMode } from '@/domain/practice';
 import { useI18n } from '@/i18n/context';
@@ -39,8 +40,6 @@ function chipClass(active: boolean) {
     active ? 'bg-accent text-on-accent' : 'bg-bg-alt text-muted hover:text-ink'
   }`;
 }
-
-const selectClass = 'rounded-panel border-line bg-bg text-ink min-h-9 border px-2 text-xs w-full';
 
 /**
  * The screen both practice modes open on.
@@ -203,10 +202,9 @@ export function PracticeSetup({
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.partOfSpeech')}</span>
-          <select
+          <SelectControl
             value={filters.pos}
             onChange={(event) => update('pos', event.target.value)}
-            className={selectClass}
           >
             <option value="">{t('vocabulary.all')}</option>
             {POS.map((part) => (
@@ -214,15 +212,14 @@ export function PracticeSetup({
                 {entryLabel(part)}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </label>
 
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.origin')}</span>
-          <select
+          <SelectControl
             value={filters.origin}
             onChange={(event) => update('origin', event.target.value)}
-            className={selectClass}
           >
             <option value="">{t('vocabulary.all')}</option>
             {WORD_ORIGINS.map((origin) => (
@@ -230,7 +227,7 @@ export function PracticeSetup({
                 {entryLabel(origin)}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </label>
       </div>
 
@@ -264,7 +261,7 @@ export function PracticeSetup({
               type="date"
               value={filters.from}
               onChange={(event) => update('from', event.target.value)}
-              className={selectClass}
+              className={controlClass}
             />
           </label>
           <label className="space-y-1">
@@ -273,7 +270,7 @@ export function PracticeSetup({
               type="date"
               value={filters.to}
               onChange={(event) => update('to', event.target.value)}
-              className={selectClass}
+              className={controlClass}
             />
           </label>
         </div>
