@@ -144,6 +144,22 @@ export function EntryFormModal({
   const busyFor = useRef<DraftRequest | null>(null);
   const trackDrafting = (busy: boolean, request: DraftRequest) => {
     if (busy) {
+      /*
+        A new request is the moment the last one's reason stops being true.
+
+        `JsonImport.generate` cleared it as its first act; lifting the state up
+        here dropped that, so a draft that failed and then succeeded on a retry
+        left the failure on the JSON panel — visible again the next time the
+        reader opened that tab, describing a request that had since worked.
+        Cleared here rather than in either panel because both can produce one,
+        and this is the one line both of them already go through.
+
+        `handedOff` with it: the notice explains why the reader was moved to
+        this tab, and someone who has since pressed a button on it is no longer
+        being explained to.
+      */
+      setAiError(null);
+      setHandedOff(false);
       busyFor.current = request;
       setDrafting(true);
       return;

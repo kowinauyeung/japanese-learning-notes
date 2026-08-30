@@ -108,4 +108,16 @@ export interface E2ESeed {
    * Ignored when `entryDrafting` is set: a request that failed has no reply.
    */
   entryDraftingReply?: string;
+  /**
+   * Hold every drafting request open until the spec releases it.
+   *
+   * The only way to have two of them in flight at once, which is what the
+   * modal's lock is about: a request can outlive the dialog that started it,
+   * and the one that settles is not always the one being waited on. Released
+   * oldest-first through `window.__GOITEI_E2E_RELEASE_DRAFT__`, so a spec can
+   * settle the stale one while the current one is still out.
+   *
+   * `entryDrafting` still wins: a request that failed did not hang.
+   */
+  entryDraftingHangs?: boolean;
 }

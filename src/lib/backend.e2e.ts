@@ -40,6 +40,8 @@ declare global {
     __GOITEI_E2E__?: E2ESeed;
     __GOITEI_E2E_READS__?: Record<'entries' | 'progress' | 'wordSets', number>;
     __GOITEI_E2E_RELEASE_SETTINGS_SAVE__?: () => void;
+    /** Settles the oldest drafting request still held by `entryDraftingHangs`. */
+    __GOITEI_E2E_RELEASE_DRAFT__?: () => void;
   }
 }
 
@@ -745,6 +747,9 @@ let draftingIsSpent = false;
  */
 let draftingSeed: E2ESeed | undefined;
 
+/** Drafting requests held open by `entryDraftingHangs`, oldest first. */
+const held: (() => void)[] = [];
+
 export const entryDraftingPort: EntryDraftingPort = {
   available: () => {
     // The flag's memory is the seed's, not the session's: a flag that outlived
@@ -769,6 +774,19 @@ export const entryDraftingPort: EntryDraftingPort = {
     // asking about what the app does with it, and deriving a headword from the
     // prompt would be answering a question it did not ask.
     const supplied = seed().entryDraftingReply;
+
+    if (seed().entryDraftingHangs) {
+      return new Promise<string>((resolve) => {
+        held.push(() => resolve(supplied ?? '{"headword":"兆候","definition":"きざし。"}'));
+        // Reassigned on every request rather than installed once, so the handle
+        // a spec holds always settles the oldest outstanding one — two requests
+        // in flight is the whole reason this exists.
+        window.__GOITEI_E2E_RELEASE_DRAFT__ = () => {
+          held.shift()?.();
+          if (held.length === 0) delete window.__GOITEI_E2E_RELEASE_DRAFT__;
+        };
+      });
+    }
     if (supplied !== undefined) return Promise.resolve(supplied);
 
     const headword = /^「(.+?)」/.exec(prompt)?.[1] ?? '兆候';

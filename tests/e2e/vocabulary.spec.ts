@@ -496,6 +496,89 @@ test.describe('adding a word', () => {
   });
 
   /**
+   * A reason that has been superseded stops being shown.
+   *
+   * `JsonImport.generate` cleared it as its first act; lifting the state into
+   * the modal dropped that. So a draft that failed and then worked on a retry
+   * left the failure behind on the JSON panel, waiting to describe a request
+   * that had since succeeded to whoever next opened that tab.
+   *
+   * The seed is edited between the two presses rather than reseeded: the
+   * stand-in reads it per request, and a reload would take the modal with it.
+   */
+  test('drops a failure the retry disproved, instead of showing it on the next visit', async ({
+    page,
+  }) => {
+    await seed(page, { signedIn: true, entries: WORDS, entryDrafting: 'quota' });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    const quota = dialog.getByText(/本日のAI利用回数の上限に達しました/);
+    await dialog.getByRole('button', { name: 'JSON' }).click();
+    await dialog.getByLabel('単語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成' }).click();
+    await expect(quota).toBeVisible();
+
+    await page.evaluate(() => {
+      delete (window as unknown as { __GOITEI_E2E__: { entryDrafting?: string } }).__GOITEI_E2E__
+        .entryDrafting;
+    });
+    await dialog.getByRole('button', { name: 'AIで作成' }).click();
+    await expect(dialog.getByLabel('読み方')).toHaveValue('ちょうこう');
+
+    await dialog.getByRole('button', { name: 'JSON' }).click();
+    await expect(quota).toBeHidden();
+  });
+
+  /**
+   * A request that outlived its dialog does not unlock the one that replaced it.
+   *
+   * The close button stays live while a draft is out, on purpose, as the way out
+   * of a request that hangs. So a reader can close, reopen and press again, and
+   * the first reply then lands with the second still in flight. Reporting the
+   * unlock on the reply alone brought 保存する back over a form the second reply
+   * was about to overwrite — the exact case the lock exists to prevent.
+   *
+   * Here rather than in tests/component: what is under test is the modal's own
+   * bookkeeping, and `EntryFormModal` resolves its repository through a provider
+   * no component test may reach. `SimpleForm.test.tsx` covers the other half —
+   * that two requests never share a name — which is what makes the comparison
+   * this asserts mean anything.
+   */
+  test('does not let a request from a closed dialog unlock the one that replaced it', async ({
+    page,
+  }) => {
+    await seed(page, { signedIn: true, entries: WORDS, entryDraftingHangs: true });
+
+    await page.goto('/vocabulary');
+    const dialog = addDialog(page);
+    const save = dialog.getByRole('button', { name: '保存する' });
+
+    // First request, then abandoned by closing the dialog.
+    await page.getByRole('button', { name: '＋追加' }).click();
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+    await expect(save).toBeDisabled();
+    await dialog.getByRole('button', { name: '閉じる' }).click();
+
+    // Second request, in a session that knows nothing about the first.
+    await page.getByRole('button', { name: '＋追加' }).click();
+    await dialog.getByLabel('見出し語').fill('清高');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+    await expect(save).toBeDisabled();
+
+    // The abandoned one answers. It must change nothing here.
+    await page.evaluate(() =>
+      (
+        window as unknown as { __GOITEI_E2E_RELEASE_DRAFT__?: () => void }
+      ).__GOITEI_E2E_RELEASE_DRAFT__?.(),
+    );
+    await expect(save).toBeDisabled();
+  });
+
+  /**
    * The panel's fields keep their value across an import that resolves late.
    *
    * `loadJson` reads 出会った文 and 出典 to build the context it hands
