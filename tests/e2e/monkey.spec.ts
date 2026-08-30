@@ -211,7 +211,6 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
       description: `click button index ${chosen.index}`,
       run: async () => {
         const button = buttons.nth(chosen.index);
-        const label = await labelOf(button);
         /*
          * The index is from a snapshot, and the snapshot can be of the previous
          * page. `available()` rejects anything a reader could not press —
@@ -230,7 +229,15 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
          * failing anyway. The skip goes into the history, so a run that keeps
          * doing this is visible rather than quietly shorter.
          */
-        if (!(await button.isVisible())) return `skipped “${label}”, no longer on screen`;
+        // Visibility before the label, and not the other way round: `labelOf`
+        // goes through `Locator.evaluate`, which *waits* for an element that
+        // is not there rather than reporting that it is gone. Resolving the
+        // label first therefore turns the very staleness described above into
+        // a run that hangs to its timeout with no skip recorded, which is the
+        // failure this guard exists to replace.
+        if (!(await button.isVisible()))
+          return `skipped button index ${chosen.index}, no longer on screen`;
+        const label = await labelOf(button);
         await test.step(`resolved button “${label}”`, () => button.click({ timeout: 4000 }));
         return `click button “${label}”`;
       },
@@ -246,9 +253,12 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
       description: `click link index ${chosen.index}`,
       run: async () => {
         const link = links.nth(chosen.index);
+        // Same staleness as the button above, and the same answer — including
+        // the order: the index is the only label available for something that
+        // is no longer on the page to be asked for one.
+        if (!(await link.isVisible()))
+          return `skipped link index ${chosen.index}, no longer on screen`;
         const label = await labelOf(link);
-        // Same staleness as the button above, and the same answer.
-        if (!(await link.isVisible())) return `skipped “${label}”, no longer on screen`;
         await test.step(`resolved link “${label}”`, () => link.click({ timeout: 4000 }));
         return `click link “${label}”`;
       },

@@ -56,19 +56,25 @@ describe('within', () => {
     const unhandled = vi.fn();
     process.on('unhandledRejection', unhandled);
 
-    let fail!: (cause: Error) => void;
-    const settled = within(
-      new Promise<string>((_, reject) => {
-        fail = reject;
-      }),
-      5,
-    );
-    await expect(settled).resolves.toBe(TIMED_OUT);
+    // `finally`, because the assertion below is the one that fails when this
+    // regresses — and an early exit past the removal leaves a listener behind
+    // that reports every later test's rejections as this one's.
+    try {
+      let fail!: (cause: Error) => void;
+      const settled = within(
+        new Promise<string>((_, reject) => {
+          fail = reject;
+        }),
+        5,
+      );
+      await expect(settled).resolves.toBe(TIMED_OUT);
 
-    fail(new Error('late'));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+      fail(new Error('late'));
+      await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(unhandled).not.toHaveBeenCalled();
-    process.off('unhandledRejection', unhandled);
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
   });
 });

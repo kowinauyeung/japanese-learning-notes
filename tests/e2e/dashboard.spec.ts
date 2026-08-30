@@ -95,13 +95,17 @@ test.describe('dashboard', () => {
       .poll(async () => scroller.evaluate((node) => node.scrollWidth - node.clientWidth))
       .toBeGreaterThan(0);
 
-    const pinnedOffset = await scroller.evaluate((node) => node.scrollLeft);
     // First prove the normal mobile load still opens on today; otherwise the
     // manual scroll below would not represent a reader leaving the latest week.
-    expect(
-      pinnedOffset,
-      'the narrow viewport must initially pin to the newest week',
-    ).toBeGreaterThan(0);
+    //
+    // Polled rather than read once: the overflow above appears when the row is
+    // laid out, and the pin is written by an effect after that — so a single
+    // read can land in between and see the 0 this is here to rule out.
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollLeft), {
+        message: 'the narrow viewport must initially pin to the newest week',
+      })
+      .toBeGreaterThan(0);
 
     await scroller.evaluate((node) => {
       node.scrollLeft = 0;
