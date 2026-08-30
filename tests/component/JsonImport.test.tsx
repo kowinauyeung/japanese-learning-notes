@@ -6,6 +6,7 @@ import {
   JsonImport,
   type JsonImportState,
 } from '@/components/entry-form/JsonImport';
+import type { EntryDraftingFailure } from '@/domain/ports';
 import { messages } from '@/i18n/messages';
 import { buildPrompt } from '@/lib/jsonImport';
 import { renderWithI18n as render } from '../fixtures/renderWithI18n';
@@ -44,6 +45,12 @@ const FAILED = 'コピーできませんでした。下のプロンプトを選�
  */
 const ja = (key: keyof (typeof messages)['ja']) => messages.ja[key];
 
+/**
+ * Stands in for `EntryFormModal`, which owns the failure reason because the
+ * 簡単 tab can produce one too. `handedOff` is false throughout this file: it
+ * is the flag for a reader moved here by a failure on the other tab, and every
+ * case below presses a button on this one.
+ */
 function Harness({
   initial,
   onDrafted = () => {},
@@ -52,7 +59,18 @@ function Harness({
   onDrafted?: (raw: string) => void;
 }) {
   const [value, setValue] = useState(initial);
-  return <JsonImport value={value} onChange={setValue} onDrafted={onDrafted} />;
+  const [aiError, setAiError] = useState<EntryDraftingFailure | null>(null);
+  return (
+    <JsonImport
+      value={value}
+      onChange={setValue}
+      onDrafted={onDrafted}
+      aiError={aiError}
+      handedOff={false}
+      onFailure={setAiError}
+      onBusyChange={() => {}}
+    />
+  );
 }
 
 describe('JsonImport — translation language preference', () => {

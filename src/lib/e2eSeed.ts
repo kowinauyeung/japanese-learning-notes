@@ -39,9 +39,12 @@ export interface E2ESeed {
    * Fails an entry `create`/`update`. `denied` carries Firestore's own
    * `permission-denied`, so `EntryFormModal` renders the account-denial
    * sentence rather than the generic 保存できませんでした. `unreachable`
-   * mirrors `settingsSave`'s branch of the same name.
+   * mirrors `settingsSave`'s branch of the same name. `defer` holds the write
+   * open until `window.__GOITEI_E2E_RELEASE_ENTRY_SAVE__` is called, which is
+   * the only way to have a save still out while the dialog that started it is
+   * closed and another is opened — see `settingsSave`, which does the same.
    */
-  entrySave?: 'denied' | 'unreachable';
+  entrySave?: 'denied' | 'unreachable' | 'defer';
   /**
    * Fails the entry page this account's export walk reads first. `denied`
    * carries `permission-denied`; `unreachable` carries `unavailable`, so
@@ -93,4 +96,31 @@ export interface E2ESeed {
    * offering to try again forever.
    */
   entryDrafting?: 'unavailable' | 'quota' | 'blocked' | 'failed';
+  /**
+   * What the model answers with, instead of the stand-in's own reply.
+   *
+   * Exists because the recovery paths are about replies the app cannot use, and
+   * a stand-in that only ever answers correctly cannot produce one. The limits
+   * rule out the alternative: `INPUT_LIMITS.importWord` is `ENTRY_LIMITS.headword`,
+   * so no word a reader can type makes the drafted note too long for itself.
+   *
+   * Substituting what an external service says is the seam this file already
+   * is, and the app is unchanged by it — the reply crosses the port and goes
+   * through the same `jsonToDraft` every other reply does.
+   *
+   * Ignored when `entryDrafting` is set: a request that failed has no reply.
+   */
+  entryDraftingReply?: string;
+  /**
+   * Hold every drafting request open until the spec releases it.
+   *
+   * The only way to have two of them in flight at once, which is what the
+   * modal's lock is about: a request can outlive the dialog that started it,
+   * and the one that settles is not always the one being waited on. Released
+   * oldest-first through `window.__GOITEI_E2E_RELEASE_DRAFT__`, so a spec can
+   * settle the stale one while the current one is still out.
+   *
+   * `entryDrafting` still wins: a request that failed did not hang.
+   */
+  entryDraftingHangs?: boolean;
 }

@@ -57,11 +57,14 @@ export function Text({
   onChange,
   maxLength,
   placeholder,
+  disabled,
 }: {
   value: string;
   onChange: (value: string) => void;
   maxLength: number;
   placeholder?: string;
+  /** See `Area`: a field a request in flight is about to answer for. */
+  disabled?: boolean;
 }) {
   return (
     <input
@@ -69,6 +72,7 @@ export function Text({
       value={value}
       maxLength={maxLength}
       placeholder={placeholder}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
       className={inputClass}
     />

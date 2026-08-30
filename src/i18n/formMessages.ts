@@ -46,6 +46,8 @@ const en = {
   'form.saving': 'Saving…',
   'form.save': 'Save',
   'form.moreFields': 'Add the remaining fields in the Detailed tab, or edit them after saving.',
+  'form.orWriteYourself': 'Or write it yourself',
+  'form.aiBadge': 'AI',
   'form.deleteRow': 'Delete',
   'form.addRow': '+ Add',
   'form.pitchAccent': 'Pitch accent',
@@ -58,6 +60,7 @@ const en = {
     'Adding a sentence lets AI explain how the word works in that context. You may leave it blank.',
   'import.generate': 'Draft with AI',
   'import.generating': 'Drafting…',
+  'import.draftAndSave': 'Draft with AI and save',
   'import.aiDisclaimer':
     'AI-written, so it can be wrong. Check the reading, pitch accent and level before you save.',
   'import.aiUnavailable':
@@ -65,6 +68,8 @@ const en = {
   'import.aiQuota': "Today's AI allowance is used up. Use the prompt below, or try again tomorrow.",
   'import.aiBlocked': 'AI would not answer for this word. Try another, or use the prompt below.',
   'import.aiFailed': 'Could not reach AI. Check your connection and try again.',
+  'import.aiHandoff':
+    'Your input has been carried over. Copy the prompt below, ask your own assistant, and paste the JSON it returns into the box at the bottom.',
   'import.copyPrompt': 'Copy prompt',
   'import.copied': 'Copied',
   'import.copyError': 'Could not copy. Select and copy the prompt below instead.',
@@ -143,6 +148,8 @@ const ja: FormMessages = {
   'form.saving': '保存中…',
   'form.save': '保存する',
   'form.moreFields': '残りの項目は「詳細」タブ、または保存後の編集から入力できます。',
+  'form.orWriteYourself': 'または自分で書く',
+  'form.aiBadge': 'AI',
   'form.deleteRow': '削除',
   'form.addRow': '＋ 追加',
   'form.pitchAccent': 'アクセント',
@@ -155,6 +162,7 @@ const ja: FormMessages = {
     '文を入れると、その文脈での役割まで AI に書かせます。空のままでも構いません。',
   'import.generate': 'AIで作成',
   'import.generating': '作成中…',
+  'import.draftAndSave': 'AIで作成して保存',
   'import.aiDisclaimer':
     'AIが書いた内容なので誤りが含まれることがあります。保存する前に読み・アクセント・レベルを確認してください。',
   'import.aiUnavailable':
@@ -164,6 +172,8 @@ const ja: FormMessages = {
   'import.aiBlocked':
     'この単語にはAIが回答しませんでした。別の単語か、下のプロンプトをお試しください。',
   'import.aiFailed': 'AIに接続できませんでした。通信環境を確認してもう一度お試しください。',
+  'import.aiHandoff':
+    '入力した内容はこちらに引き継いでいます。下のプロンプトをコピーしてお使いの AI に渡し、返ってきた JSON を一番下の欄に貼り付けてください。',
   'import.copyPrompt': 'プロンプトをコピー',
   'import.copied': 'コピーしました',
   'import.copyError': 'コピーできませんでした。下のプロンプトを選択してコピーしてください。',
@@ -240,6 +250,8 @@ const zhHant: FormMessages = {
   'form.saving': '儲存中…',
   'form.save': '儲存',
   'form.moreFields': '其餘欄位可在「詳細」分頁，或儲存後再編輯。',
+  'form.orWriteYourself': '或自己填寫',
+  'form.aiBadge': 'AI',
   'form.deleteRow': '刪除',
   'form.addRow': '＋ 新增',
   'form.pitchAccent': '音高重音',
@@ -251,11 +263,14 @@ const zhHant: FormMessages = {
   'import.contextHint': '加入句子後，AI 會一併說明詞語在該語境中的作用；亦可留空。',
   'import.generate': '用 AI 建立',
   'import.generating': '建立中…',
+  'import.draftAndSave': '用 AI 建立並儲存',
   'import.aiDisclaimer': 'AI 撰寫的內容可能有誤，儲存前請確認讀音、聲調與程度。',
   'import.aiUnavailable': '此處無法使用 AI 建立。請改用下方的提示詞與你自己的 AI。',
   'import.aiQuota': '今日的 AI 使用次數已用完。請改用下方的提示詞，或明天再試。',
   'import.aiBlocked': 'AI 沒有回答這個單字。請換一個單字，或改用下方的提示詞。',
   'import.aiFailed': '無法連接 AI。請檢查網路後再試一次。',
+  'import.aiHandoff':
+    '你輸入的內容已經帶過來了。複製下面的 prompt 交給你自己的 AI，再把回覆的 JSON 貼到最下面的欄位。',
   'import.copyPrompt': '複製 prompt',
   'import.copied': '已複製',
   'import.copyError': '無法複製，請選取並複製下方的 prompt。',
@@ -330,6 +345,8 @@ const ko: FormMessages = {
   'form.saving': '저장 중…',
   'form.save': '저장',
   'form.moreFields': '나머지 항목은 상세 탭이나 저장 후 수정에서 입력할 수 있습니다.',
+  'form.orWriteYourself': '직접 작성하기',
+  'form.aiBadge': 'AI',
   'form.deleteRow': '삭제',
   'form.addRow': '＋ 추가',
   'form.pitchAccent': '피치 악센트',
@@ -341,6 +358,7 @@ const ko: FormMessages = {
   'import.contextHint': '문장을 넣으면 AI가 해당 문맥에서의 역할도 설명합니다. 비워 두어도 됩니다.',
   'import.generate': 'AI로 작성',
   'import.generating': '작성 중…',
+  'import.draftAndSave': 'AI로 작성해 저장',
   'import.aiDisclaimer':
     'AI가 작성한 내용이라 틀릴 수 있습니다. 저장하기 전에 읽는 법, 억양, 레벨을 확인하세요.',
   'import.aiUnavailable': '여기서는 AI 작성을 사용할 수 없습니다. 아래 프롬프트를 사용하세요.',
@@ -348,6 +366,8 @@ const ko: FormMessages = {
     '오늘의 AI 사용 횟수를 모두 사용했습니다. 아래 프롬프트를 쓰거나 내일 다시 시도하세요.',
   'import.aiBlocked': 'AI가 이 단어에 답하지 않았습니다. 다른 단어나 아래 프롬프트를 사용하세요.',
   'import.aiFailed': 'AI에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도하세요.',
+  'import.aiHandoff':
+    '입력한 내용은 그대로 옮겨 두었습니다. 아래 프롬프트를 복사해 사용하시는 AI에 전달한 뒤, 받은 JSON을 맨 아래 칸에 붙여넣어 주세요.',
   'import.copyPrompt': '프롬프트 복사',
   'import.copied': '복사했습니다',
   'import.copyError': '복사할 수 없습니다. 아래 프롬프트를 선택하여 복사해 주세요.',
@@ -424,6 +444,8 @@ const es: FormMessages = {
   'form.save': 'Guardar',
   'form.moreFields':
     'Completa los demás campos en la pestaña Detallado o edítalos después de guardar.',
+  'form.orWriteYourself': 'O escríbelo tú',
+  'form.aiBadge': 'IA',
   'form.deleteRow': 'Eliminar',
   'form.addRow': '＋ Añadir',
   'form.pitchAccent': 'Acento tonal',
@@ -436,6 +458,7 @@ const es: FormMessages = {
     'Si añades una frase, la IA también explicará el uso en ese contexto. Puedes dejarla vacía.',
   'import.generate': 'Redactar con IA',
   'import.generating': 'Redactando…',
+  'import.draftAndSave': 'Redactar con IA y guardar',
   'import.aiDisclaimer':
     'Lo ha escrito una IA, así que puede equivocarse. Comprueba la lectura, el acento y el nivel antes de guardar.',
   'import.aiUnavailable':
@@ -444,6 +467,8 @@ const es: FormMessages = {
   'import.aiBlocked':
     'La IA no respondió para esta palabra. Prueba con otra o usa el texto de abajo.',
   'import.aiFailed': 'No se pudo conectar con la IA. Comprueba tu conexión e inténtalo de nuevo.',
+  'import.aiHandoff':
+    'Lo que escribiste se ha conservado. Copia el prompt de abajo, pásaselo a tu propio asistente y pega el JSON que devuelva en el campo inferior.',
   'import.copyPrompt': 'Copiar prompt',
   'import.copied': 'Copiado',
   'import.copyError': 'No se pudo copiar. Selecciona y copia el prompt de abajo.',
