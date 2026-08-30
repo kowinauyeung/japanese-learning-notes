@@ -109,6 +109,13 @@ test('does not start a second read while a slow retry is already in flight', asy
   // `setOffline` calls with nothing awaited between them can both dispatch
   // before React ever renders the intermediate offline state.
   await context.setOffline(false);
+  // The paragraph above applies to *this* pair too, and it was the one pair
+  // with nothing awaited between its two calls: both events could dispatch
+  // before React rendered the online state, so `useRetryOnReconnect` never saw
+  // the transition, no retry was in flight for the second one to overlap, and
+  // the read count below came out 1 without the guard ever being exercised.
+  // The notice going away is the render, and therefore the started retry.
+  await expect(page.getByText('オフライン')).toBeHidden();
   await context.setOffline(true);
   await expect(page.getByText('オフライン')).toBeVisible();
   await context.setOffline(false);
