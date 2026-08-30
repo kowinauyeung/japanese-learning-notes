@@ -30,8 +30,15 @@ const USAGE =
  * to end: a half-selected paste registers a token that can never match, App
  * Check says nothing about it, and sign-in keeps failing with the same
  * generic message it failed with before.
+ *
+ * Version 4 specifically, variant nibble included, because that is what the
+ * API accepts: `debugTokens.create` documents `token` as "must be a UUID4,
+ * case insensitive" and refuses anything else. `crypto.randomUUID()`, which is
+ * what the SDK calls, produces exactly that — so the narrower pattern rejects
+ * nothing a browser can print, and turns a UUID from some other generator into
+ * an error at the prompt rather than a 400 from Google.
  */
-const TOKEN_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const TOKEN_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function parseAppCheckDebugTokenArgs(
   args: string[],

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { hostname } from 'node:os';
-import { applicationDefault, cert } from 'firebase-admin/app';
+import { applicationDefault } from 'firebase-admin/app';
 import { describeCredentialSource } from './allow-user.shared';
 import {
   debugTokensEndpoint,
@@ -77,8 +77,14 @@ if (!appId) {
   process.exit(1);
 }
 
-const key = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-const credential = key ? cert(key) : applicationDefault();
+// `applicationDefault()` unconditionally, for the reason
+// `mint-preview-app-check-token.ts` already records: `GOOGLE_APPLICATION_CREDENTIALS`
+// may point at a Workload Identity Federation config rather than a
+// service-account key JSON, and `cert()` accepts only the latter and throws on
+// the former. `applicationDefault()` reads either, and a key file set that way
+// is one of the things it reads, so branching on the variable buys nothing and
+// costs the credential type this repository's own CI issues.
+const credential = applicationDefault();
 
 let accessToken: string;
 try {
