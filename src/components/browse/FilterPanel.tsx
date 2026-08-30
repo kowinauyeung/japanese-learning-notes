@@ -46,6 +46,7 @@ export function FilterPanel({
               <button
                 key={tag}
                 type="button"
+                aria-pressed={filters.tags.includes(tag)}
                 onClick={() => set('tags', toggle(filters.tags, tag))}
                 className={chipClass(filters.tags.includes(tag))}
               >
@@ -61,6 +62,7 @@ export function FilterPanel({
           <button
             key={level}
             type="button"
+            aria-pressed={filters.jlpt.includes(level)}
             onClick={() => set('jlpt', toggle(filters.jlpt, level))}
             className={chipClass(filters.jlpt.includes(level))}
           >
