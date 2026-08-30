@@ -13,8 +13,10 @@ import {
   type RemoteConfig,
 } from 'firebase/remote-config';
 import { EntryDraftingError, type EntryDraftingPort } from '@/domain/ports';
+import { TIMED_OUT, within } from '@/infra/ai/deadline';
 import {
   DEFAULT_GEMINI_MODEL,
+  GEMINI_DRAFT_TIMEOUT_MS,
   GEMINI_MODEL_NAME_CONFIG_KEY,
   GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS,
   GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS,
@@ -226,18 +228,44 @@ export const geminiEntryDrafting: EntryDraftingPort = {
   available: () => ensureModel() !== undefined,
 
   async draft(prompt) {
-    await refreshConfiguredModelName();
+    /*
+      Bounded, and then ignored either way.
+
+      The comment on `refreshConfiguredModelName` says Remote Config must not
+      turn drafting into a feature that needs two network calls to succeed
+      first. `ensureInitialized` defeated that on its own: it is an unbounded
+      IndexedDB read, and the fetch timeout beside it does not cover it — so a
+      storage layer that never answers took the model request with it, before
+      the request existed. The bundled default is valid input to AI Logic, which
+      is the whole reason it is a default, so a deadline here costs nothing but
+      a stale model name.
+    */
+    if (
+      (await within(refreshConfiguredModelName(), GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS)) ===
+      TIMED_OUT
+    ) {
+      console.error('Gemini model Remote Config did not settle; using', configuredModelName);
+    }
     const generative = ensureModel();
     if (!generative) throw new EntryDraftingError('unavailable');
 
     let text: string;
     try {
-      const result = await generative.generateContent(prompt);
+      const result = await within(generative.generateContent(prompt), GEMINI_DRAFT_TIMEOUT_MS);
+      // Thrown rather than returned, so the one exit below carries every
+      // failure. `failed` because a deadline is the one thing here that a
+      // second attempt might genuinely get past — see `deadline.ts` for what
+      // the SDK's own 180-second timeout does not cover.
+      if (result === TIMED_OUT) throw new EntryDraftingError('failed');
       // Inside the `try` on purpose: `text()` throws for a response that was
       // filtered, so the safety refusal arrives here rather than at the call
       // above, and `classify` is the only place that decides what it means.
       text = result.response.text();
     } catch (error) {
+      // Ours, and already the reason it is going to be reported as. Running it
+      // through `classify` would log it as an SDK failure and re-derive the
+      // answer it was constructed with.
+      if (error instanceof EntryDraftingError) throw error;
       const failure = classify(error);
       // A permanent failure has to reach `available()`, or the comment on
       // `ensureModel` above is a lie: it says a button that retries a permanent
