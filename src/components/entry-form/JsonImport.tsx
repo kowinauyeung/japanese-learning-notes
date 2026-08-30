@@ -1,13 +1,13 @@
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from 'react';
 import { controlClass, textAreaClass } from '@/components/controls';
 import { INPUT_LIMITS } from '@/domain/limits';
-import { EntryDraftingError, type EntryDraftingFailure } from '@/domain/ports';
+import type { EntryDraftingFailure } from '@/domain/ports';
 import type { TranslationLanguage } from '@/domain/user';
 import { useI18n } from '@/i18n/context';
 import type { MessageKey } from '@/i18n/messages';
-import { entryDraftingPort } from '@/lib/backend';
 import { buildPrompt, promptLanguageName, SCHEMA } from '@/lib/jsonImport';
 import { Area, Field } from './fields';
+import { useEntryDrafting } from './useEntryDrafting';
 
 /**
  * What to say for each way the drafting can fail.
@@ -51,6 +51,9 @@ export function JsonImport({
   value,
   onChange,
   onDrafted,
+  aiError,
+  handedOff,
+  onFailure,
 }: {
   value: JsonImportState;
   /**
@@ -72,13 +75,32 @@ export function JsonImport({
    * the box and importing it are two things and this button does both.
    */
   onDrafted: (raw: string) => void;
+  /**
+   * Why the last drafting request failed, or null.
+   *
+   * Held by the modal rather than here because this panel is not the only place
+   * that can produce one: the 簡易 tab drafts too, and when its request fails
+   * the reader is handed to this tab to finish by hand. A reason kept locally
+   * would be a reason that vanished on the way over.
+   */
+  aiError: EntryDraftingFailure | null;
+  /**
+   * Whether the reader arrived here from a failed draft on 簡易 rather than by
+   * choosing the tab.
+   *
+   * Worth a sentence of its own, because being moved between tabs is the part
+   * `aiError` does not explain: what it says is why the model did not answer,
+   * not that the word and source came along and that the prompt below is now
+   * the way to finish.
+   */
+  handedOff: boolean;
+  onFailure: (reason: EntryDraftingFailure) => void;
 }) {
   // Purely local: nothing outside this component acts on it.
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
-  const [drafting, setDrafting] = useState(false);
-  const [aiError, setAiError] = useState<EntryDraftingFailure | null>(null);
   const [pasteFailed, setPasteFailed] = useState(false);
   const [pasting, setPasting] = useState(false);
+  const { available: canDraft, drafting, draft: askForDraft } = useEntryDrafting();
 
   /**
    * Whether this panel is still the one on screen.
@@ -86,10 +108,14 @@ export function JsonImport({
    * The modal it lives in **stays mounted when it is closed** — `AppLayout`
    * renders `<EntryFormModal open={adding}>` unconditionally and only `Modal`
    * returns null — and it resets its state when `open` turns true again. This
-   * panel does unmount, but a request already in flight still holds `onChange`
-   * and `onDrafted` from the render that started it, and those write to a modal
-   * that is very much alive. So closing the dialog mid-request and reopening it
-   * used to fill the fresh form with the previous word.
+   * panel does unmount, but a clipboard read already in flight still holds
+   * `onChange` and `onDrafted` from the render that started it, and those write
+   * to a modal that is very much alive. So closing the dialog mid-read and
+   * reopening it used to fill the fresh form with the previous word.
+   *
+   * The drafting request needs the same guard and no longer takes it from here:
+   * `useEntryDrafting` keeps its own, which is what let the 簡易 tab have one
+   * without a second copy of this reasoning.
    *
    * Read after every await. The stale closure reads the *old* instance's ref,
    * which unmounting set to false, so the reply is dropped rather than applied
@@ -115,16 +141,6 @@ export function JsonImport({
    */
   const busy = drafting || pasting;
   const { t } = useI18n();
-
-  /*
-    Asked once, at render, rather than stored: `available()` is a synchronous
-    read of whether the SDK initialised, and it does not change during a
-    session. Hiding the button outright — rather than showing one that explains
-    itself away when pressed — is deliberate. The manual prompt underneath is
-    the route in either case, and a control that is present but never works is
-    worse than one that was never offered.
-  */
-  const canDraft = entryDraftingPort.available();
 
   /*
     Reading the clipboard is a narrower capability than writing to it, and the
@@ -247,38 +263,23 @@ export function JsonImport({
       });
   };
 
-  /*
-    The model's reply is not inspected here. It goes to the modal verbatim and
-    through `jsonToDraft`, which is the same function the paste box's reply goes
-    through — so a malformed answer is refused with the same words whichever
-    route it arrived by. A second parser here is exactly the thing that would
-    let a bad reply through one door while the other refused it.
-
-    The raw box is filled as well as imported. If the import fails on a field
-    that is too long, the reply is then on screen to edit and retry, instead of
-    having been discarded by the button that fetched it.
-  */
-  const generate = async () => {
-    setAiError(null);
-    setDrafting(true);
-    try {
-      const raw = await entryDraftingPort.draft(prompt);
-      if (!alive.current) return;
-      onChange((prev) => ({ ...prev, raw }));
-      onDrafted(raw);
-    } catch (cause) {
-      if (alive.current) {
-        setAiError(cause instanceof EntryDraftingError ? cause.reason : 'failed');
-      }
-    } finally {
-      // In `finally` rather than after the call: an error path that leaves this
-      // true is a button that stays disabled for the rest of the session.
-      if (alive.current) setDrafting(false);
-    }
-  };
-
   return (
     <div className="space-y-4">
+      {/* At the top of the panel rather than beside the drafting button below,
+          because this is not a statement about that button — it is what a
+          reader who did not choose this tab needs in order to understand why
+          they are looking at it. The reason travels with it: a handoff that
+          said only "your input came over" would leave the reader to find out
+          for themselves that the model is out of allowance. The button's own
+          failures still render next to the button, where the reader was
+          already looking. */}
+      {handedOff && aiError && (
+        <div className="space-y-1 rounded-panel border border-line px-3 py-2">
+          <p className="text-[11px] text-danger">{t(FAILURE_MESSAGE[aiError])}</p>
+          <p className="text-[11px] text-muted">{t('import.aiHandoff')}</p>
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={t('import.word')}>
           <input
@@ -333,17 +334,30 @@ export function JsonImport({
           inside `canDraft` would take the explanation away in the same paint
           that removed the control — leaving a button that vanished and nothing
           saying why. */}
-      {(canDraft || aiError) && (
+      {(canDraft || (aiError && !handedOff)) && (
         <div className="space-y-2">
           {canDraft && (
             <>
               <button
                 type="button"
-                // `void`, not the bare handler: `generate` is async, and React's
-                // onClick wants void — a returned promise is one nothing awaits
-                // and whose rejection would go nowhere. It cannot reject (the
-                // try/catch is total), and this says so rather than relying on it.
-                onClick={() => void generate()}
+                /*
+                  The reply is not inspected here. It goes to the modal verbatim
+                  and through `jsonToDraft`, the same function the paste box's
+                  reply goes through — so a malformed answer is refused with the
+                  same words whichever route it arrived by. A second parser here
+                  is exactly the thing that would let a bad reply through one
+                  door while the other refused it.
+
+                  The raw box is filled as well as imported, by the modal. If
+                  the import fails on a field that is too long, the reply is
+                  then on screen to edit and retry, instead of having been
+                  discarded by the button that fetched it.
+
+                  `void`, not a bare handler: `draft` is async and React's
+                  onClick wants void. It cannot reject — the hook's try/catch is
+                  total — and this says so rather than relying on it.
+                */
+                onClick={() => void askForDraft(prompt, { onReply: onDrafted, onFailure })}
                 disabled={busy || !value.word.trim()}
                 className="min-h-10 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"
               >
@@ -356,7 +370,9 @@ export function JsonImport({
               <p className="text-[11px] text-muted">{t('import.aiDisclaimer')}</p>
             </>
           )}
-          {aiError && <p className="text-[11px] text-danger">{t(FAILURE_MESSAGE[aiError])}</p>}
+          {aiError && !handedOff && (
+            <p className="text-[11px] text-danger">{t(FAILURE_MESSAGE[aiError])}</p>
+          )}
         </div>
       )}
 

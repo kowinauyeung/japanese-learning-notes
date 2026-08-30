@@ -287,7 +287,6 @@ test.describe('adding a word', () => {
 
     const dialog = addDialog(page);
     await dialog.getByLabel('見出し語').fill('清高');
-    await dialog.getByLabel('読み方').fill('せいこう');
     await dialog.getByLabel('意味・説明').fill('清らかで気高いこと。');
     await dialog.getByRole('button', { name: '保存する' }).click();
 
@@ -353,6 +352,74 @@ test.describe('adding a word', () => {
 
     await page.goto('/vocabulary');
     await expect(page.getByText('4 語')).toBeVisible();
+  });
+
+  /**
+   * The 簡易 button saves; it does not fill a form and stop.
+   *
+   * Here and not in tests/component because the claim is the span nothing
+   * smaller can see: the reply crosses the port, goes through `jsonToDraft`,
+   * skips the tab switch every other import route performs, is written through
+   * the repository, and lands the reader on the entry's own page with the
+   * modal gone. `tests/component/SimpleForm.test.tsx` already covers which
+   * fields arm the button, in milliseconds, so this does not re-check that.
+   *
+   * The reply is `backend.e2e.ts`'s stand-in, which answers from the prompt —
+   * so 「兆候」 below is an assertion about this request rather than about a
+   * fixture that would pass for any word.
+   */
+  test('saves a drafted word outright instead of stopping at the twenty-field form', async ({
+    page,
+  }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+
+    // The URL and the closed dialog together, and neither alone.
+    //
+    // React writes a textarea's value into its text content, so 「兆候の意味」
+    // is on screen either way — once as the entry, once as the 意味・説明 box
+    // of a 詳細 tab that never saved. Measured: with the direct save reverted,
+    // a text assertion passed while the modal was still open in front of it.
+    await expect(page).toHaveURL(/\/vocabulary\/[^/]+$/);
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText('兆候の意味')).toBeVisible();
+
+    await page.goto('/vocabulary');
+    await expect(page.getByText('4 語')).toBeVisible();
+  });
+
+  /**
+   * A draft that never came back leaves the reader somewhere they can finish.
+   *
+   * The 簡易 button has no room under it for the manual route, so a failure
+   * there moves the reader to the tab that has one — and the word has to make
+   * the trip, or the first thing they do on arrival is type it again. Both
+   * halves are asserted: the reason the model gave, and the sentence that says
+   * their input came with them.
+   *
+   * `quota` rather than `unavailable`, because `unavailable` also makes the
+   * port stop reporting itself available — which would confound "the word was
+   * carried over" with "the drafting controls went away".
+   */
+  test('carries the word to the JSON tab when the model does not answer', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, entryDrafting: 'quota' });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByLabel('出典').fill('会議');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+
+    await expect(dialog.getByRole('textbox', { name: '単語' })).toHaveValue('兆候');
+    await expect(dialog.getByRole('textbox', { name: '出典' })).toHaveValue('会議');
+    await expect(dialog.getByText(/本日のAI利用回数の上限に達しました/)).toBeVisible();
+    await expect(dialog.getByText(/入力した内容はこちらに引き継いでいます/)).toBeVisible();
   });
 
   /**
@@ -422,7 +489,11 @@ test.describe('adding a word', () => {
     await page.goto('/vocabulary');
     await page.getByRole('button', { name: '＋追加' }).click();
 
+    // On 詳細, because 簡易 no longer carries タグ: everything the drafting
+    // button fills better than a person typing at capture time came off that
+    // tab, and the validation is the form's rather than any one tab's.
     const dialog = addDialog(page);
+    await dialog.getByRole('button', { name: '詳細' }).click();
     await dialog.getByLabel('見出し語').fill('清高');
     await dialog.getByLabel('意味・説明').fill('清らかで気高いこと。');
     await dialog.getByLabel('タグ').fill('a/b');

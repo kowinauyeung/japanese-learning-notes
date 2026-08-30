@@ -1,0 +1,144 @@
+import type { EntryDraft } from '@/domain/entry';
+import { ENTRY_LIMITS, INPUT_LIMITS } from '@/domain/limits';
+import type { EntryDraftingFailure } from '@/domain/ports';
+import { useI18n } from '@/i18n/context';
+import { buildPrompt } from '@/lib/jsonImport';
+import { Area, Field, Text } from './fields';
+import { useEntryDrafting } from './useEntryDrafting';
+
+/**
+ * The quick-capture tab, and the app's shortest route to a finished note.
+ *
+ * It carries two ways out and they need different fields, so the fields are
+ * grouped by the button that consumes them rather than by what they mean.
+ * 見出し語 and 出典 sit above both groups because both paths use them; 訳の言語
+ * belongs to the model and 意味・説明 belongs to the person, and a rule between
+ * them is what makes that readable without a sentence explaining it. Written
+ * out flat instead of shared with `EntryForm`: this tab exists precisely to not
+ * be that form, and the moment the two share a field list one of them starts
+ * growing the other's fields back.
+ *
+ * `読み方`, `補足` and `タグ` were here and are not any more. Everything the
+ * model fills it fills better than a person typing at capture time, and
+ * everything else is a keystroke between the reader and a saved note — the
+ * remaining fields are reachable on 詳細 and after the save, which is what the
+ * line at the bottom says.
+ *
+ * A component of its own rather than JSX inside `EntryFormModal`, because
+ * `useEntryDrafting` guards on unmount and the modal does not unmount. See the
+ * hook.
+ */
+export function SimpleForm({
+  draft,
+  onChange,
+  language,
+  onLanguageChange,
+  onAsk,
+  onReply,
+  onFailure,
+}: {
+  draft: EntryDraft;
+  onChange: (next: EntryDraft) => void;
+  /**
+   * Lives in the modal's JSON state rather than in the draft, because it is not
+   * a property of the note: it is what the prompt asks for, and the JSON tab
+   * asks for the same thing. One value, so a reader who changes it here and
+   * then falls back to that tab is not asked again.
+   */
+  language: string;
+  onLanguageChange: (next: string) => void;
+  /**
+   * Called synchronously as the request goes out, so the modal can carry what
+   * was asked over to the JSON tab in case the reader ends up there.
+   */
+  onAsk: () => void;
+  /** The model's reply, verbatim. Parsed by the modal, never here. */
+  onReply: (raw: string) => void;
+  onFailure: (reason: EntryDraftingFailure) => void;
+}) {
+  const { t } = useI18n();
+  const { available, drafting, draft: askForDraft } = useEntryDrafting();
+  const set = <K extends keyof EntryDraft>(key: K, value: EntryDraft[K]) =>
+    onChange({ ...draft, [key]: value });
+
+  /*
+    Both, not just the language. `buildPrompt` substitutes 「（単語）」 for an
+    empty word, so a request sent without a headword is a request the model
+    answers seriously — about a placeholder. The language has a default from the
+    reader's settings and is therefore almost always filled, which makes the
+    headword the condition that actually does the work here.
+  */
+  const canAsk = draft.headword.trim().length > 0 && language.trim().length > 0;
+
+  const ask = () => {
+    onAsk();
+    void askForDraft(buildPrompt(draft.headword.trim(), language, { source: draft.source }), {
+      onReply,
+      onFailure,
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <Field label={t('form.headword')} hint={t('form.required')}>
+        <Text
+          value={draft.headword}
+          onChange={(v) => set('headword', v)}
+          maxLength={ENTRY_LIMITS.headword}
+        />
+      </Field>
+      <Field label={t('form.source')} hint={t('form.optional')}>
+        <Text
+          value={draft.source}
+          onChange={(v) => set('source', v)}
+          maxLength={ENTRY_LIMITS.source}
+          placeholder={t('form.sourcePlaceholder')}
+        />
+      </Field>
+
+      {/* The whole group goes when the model cannot be reached, rather than a
+          button that explains itself away when pressed. What is left is an
+          ordinary two-field capture form, and the manual prompt on the JSON tab
+          is the route in that case — the same reasoning `JsonImport` applies to
+          its own drafting button. */}
+      {available && (
+        <div className="space-y-3 border-t border-line pt-4">
+          <Field label={t('import.translationLanguage')}>
+            <Text
+              value={language}
+              onChange={onLanguageChange}
+              maxLength={INPUT_LIMITS.importLanguage}
+            />
+          </Field>
+          <button
+            type="button"
+            onClick={ask}
+            disabled={drafting || !canAsk}
+            className="min-h-10 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"
+          >
+            {drafting ? t('import.generating') : t('import.draftAndSave')}
+          </button>
+          {/* The only place this warning appears on this route. Pressing the
+              button above saves and leaves, so there is no filled form to
+              repeat it beside — which is why it is here, under the control that
+              produces the result, and not somewhere the reader has already
+              scrolled past. */}
+          <p className="text-[11px] text-muted">{t('import.aiDisclaimer')}</p>
+        </div>
+      )}
+
+      <div className="space-y-3 border-t border-line pt-4">
+        <p className="text-[11px] font-semibold text-muted">{t('form.orWriteYourself')}</p>
+        <Field label={t('form.definition')} hint={t('form.required')}>
+          <Area
+            value={draft.definition}
+            onChange={(v) => set('definition', v)}
+            maxLength={ENTRY_LIMITS.definition}
+            rows={4}
+          />
+        </Field>
+        <p className="text-xs text-muted">{t('form.moreFields')}</p>
+      </div>
+    </div>
+  );
+}

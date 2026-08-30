@@ -1,21 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import type { Entry, EntryDraft } from '@/domain/entry';
-import { ENTRY_LIMITS, TAG_INPUT_MAX } from '@/domain/limits';
+import type { EntryDraftingFailure } from '@/domain/ports';
 import type { TranslationLanguage } from '@/domain/user';
 import { useI18n } from '@/i18n/context';
 import { localizeFormError } from '@/i18n/localizeFormError';
 import { dateKey } from '@/lib/dates';
-import { draftError, emptyDraft, parseTags, toDraft } from '@/lib/draft';
+import { draftError, emptyDraft, toDraft } from '@/lib/draft';
 import { useEntries } from '@/lib/entries';
-import { jsonToDraft } from '@/lib/jsonImport';
+import { jsonToDraft, type PromptContext } from '@/lib/jsonImport';
 import { loadErrorMessage } from '@/lib/loadError';
 import { EntryForm } from './EntryForm';
-import { Area, Field, Text } from './fields';
 import { emptyJsonImport, JsonImport } from './JsonImport';
 import type { JsonImportState } from './JsonImport';
+import { SimpleForm } from './SimpleForm';
 
 type Tab = 'simple' | 'full' | 'json';
+
+/**
+ * What an imported reply is for.
+ *
+ * `'form'` fills the form and leaves the reader in front of it — the JSON tab's
+ * two buttons, where filling the form is the whole point of the tab. `'save'`
+ * is the 簡易 tab's one button, which writes the note and leaves; the reader
+ * reviews it on its detail page rather than in a twenty-field form they did not
+ * ask to be in.
+ *
+ * Only the *successful* path differs. A reply that cannot be imported is
+ * handled identically either way, because there is nothing to save and the JSON
+ * tab is where a reply gets corrected.
+ */
+type ImportMode = 'form' | 'save';
 
 /**
  * One modal for both adding and editing. Editing skips the tab switcher — the
@@ -77,17 +92,37 @@ export function EntryFormModal({
    * state, and deliberately *not* cleared on edit: a form the user has
    * corrected two fields of is still mostly the model's work.
    *
-   * Set by `loadJson` and therefore by all three routes — drafted here, pasted
-   * from the clipboard, or loaded from a hand-filled box — because all three
-   * are the JSON panel, and that panel exists to receive what an assistant
-   * wrote.
+   * Set by `importJson` and therefore by every route a reply arrives on —
+   * drafted from either tab, pasted from the clipboard, or loaded from a
+   * hand-filled box. Pasting one from a chatbot in another tab is no less
+   * AI-written than fetching it from this one, so the flag cannot depend on
+   * which button was pressed.
+   *
+   * The 簡易 tab sets it and never shows it: that route saves and leaves, so
+   * there is no filled form to render the warning beside. Its warning is under
+   * the button instead, which is the last screen the reader is on. This stays
+   * true for that route rather than being special-cased, because a note whose
+   * reader then presses 編集 lands on 詳細 — and it is the model's work there
+   * for the same reason it is anywhere else.
    */
   const [fromModel, setFromModel] = useState(false);
+  /**
+   * Why the last drafting request failed, and whether it failed on a tab the
+   * reader is no longer looking at.
+   *
+   * Both live here rather than in `JsonImport` because either tab can produce
+   * the failure and only one of them can explain it: the 簡易 tab's button has
+   * no room for the manual route underneath it, so a failure there moves the
+   * reader to the JSON tab, which has. State held in the panel would be state
+   * that unmounted on the way over.
+   */
+  const [aiError, setAiError] = useState<EntryDraftingFailure | null>(null);
+  const [handedOff, setHandedOff] = useState(false);
   /**
    * The current `json`, readable from a callback that outlived the render it
    * was created in.
    *
-   * `loadJson` reads `original` and `source` to build the import context, and
+   * `importJson` reads `original` and `source` for its default context, and
    * the panel calls it *after* an await — after a clipboard read that a browser
    * may have put its own confirmation in front of, for as long as the reader
    * takes to answer it. Through the closure those two fields were whatever they
@@ -111,65 +146,102 @@ export function EntryFormModal({
     setTab(entry ? 'full' : 'simple');
     setJson(emptyJsonImport(translationLanguage));
     setFromModel(false);
+    setAiError(null);
+    setHandedOff(false);
     setErrors([]);
   }, [open, entry, translationLanguage]);
 
   /**
-   * Takes the text rather than reading `json.raw`, so the model's reply can be
-   * imported in the same tick it arrives.
+   * Turn an assistant's reply into a note, and either show it or save it.
    *
-   * `setJson` is asynchronous; calling this straight after it would parse the
-   * *previous* paste — on the first draft, an empty one. Passing the text is
-   * also what keeps the two routes on one implementation: there is no second
-   * import path for the generated reply to drift away from.
+   * Takes the text rather than reading `json.raw`, so the model's reply can be
+   * imported in the same tick it arrives. `setJson` is asynchronous; calling
+   * this straight after it would parse the *previous* paste — on the first
+   * draft, an empty one. Passing the text is also what keeps every route on one
+   * implementation: there is no second import path for a generated reply to
+   * drift away from.
+   *
+   * `context` defaults to the ref rather than to `json` for the reason the ref
+   * documents, and is passed explicitly by the 簡易 tab, whose 出典 is a field
+   * on the draft and has never been in `json` at all.
    */
-  const loadJson = (raw: string = json.raw) => {
-    // Set here rather than only on the drafting button, because every route
-    // into this function is an assistant's reply — the panel is labelled
-    // 「AIが返したJSONを貼り付け」 and the footer button that calls this
-    // renders only while that panel is open. Pasting one from a chatbot in
-    // another tab is no less AI-written than fetching it from this one, so the
-    // warning cannot depend on which button was pressed.
+  const importJson = async (
+    raw: string,
+    mode: ImportMode = 'form',
+    context: PromptContext = jsonRef.current,
+  ) => {
+    // Set here rather than only on the drafting buttons, because every route
+    // into this function is an assistant's reply — the JSON panel is labelled
+    // 「AIが返したJSONを貼り付け」 and the 簡易 button says it drafts with AI.
+    // Pasting one from a chatbot in another tab is no less AI-written than
+    // fetching it from this one, so the warning cannot depend on which button
+    // was pressed.
     setFromModel(true);
-    const {
-      draft: loaded,
-      error: failure,
-      oversize,
-    } = jsonToDraft(raw, {
-      original: jsonRef.current.original,
-      source: jsonRef.current.source,
-    });
-    if (failure) return setErrors([localizeFormError(failure, t)]);
+    const { draft: loaded, error: failure, oversize } = jsonToDraft(raw, context);
+
+    /*
+      A reply that arrived and could not be used is still a reply.
+
+      In `'save'` mode it was fetched from a tab with nowhere to show it, so it
+      is put in the paste box and the reader is moved to the tab that box is on
+      — where the message naming what is wrong with it is actionable, and where
+      a fixed version can be imported by hand. Discarding it would spend the
+      allowance and leave nothing behind.
+
+      Deliberately not `handedOff`: that flag says the model never answered and
+      the manual prompt is now the way through. Here it answered, and telling
+      someone to re-ask their own assistant about a reply whose 意味・説明 is
+      forty characters too long is advice that walks them into the same wall.
+    */
+    const refuse = (messages: string[]) => {
+      if (mode === 'save') {
+        setJson((prev) => ({ ...prev, raw }));
+        setTab('json');
+      }
+      setErrors(messages);
+    };
+
+    if (failure) return refuse([localizeFormError(failure, t)]);
     // Deliberately not loaded and not truncated: the user is looking at the JSON
     // that produced these, so naming every field they have to shorten is both
     // actionable and the only way to avoid silently importing a note whose
     // explanation stops mid-sentence.
     if (oversize?.length) {
-      return setErrors([
+      return refuse([
         t('import.oversizeTitle'),
         ...oversize.map((problem) => localizeFormError(problem, t)),
       ]);
     }
     setErrors([]);
-    if (loaded) {
-      setDraft(loaded);
-      setTab('full');
-    }
+    if (!loaded) return;
+
+    setDraft(loaded);
+    if (mode === 'form') return setTab('full');
+    // `loaded`, not the state that was just set from it: `setDraft` is
+    // asynchronous and `saveDraft` would otherwise write the draft as it was
+    // before the import — on a first add, an empty one.
+    await saveDraft(loaded);
   };
 
-  const save = async () => {
+  /**
+   * Write one draft, whichever route built it.
+   *
+   * Takes the draft rather than reading the state, because the drafting route
+   * saves in the same tick it imports — see `importJson`.
+   */
+  const saveDraft = async (target: EntryDraft) => {
     // The clock is read here rather than inside `draftError`, which takes it as
     // an argument so it can be tested on any day — `learnedOn` is now bounded
     // above by today.
-    const invalid = draftError(draft, dateKey(new Date()));
+    const invalid = draftError(target, dateKey(new Date()));
     if (invalid) return setErrors([localizeFormError(invalid, t)]);
 
     setSaving(true);
     setErrors([]);
     try {
       const id = entry
-        ? (await repository.update(entry.id, draft), entry.id)
-        : await repository.create(draft);
+        ? (await repository.update(entry.id, target), entry.id)
+        : await repository.create(target);
       await refresh();
       onSaved?.(id);
       onClose();
@@ -211,10 +283,10 @@ export function EntryFormModal({
           {tab === 'json' && !entry && (
             <button
               type="button"
-              // Wrapped, not passed by reference: `loadJson` now takes the text
+              // Wrapped, not passed by reference: `importJson` takes the text
               // to import, and a bare handler would hand it the MouseEvent —
               // which `jsonToDraft` would dutifully try to parse.
-              onClick={() => loadJson()}
+              onClick={() => void importJson(json.raw)}
               disabled={!json.raw.trim()}
               className="min-h-10 rounded-pill bg-bg-alt px-5 text-sm font-semibold text-ink disabled:opacity-50"
             >
@@ -230,7 +302,7 @@ export function EntryFormModal({
           </button>
           <button
             type="button"
-            onClick={() => void save()}
+            onClick={() => void saveDraft(draft)}
             disabled={saving}
             className="min-h-10 rounded-pill bg-accent px-5 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
@@ -247,6 +319,10 @@ export function EntryFormModal({
               type="button"
               onClick={() => {
                 setTab(item.id);
+                // Chosen, not arrived at: the handoff notice explains why the
+                // reader was moved here, and a reader who pressed the tab
+                // themselves was not.
+                setHandedOff(false);
                 // `errors` carries both a JSON parse failure and a save failure.
                 // Left alone, a malformed paste kept complaining from the footer
                 // of the 詳細 tab, next to a 保存する it had nothing to do with.
@@ -263,47 +339,30 @@ export function EntryFormModal({
       )}
 
       {tab === 'simple' && !entry && (
-        <div className="space-y-3">
-          <Field label={t('form.headword')} hint={t('form.required')}>
-            <Text
-              value={draft.headword}
-              onChange={(v) => setDraft({ ...draft, headword: v })}
-              maxLength={ENTRY_LIMITS.headword}
-            />
-          </Field>
-          <Field label={t('form.reading')} hint={t('form.kana')}>
-            <Text
-              value={draft.reading}
-              onChange={(v) => setDraft({ ...draft, reading: v })}
-              maxLength={ENTRY_LIMITS.reading}
-            />
-          </Field>
-          <Field label={t('form.definition')} hint={t('form.required')}>
-            <Area
-              value={draft.definition}
-              onChange={(v) => setDraft({ ...draft, definition: v })}
-              maxLength={ENTRY_LIMITS.definition}
-              rows={4}
-            />
-          </Field>
-          <Field label={t('form.additionalNotes')} hint={t('form.optional')}>
-            <Area
-              value={draft.definitionSub}
-              onChange={(v) => setDraft({ ...draft, definitionSub: v })}
-              maxLength={ENTRY_LIMITS.definitionSub}
-              rows={3}
-            />
-          </Field>
-          <Field label={t('form.tags')} hint={t('form.tagsHint')}>
-            <Text
-              value={draft.tags.join(' ')}
-              onChange={(v) => setDraft({ ...draft, tags: parseTags(v) })}
-              maxLength={TAG_INPUT_MAX}
-              placeholder={t('form.tagsPlaceholder')}
-            />
-          </Field>
-          <p className="text-xs text-muted">{t('form.moreFields')}</p>
-        </div>
+        <SimpleForm
+          draft={draft}
+          onChange={setDraft}
+          language={json.language}
+          onLanguageChange={(next) => setJson((prev) => ({ ...prev, language: next }))}
+          /* Copied into `json` at the press rather than kept in step with every
+             keystroke, so there is one place either field is edited and no
+             second copy to drift. What the JSON tab shows after a handoff is
+             then exactly what was asked for, even if the reader kept typing
+             while the request was out. */
+          onAsk={() =>
+            setJson((prev) => ({
+              ...prev,
+              word: draft.headword.trim(),
+              source: draft.source,
+            }))
+          }
+          onReply={(raw) => void importJson(raw, 'save', { source: draft.source })}
+          onFailure={(reason) => {
+            setAiError(reason);
+            setHandedOff(true);
+            setTab('json');
+          }}
+        />
       )}
 
       {tab === 'full' && (
@@ -322,7 +381,17 @@ export function EntryFormModal({
       )}
 
       {tab === 'json' && !entry && (
-        <JsonImport value={json} onChange={setJson} onDrafted={loadJson} />
+        <JsonImport
+          value={json}
+          onChange={setJson}
+          onDrafted={(raw) => void importJson(raw)}
+          aiError={aiError}
+          handedOff={handedOff}
+          onFailure={(reason) => {
+            setAiError(reason);
+            setHandedOff(false);
+          }}
+        />
       )}
     </Modal>
   );
