@@ -119,10 +119,28 @@ source tree.
 | `yarn release`                         | Bump the version and write `CHANGELOG.md`             |
 | `yarn rules:dev` / `yarn rules:prod`   | Deploy `firestore.rules`                              |
 | `yarn auth:login` / `yarn auth:revoke` | Repo-local Google ADC, used by the operator scripts   |
+| `yarn appcheck:debug-token <uuid>`     | Register a browser's App Check debug token            |
 
 `yarn auth:login` writes to `.gcloud/` via `CLOUDSDK_CONFIG`, deliberately apart
 from the machine-wide `~/.config/gcloud`. There is no long-lived service-account
 key in this project, and there should not be one.
+
+`yarn appcheck:debug-token` is what makes `yarn dev` able to sign in at all once
+App Check enforcement covers `identitytoolkit`, which it does on `goitei-dev` and
+`goitei`. A deployed origin attests with reCAPTCHA v3; `localhost` cannot, because
+a v3 site key is bound to registered domains, so `src/infra/firebase/client.ts`
+switches to a debug token in `DEV`. The SDK generates one per browser profile and
+prints it to the console — `App Check debug token: <uuid>` — and until that UUID
+is registered, `signInWithPopup` is refused and the login screen reports the same
+「ログインできませんでした」 it reports for every other cause. Nothing else names
+App Check as the reason, which is why this has its own command rather than a line
+in a runbook.
+
+A debug token is a bypass, so registering one is a decision rather than a
+formality: it lives in IndexedDB, a cleared profile or a second browser produces
+another, and each registration attests as this app until somebody removes it.
+The Firebase console lists them under App Check → Apps → Manage debug tokens,
+which is also where they are deleted.
 
 ## Tests
 
