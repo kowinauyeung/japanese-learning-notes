@@ -765,6 +765,12 @@ export const entryDraftingPort: EntryDraftingPort = {
       if (failure === 'unavailable') draftingIsSpent = true;
       return Promise.reject(new EntryDraftingError(failure));
     }
+    // Before the generated reply, not after: a spec that supplies one is
+    // asking about what the app does with it, and deriving a headword from the
+    // prompt would be answering a question it did not ask.
+    const supplied = seed().entryDraftingReply;
+    if (supplied !== undefined) return Promise.resolve(supplied);
+
     const headword = /^「(.+?)」/.exec(prompt)?.[1] ?? '兆候';
     // Fenced, because a real reply is: the prompt asks for a ```json block and
     // `jsonToDraft` strips one. An unfenced fixture would leave that unexercised.

@@ -4,7 +4,7 @@ import type { EntryDraftingFailure } from '@/domain/ports';
 import { useI18n } from '@/i18n/context';
 import { buildPrompt } from '@/lib/jsonImport';
 import { Area, Field, Text } from './fields';
-import { useEntryDrafting } from './useEntryDrafting';
+import { type DraftRequest, useEntryDrafting } from './useEntryDrafting';
 
 /**
  * The quick-capture tab, and the app's shortest route to a finished note.
@@ -58,8 +58,11 @@ export function SimpleForm({
    * this panel locks its fields. Reported rather than derived from `onAsk` and
    * `onReply`: a reply that arrives after this panel unmounts never reaches
    * either, and the footer would stay locked with nothing left to unlock it.
+   *
+   * Carries the request it is about, because one can outlive the dialog that
+   * started it — see `useEntryDrafting`.
    */
-  onBusyChange: (busy: boolean) => void;
+  onBusyChange: (busy: boolean, request: DraftRequest) => void;
   /** The model's reply, verbatim. Parsed by the modal, never here. */
   onReply: (raw: string) => void;
   onFailure: (reason: EntryDraftingFailure) => void;

@@ -24,7 +24,15 @@ import { entryDraftingPort } from '@/lib/backend';
  * leaving the tab really does unmount it. Calling it from `EntryFormModal`
  * itself would compile and would silently have no guard at all.
  */
-export function useEntryDrafting(onBusyChange?: (busy: boolean) => void) {
+/**
+ * Identifies one request, so a caller can tell which one is reporting.
+ *
+ * An opaque object rather than a counter: two panels hold two hook instances
+ * and a counter local to either would collide with the other's.
+ */
+export type DraftRequest = object;
+
+export function useEntryDrafting(onBusyChange?: (busy: boolean, request: DraftRequest) => void) {
   const [drafting, setDrafting] = useState(false);
 
   const alive = useRef(true);
@@ -55,8 +63,9 @@ export function useEntryDrafting(onBusyChange?: (busy: boolean) => void) {
     prompt: string,
     handlers: { onReply: (raw: string) => void; onFailure: (reason: EntryDraftingFailure) => void },
   ) => {
+    const request: DraftRequest = {};
     setDrafting(true);
-    onBusyChange?.(true);
+    onBusyChange?.(true, request);
     try {
       const raw = await entryDraftingPort.draft(prompt);
       if (!alive.current) return;
@@ -73,14 +82,22 @@ export function useEntryDrafting(onBusyChange?: (busy: boolean) => void) {
       // true is a button disabled for the rest of the session.
       if (alive.current) setDrafting(false);
       /*
-        Unconditional, unlike the line above it, and the asymmetry is the point.
-        The guard exists to stop a reply writing into a component that is gone;
-        the *caller* is not gone — it outlives this one, which is the whole
-        reason it needs telling. Skipping this when the panel unmounts mid-
-        request leaves the modal's footer locked with nothing on its way to
-        unlock it, and switching tabs is enough to reach that.
+        Reported unconditionally, but *named*, and both halves matter.
+
+        Unconditional, because the caller is not the thing the guard above
+        protects: it outlives this hook, which is the whole reason it needs
+        telling. Skip it when the panel unmounts mid-request and the caller is
+        left locked with nothing on its way to unlock it.
+
+        Named, because "unconditional" alone was wrong in the other direction.
+        The dialog can be closed while a request is out — the close button stays
+        live on purpose, as the way out of a request that hangs — and reopening
+        it starts a second one. The first then settles and unlocked the second,
+        re-enabling the save over a form the second request was still about to
+        overwrite. The caller compares this against the request it is waiting on
+        and ignores anything else.
       */
-      onBusyChange?.(false);
+      onBusyChange?.(false, request);
     }
   };
 

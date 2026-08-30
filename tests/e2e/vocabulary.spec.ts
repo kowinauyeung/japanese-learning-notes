@@ -423,6 +423,79 @@ test.describe('adding a word', () => {
   });
 
   /**
+   * A reply that will not import stays on screen to be corrected.
+   *
+   * The drafting button is also the only button that can throw the reply away,
+   * and the allowance is spent by the time it does. `JsonImport` used to write
+   * the raw box itself; moving the import into the modal dropped that for the
+   * tab it came from, so a malformed reply was refused into an empty box with
+   * nothing left to fix.
+   *
+   * The reply is seeded rather than provoked: `INPUT_LIMITS.importWord` is
+   * `ENTRY_LIMITS.headword`, so no word a reader can type produces a note too
+   * long for itself, and the stand-in otherwise always answers correctly.
+   */
+  test('leaves a malformed reply in the paste box instead of discarding it', async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS,
+      entryDraftingReply: 'sorry, I cannot do that',
+    });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByRole('button', { name: 'JSON' }).click();
+    await dialog.getByLabel('単語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成' }).click();
+
+    await expect(dialog.getByText('JSON として解析できませんでした。')).toBeVisible();
+    await expect(dialog.getByRole('textbox', { name: 'AI の返した JSON を貼り付け' })).toHaveValue(
+      'sorry, I cannot do that',
+    );
+  });
+
+  /**
+   * A note can import cleanly and still be refused by the save.
+   *
+   * `sanitizeDraft` will not bound the pitch accent against the reading — its
+   * comment says the form owns that rule, "where it can be shown and corrected
+   * instead" — so a model answering 9 for a three-mora word passes the import
+   * and fails `draftError`. The quick tab has neither the reading nor the
+   * accent on it, so a refusal there left the reader reading a sentence about
+   * an accent on a form with no accent on it.
+   */
+  test('moves a refused draft to the form that has the field it was refused for', async ({
+    page,
+  }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS,
+      entryDraftingReply: JSON.stringify({
+        headword: '兆候',
+        reading: 'ちょうこう',
+        definition: 'きざし。',
+        pitchAccent: 9,
+      }),
+    });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+
+    // The detailed form, with the drafted values in it and the accent on screen
+    // — not the quick tab it was pressed from, and not a saved note.
+    await expect(dialog.getByLabel('読み方')).toHaveValue('ちょうこう');
+    await expect(dialog.getByLabel(/アクセント/)).toBeVisible();
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveURL(/\/vocabulary$/);
+  });
+
+  /**
    * The panel's fields keep their value across an import that resolves late.
    *
    * `loadJson` reads 出会った文 and 出典 to build the context it hands

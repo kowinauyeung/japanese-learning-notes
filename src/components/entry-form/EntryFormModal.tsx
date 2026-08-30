@@ -14,6 +14,7 @@ import { EntryForm } from './EntryForm';
 import { emptyJsonImport, JsonImport } from './JsonImport';
 import type { JsonImportState } from './JsonImport';
 import { SimpleForm } from './SimpleForm';
+import type { DraftRequest } from './useEntryDrafting';
 
 type Tab = 'simple' | 'full' | 'json';
 
@@ -132,6 +133,26 @@ export function EntryFormModal({
    */
   const [drafting, setDrafting] = useState(false);
   /**
+   * Which request the lock above belongs to.
+   *
+   * A request outlives the panel that made it and can outlive the whole dialog:
+   * the close button stays live while one is out, and reopening starts a
+   * second. Without this, the first settling unlocked the second — the footer's
+   * save came back over a form a reply was still about to overwrite. Only the
+   * request that took the lock may give it back.
+   */
+  const busyFor = useRef<DraftRequest | null>(null);
+  const trackDrafting = (busy: boolean, request: DraftRequest) => {
+    if (busy) {
+      busyFor.current = request;
+      setDrafting(true);
+      return;
+    }
+    if (busyFor.current !== request) return;
+    busyFor.current = null;
+    setDrafting(false);
+  };
+  /**
    * The current `json`, readable from a callback that outlived the render it
    * was created in.
    *
@@ -162,6 +183,9 @@ export function EntryFormModal({
     setAiError(null);
     setHandedOff(false);
     setDrafting(false);
+    // The outstanding request, if there is one, is now nobody's: it may still
+    // settle, and what it must not do on the way past is unlock this session.
+    busyFor.current = null;
     setErrors([]);
   }, [open, entry, translationLanguage]);
 
@@ -191,16 +215,30 @@ export function EntryFormModal({
     // fetching it from this one, so the warning cannot depend on which button
     // was pressed.
     setFromModel(true);
+    /*
+      Unconditional, and it is the paste box's whole job.
+
+      A reply that will not import has to stay on screen to be corrected, or
+      the button that fetched it is also the button that threw it away — with
+      the allowance already spent. `JsonImport.generate` used to do this itself
+      and the move here dropped it for the tab it came from: the drafting
+      button on the JSON panel refused a malformed reply into an empty box.
+
+      Harmless on the routes that do not need it. The 読み込む button is
+      importing what is already in the box, and the clipboard button has just
+      written it, so both are setting the value they read.
+    */
+    setJson((prev) => ({ ...prev, raw }));
     const { draft: loaded, error: failure, oversize } = jsonToDraft(raw, context);
 
     /*
       A reply that arrived and could not be used is still a reply.
 
-      In `'save'` mode it was fetched from a tab with nowhere to show it, so it
-      is put in the paste box and the reader is moved to the tab that box is on
-      — where the message naming what is wrong with it is actionable, and where
-      a fixed version can be imported by hand. Discarding it would spend the
-      allowance and leave nothing behind.
+      It is in the paste box by now, whichever tab asked for it. What is left to
+      decide is where the reader should be standing, and in `'save'` mode that
+      is not where they are: the quick tab has nowhere to show a reply, so they
+      are moved to the tab that does — where the message naming what is wrong
+      with it is actionable, and where a fixed version can be imported by hand.
 
       Deliberately not `handedOff`: that flag says the model never answered and
       the manual prompt is now the way through. Here it answered, and telling
@@ -208,10 +246,9 @@ export function EntryFormModal({
       forty characters too long is advice that walks them into the same wall.
     */
     const refuse = (messages: string[]) => {
-      if (mode === 'save') {
-        setJson((prev) => ({ ...prev, raw }));
-        setTab('json');
-      }
+      // The reply is in the box either way; this is only about where the reader
+      // is standing. `'form'` mode was already on the panel that box is on.
+      if (mode === 'save') setTab('json');
       setErrors(messages);
     };
 
@@ -234,7 +271,22 @@ export function EntryFormModal({
     // `loaded`, not the state that was just set from it: `setDraft` is
     // asynchronous and `saveDraft` would otherwise write the draft as it was
     // before the import — on a first add, an empty one.
-    await saveDraft(loaded);
+    /*
+      A drafted note can import cleanly and still be refused by the save.
+
+      `sanitizeDraft` deliberately does not bound the pitch accent against the
+      reading — the comment there says the form owns that rule, "where it can be
+      shown and corrected instead" — so a model answering 9 on a three-mora word
+      passes the import and fails `draftError`. The quick tab has neither field,
+      which left the reader looking at a sentence about an accent on a form with
+      no accent on it. A refused save therefore lands where the rule can be
+      obeyed, which is the same place the JSON tab's own drafts land.
+
+      Every refusal, not only that one: a save that fails on the network is
+      about a note the quick tab does not show either, and retrying from the
+      filled form is the only version of that the reader can act on.
+    */
+    if (!(await saveDraft(loaded))) setTab('full');
   };
 
   /**
@@ -242,13 +294,21 @@ export function EntryFormModal({
    *
    * Takes the draft rather than reading the state, because the drafting route
    * saves in the same tick it imports — see `importJson`.
+   *
+   * Answers whether the note was written. The footer ignores it — the errors it
+   * needs are already on screen and it is already on the form — but the quick
+   * tab's one-press route has to know, because a refusal there leaves the
+   * reader on a tab that cannot show what was refused.
    */
-  const saveDraft = async (target: EntryDraft) => {
+  const saveDraft = async (target: EntryDraft): Promise<boolean> => {
     // The clock is read here rather than inside `draftError`, which takes it as
     // an argument so it can be tested on any day — `learnedOn` is now bounded
     // above by today.
     const invalid = draftError(target, dateKey(new Date()));
-    if (invalid) return setErrors([localizeFormError(invalid, t)]);
+    if (invalid) {
+      setErrors([localizeFormError(invalid, t)]);
+      return false;
+    }
 
     setSaving(true);
     setErrors([]);
@@ -259,6 +319,7 @@ export function EntryFormModal({
       await refresh();
       onSaved?.(id);
       onClose();
+      return true;
     } catch (cause) {
       console.error(cause);
       // `permission-denied` here is a lockout, not a mistake in the draft —
@@ -273,6 +334,7 @@ export function EntryFormModal({
           t('load.unreachableSave'),
         ),
       ]);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -368,7 +430,7 @@ export function EntryFormModal({
              second copy to drift. What the JSON tab shows after a handoff is
              then exactly what was asked for, even if the reader kept typing
              while the request was out. */
-          onBusyChange={setDrafting}
+          onBusyChange={trackDrafting}
           onAsk={() =>
             setJson((prev) => ({
               ...prev,
@@ -407,7 +469,7 @@ export function EntryFormModal({
           onDrafted={(raw) => void importJson(raw)}
           aiError={aiError}
           handedOff={handedOff}
-          onBusyChange={setDrafting}
+          onBusyChange={trackDrafting}
           onFailure={(reason) => {
             setAiError(reason);
             setHandedOff(false);

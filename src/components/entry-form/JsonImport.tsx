@@ -7,7 +7,7 @@ import { useI18n } from '@/i18n/context';
 import type { MessageKey } from '@/i18n/messages';
 import { buildPrompt, promptLanguageName, SCHEMA } from '@/lib/jsonImport';
 import { Area, Field } from './fields';
-import { useEntryDrafting } from './useEntryDrafting';
+import { type DraftRequest, useEntryDrafting } from './useEntryDrafting';
 
 /**
  * What to say for each way the drafting can fail.
@@ -97,7 +97,7 @@ export function JsonImport({
   handedOff: boolean;
   onFailure: (reason: EntryDraftingFailure) => void;
   /** See `SimpleForm`: lets the modal lock its footer for the same window. */
-  onBusyChange: (busy: boolean) => void;
+  onBusyChange: (busy: boolean, request: DraftRequest) => void;
 }) {
   // Purely local: nothing outside this component acts on it.
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');

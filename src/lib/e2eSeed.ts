@@ -93,4 +93,19 @@ export interface E2ESeed {
    * offering to try again forever.
    */
   entryDrafting?: 'unavailable' | 'quota' | 'blocked' | 'failed';
+  /**
+   * What the model answers with, instead of the stand-in's own reply.
+   *
+   * Exists because the recovery paths are about replies the app cannot use, and
+   * a stand-in that only ever answers correctly cannot produce one. The limits
+   * rule out the alternative: `INPUT_LIMITS.importWord` is `ENTRY_LIMITS.headword`,
+   * so no word a reader can type makes the drafted note too long for itself.
+   *
+   * Substituting what an external service says is the seam this file already
+   * is, and the app is unchanged by it — the reply crosses the port and goes
+   * through the same `jsonToDraft` every other reply does.
+   *
+   * Ignored when `entryDrafting` is set: a request that failed has no reply.
+   */
+  entryDraftingReply?: string;
 }

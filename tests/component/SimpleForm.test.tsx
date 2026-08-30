@@ -121,9 +121,47 @@ describe('SimpleForm — while the request is out', () => {
     render(<Harness initial={{ headword: '兆候' }} onBusyChange={onBusyChange} />);
 
     fireEvent.click(drawButton());
-    expect(onBusyChange).toHaveBeenCalledWith(true);
+    expect(onBusyChange).toHaveBeenCalledWith(true, expect.anything());
 
-    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false, expect.anything()));
+  });
+
+  /**
+   * The unlock names the request that took the lock, and two requests never
+   * share a name.
+   *
+   * This is what stops a request outliving its own session from unlocking the
+   * next one. The dialog's close button stays live while a request is out — on
+   * purpose, as the way out of one that hangs — so a reader can close, reopen
+   * and press again, and the first reply then arrives with the second still in
+   * flight. Unlocking on the reply alone brought the save back over a form that
+   * reply was about to overwrite. The modal compares these two values; this is
+   * the half that makes the comparison mean anything.
+   */
+  it('gives each request its own name, so a stale one cannot unlock a later session', async () => {
+    const onBusyChange = vi.fn();
+    seedDrafting('failed');
+    const first = render(<Harness initial={{ headword: '兆候' }} onBusyChange={onBusyChange} />);
+
+    fireEvent.click(drawButton());
+    await waitFor(() => expect(onBusyChange).toHaveBeenCalledTimes(2));
+    first.unmount();
+
+    render(<Harness initial={{ headword: '古い' }} onBusyChange={onBusyChange} />);
+    fireEvent.click(drawButton());
+    await waitFor(() => expect(onBusyChange).toHaveBeenCalledTimes(4));
+
+    const [[, lockA], [, unlockA], [, lockB], [, unlockB]] = onBusyChange.mock.calls as [
+      [boolean, object],
+      [boolean, object],
+      [boolean, object],
+      [boolean, object],
+    ];
+    // Each request answers for itself…
+    expect(unlockA).toBe(lockA);
+    expect(unlockB).toBe(lockB);
+    // …and never for the other, across a remount as well as within one.
+    expect(lockB).not.toBe(lockA);
   });
 
   /**
@@ -144,7 +182,7 @@ describe('SimpleForm — while the request is out', () => {
     fireEvent.click(drawButton());
     unmount();
 
-    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false, expect.anything()));
   });
 });
 
