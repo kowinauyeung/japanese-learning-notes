@@ -36,12 +36,21 @@ test.describe('dashboard', () => {
       0,
     );
 
-    const cell = await today.boundingBox();
-    const box = await scroller.boundingBox();
-    expect(cell).not.toBeNull();
-    expect(box).not.toBeNull();
-    expect(cell!.x).toBeGreaterThanOrEqual(box!.x);
-    expect(cell!.x + cell!.width).toBeLessThanOrEqual(box!.x + box!.width);
+    // Polled, for the same reason the manual-scroll test below polls: the
+    // overflow asserted above appears when the row is laid out, and the pin is
+    // written by an effect after that — so a single pair of reads can land in
+    // between and measure the unpinned position. This is the assertion that
+    // owns the claim, which is why it is the one hardened.
+    await expect
+      .poll(
+        async () => {
+          const [cell, box] = await Promise.all([today.boundingBox(), scroller.boundingBox()]);
+          if (!cell || !box) return false;
+          return cell.x >= box.x && cell.x + cell.width <= box.x + box.width;
+        },
+        { message: 'the first paint must scroll today into the heatmap viewport' },
+      )
+      .toBe(true);
   });
 
   test('re-pins the heatmap to today when a wide viewport becomes narrow', async ({ page }) => {
