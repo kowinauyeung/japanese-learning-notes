@@ -54,6 +54,7 @@ export function JsonImport({
   aiError,
   handedOff,
   onFailure,
+  onBusyChange,
 }: {
   value: JsonImportState;
   /**
@@ -95,12 +96,14 @@ export function JsonImport({
    */
   handedOff: boolean;
   onFailure: (reason: EntryDraftingFailure) => void;
+  /** See `SimpleForm`: lets the modal lock its footer for the same window. */
+  onBusyChange: (busy: boolean) => void;
 }) {
   // Purely local: nothing outside this component acts on it.
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [pasteFailed, setPasteFailed] = useState(false);
   const [pasting, setPasting] = useState(false);
-  const { available: canDraft, drafting, draft: askForDraft } = useEntryDrafting();
+  const { available: canDraft, drafting, draft: askForDraft } = useEntryDrafting(onBusyChange);
 
   /**
    * Whether this panel is still the one on screen.
@@ -379,7 +382,11 @@ export function JsonImport({
       <button
         type="button"
         onClick={copyPrompt}
-        className={`min-h-10 w-full rounded-pill text-sm font-semibold ${
+        // Locked with the fields it reads. The prompt is built from them, so a
+        // copy taken mid-request is a copy of a question already asked, handed
+        // to the reader as though it were the one to ask next.
+        disabled={busy}
+        className={`min-h-10 w-full rounded-pill text-sm font-semibold disabled:opacity-50 ${
           canDraft ? 'border border-line text-ink' : 'bg-accent text-on-accent'
         }`}
       >
@@ -437,6 +444,7 @@ export function JsonImport({
           value={value.raw}
           onChange={(v) => set('raw', v)}
           maxLength="unbounded"
+          disabled={busy}
           // Four, not the ten it was. The box stopped being the place the JSON
           // arrives once the two buttons above could fill it, so its height was
           // paying for a paste most readers no longer perform by hand. Ten rows

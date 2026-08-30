@@ -34,6 +34,7 @@ export function SimpleForm({
   language,
   onLanguageChange,
   onAsk,
+  onBusyChange,
   onReply,
   onFailure,
 }: {
@@ -52,12 +53,19 @@ export function SimpleForm({
    * was asked over to the JSON tab in case the reader ends up there.
    */
   onAsk: () => void;
+  /**
+   * Whether a request is out, so the modal can lock its footer for as long as
+   * this panel locks its fields. Reported rather than derived from `onAsk` and
+   * `onReply`: a reply that arrives after this panel unmounts never reaches
+   * either, and the footer would stay locked with nothing left to unlock it.
+   */
+  onBusyChange: (busy: boolean) => void;
   /** The model's reply, verbatim. Parsed by the modal, never here. */
   onReply: (raw: string) => void;
   onFailure: (reason: EntryDraftingFailure) => void;
 }) {
   const { t } = useI18n();
-  const { available, drafting, draft: askForDraft } = useEntryDrafting();
+  const { available, drafting, draft: askForDraft } = useEntryDrafting(onBusyChange);
   const set = <K extends keyof EntryDraft>(key: K, value: EntryDraft[K]) =>
     onChange({ ...draft, [key]: value });
 
@@ -78,6 +86,18 @@ export function SimpleForm({
     });
   };
 
+  /*
+    Every field on this tab locks while the request is out, not only the two the
+    prompt was built from.
+
+    The narrower version was the one to justify: 意味・説明 is not in the prompt,
+    so locking it looks like caution rather than a fix. It is a fix. A successful
+    draft overwrites that field and saves in the same tick, so anything typed
+    into it during the wait is written over and gone without ever having been on
+    screen next to what replaced it — the reader watches their own sentence
+    vanish into a note they did not write. The lock is what makes the overwrite
+    something they chose when they pressed the button.
+  */
   return (
     <div className="space-y-3">
       <Field label={t('form.headword')} hint={t('form.required')}>
@@ -85,6 +105,7 @@ export function SimpleForm({
           value={draft.headword}
           onChange={(v) => set('headword', v)}
           maxLength={ENTRY_LIMITS.headword}
+          disabled={drafting}
         />
       </Field>
       <Field label={t('form.source')} hint={t('form.optional')}>
@@ -93,6 +114,7 @@ export function SimpleForm({
           onChange={(v) => set('source', v)}
           maxLength={ENTRY_LIMITS.source}
           placeholder={t('form.sourcePlaceholder')}
+          disabled={drafting}
         />
       </Field>
 
@@ -108,6 +130,7 @@ export function SimpleForm({
               value={language}
               onChange={onLanguageChange}
               maxLength={INPUT_LIMITS.importLanguage}
+              disabled={drafting}
             />
           </Field>
           <button
@@ -135,6 +158,7 @@ export function SimpleForm({
             onChange={(v) => set('definition', v)}
             maxLength={ENTRY_LIMITS.definition}
             rows={4}
+            disabled={drafting}
           />
         </Field>
         <p className="text-xs text-muted">{t('form.moreFields')}</p>

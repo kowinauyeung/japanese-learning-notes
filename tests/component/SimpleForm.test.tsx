@@ -24,11 +24,13 @@ function Harness({
   language = '廣東話',
   onReply = () => {},
   onFailure = () => {},
+  onBusyChange = () => {},
 }: {
   initial?: Partial<EntryDraft>;
   language?: string;
   onReply?: (raw: string) => void;
   onFailure?: (reason: string) => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [draft, setDraft] = useState<EntryDraft>({ ...emptyDraft(), ...initial });
   const [lang, setLang] = useState(language);
@@ -39,6 +41,7 @@ function Harness({
       language={lang}
       onLanguageChange={setLang}
       onAsk={() => {}}
+      onBusyChange={onBusyChange}
       onReply={onReply}
       onFailure={onFailure}
     />
@@ -82,6 +85,66 @@ describe('SimpleForm — the inaccuracy warning', () => {
   it('warns before the button is pressed, because pressing it saves and leaves', () => {
     render(<Harness initial={{ headword: '兆候' }} />);
     expect(screen.getByText(ja('import.aiDisclaimer'))).toBeInTheDocument();
+  });
+});
+
+describe('SimpleForm — while the request is out', () => {
+  /**
+   * Every field, not only the two the prompt was built from.
+   *
+   * 意味・説明 is not in the prompt, so locking it reads as caution. It is not:
+   * a successful draft overwrites that field and saves in the same tick, so a
+   * sentence typed during the wait is written over and gone without ever having
+   * been on screen beside what replaced it. The lock is what makes the
+   * overwrite something the reader chose when they pressed the button.
+   *
+   * Asserted synchronously after the click, before the seeded rejection
+   * settles in its microtask — the same shape `JsonImport.test.tsx` uses to
+   * observe a request that is still out.
+   */
+  it('locks the meaning box too, which a successful draft is about to overwrite', () => {
+    seedDrafting('failed');
+    render(<Harness initial={{ headword: '兆候' }} />);
+
+    fireEvent.click(drawButton());
+
+    // Matched loosely because `Field` folds its hint into the accessible name —
+    // 「見出し語必須」 — and which fields carry a hint is not what is under test.
+    for (const label of [/見出し語/, /出典/, /訳の言語/, /意味・説明/]) {
+      expect(screen.getByRole('textbox', { name: label })).toBeDisabled();
+    }
+  });
+
+  it('reports the window upwards, which is what lets the modal lock its footer', async () => {
+    const onBusyChange = vi.fn();
+    seedDrafting('failed');
+    render(<Harness initial={{ headword: '兆候' }} onBusyChange={onBusyChange} />);
+
+    fireEvent.click(drawButton());
+    expect(onBusyChange).toHaveBeenCalledWith(true);
+
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
+  });
+
+  /**
+   * The unlock is not guarded by the unmount check that guards everything else.
+   *
+   * The guard exists to stop a reply writing into a panel that is gone. The
+   * modal is not gone — it is the thing being told — so skipping this when the
+   * panel unmounts mid-request leaves its footer locked with nothing left on
+   * its way to unlock it. Switching tabs is enough to reach that.
+   */
+  it('still unlocks the modal when the panel is gone before the reply lands', async () => {
+    const onBusyChange = vi.fn();
+    seedDrafting('failed');
+    const { unmount } = render(
+      <Harness initial={{ headword: '兆候' }} onBusyChange={onBusyChange} />,
+    );
+
+    fireEvent.click(drawButton());
+    unmount();
+
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
   });
 });
 

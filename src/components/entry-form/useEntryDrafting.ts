@@ -24,7 +24,7 @@ import { entryDraftingPort } from '@/lib/backend';
  * leaving the tab really does unmount it. Calling it from `EntryFormModal`
  * itself would compile and would silently have no guard at all.
  */
-export function useEntryDrafting() {
+export function useEntryDrafting(onBusyChange?: (busy: boolean) => void) {
   const [drafting, setDrafting] = useState(false);
 
   const alive = useRef(true);
@@ -56,6 +56,7 @@ export function useEntryDrafting() {
     handlers: { onReply: (raw: string) => void; onFailure: (reason: EntryDraftingFailure) => void },
   ) => {
     setDrafting(true);
+    onBusyChange?.(true);
     try {
       const raw = await entryDraftingPort.draft(prompt);
       if (!alive.current) return;
@@ -71,6 +72,15 @@ export function useEntryDrafting() {
       // In `finally` rather than after the call: an error path that leaves this
       // true is a button disabled for the rest of the session.
       if (alive.current) setDrafting(false);
+      /*
+        Unconditional, unlike the line above it, and the asymmetry is the point.
+        The guard exists to stop a reply writing into a component that is gone;
+        the *caller* is not gone — it outlives this one, which is the whole
+        reason it needs telling. Skipping this when the panel unmounts mid-
+        request leaves the modal's footer locked with nothing on its way to
+        unlock it, and switching tabs is enough to reach that.
+      */
+      onBusyChange?.(false);
     }
   };
 

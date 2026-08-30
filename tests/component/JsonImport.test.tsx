@@ -68,6 +68,7 @@ function Harness({
       aiError={aiError}
       handedOff={false}
       onFailure={setAiError}
+      onBusyChange={() => {}}
     />
   );
 }

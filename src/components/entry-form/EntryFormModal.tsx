@@ -119,6 +119,19 @@ export function EntryFormModal({
   const [aiError, setAiError] = useState<EntryDraftingFailure | null>(null);
   const [handedOff, setHandedOff] = useState(false);
   /**
+   * Whether a drafting request is out on whichever panel is open.
+   *
+   * The panels lock their own fields; this is what lets the dialog around them
+   * lock too. Without it the footer's 保存する stayed live over a form the panel
+   * had frozen — so the one control that could still change the note was the
+   * one that wrote it, and pressing it saved whatever was there a moment before
+   * the model answered.
+   *
+   * Reported by the panels rather than derived here, because the request can
+   * settle after the panel that made it is gone — see `useEntryDrafting`.
+   */
+  const [drafting, setDrafting] = useState(false);
+  /**
    * The current `json`, readable from a callback that outlived the render it
    * was created in.
    *
@@ -148,6 +161,7 @@ export function EntryFormModal({
     setFromModel(false);
     setAiError(null);
     setHandedOff(false);
+    setDrafting(false);
     setErrors([]);
   }, [open, entry, translationLanguage]);
 
@@ -287,7 +301,7 @@ export function EntryFormModal({
               // to import, and a bare handler would hand it the MouseEvent —
               // which `jsonToDraft` would dutifully try to parse.
               onClick={() => void importJson(json.raw)}
-              disabled={!json.raw.trim()}
+              disabled={!json.raw.trim() || drafting}
               className="min-h-10 rounded-pill bg-bg-alt px-5 text-sm font-semibold text-ink disabled:opacity-50"
             >
               {t('form.import')}
@@ -303,7 +317,7 @@ export function EntryFormModal({
           <button
             type="button"
             onClick={() => void saveDraft(draft)}
-            disabled={saving}
+            disabled={saving || drafting}
             className="min-h-10 rounded-pill bg-accent px-5 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
             {saving ? t('form.saving') : t('form.save')}
@@ -317,6 +331,11 @@ export function EntryFormModal({
             <button
               key={item.id}
               type="button"
+              // Locked while a request is out, because leaving the tab
+              // unmounts the panel that made it and the reply is then dropped —
+              // silently, and after the allowance has already been spent. The
+              // close button stays live, which is the way out if it hangs.
+              disabled={drafting}
               onClick={() => {
                 setTab(item.id);
                 // Chosen, not arrived at: the handoff notice explains why the
@@ -328,7 +347,7 @@ export function EntryFormModal({
                 // of the 詳細 tab, next to a 保存する it had nothing to do with.
                 setErrors([]);
               }}
-              className={`flex-1 rounded-pill py-1.5 text-xs font-semibold transition ${
+              className={`flex-1 rounded-pill py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
                 tab === item.id ? 'bg-card text-ink shadow-panel' : 'text-muted'
               }`}
             >
@@ -349,6 +368,7 @@ export function EntryFormModal({
              second copy to drift. What the JSON tab shows after a handoff is
              then exactly what was asked for, even if the reader kept typing
              while the request was out. */
+          onBusyChange={setDrafting}
           onAsk={() =>
             setJson((prev) => ({
               ...prev,
@@ -387,6 +407,7 @@ export function EntryFormModal({
           onDrafted={(raw) => void importJson(raw)}
           aiError={aiError}
           handedOff={handedOff}
+          onBusyChange={setDrafting}
           onFailure={(reason) => {
             setAiError(reason);
             setHandedOff(false);
