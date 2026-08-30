@@ -39,9 +39,12 @@ export interface E2ESeed {
    * Fails an entry `create`/`update`. `denied` carries Firestore's own
    * `permission-denied`, so `EntryFormModal` renders the account-denial
    * sentence rather than the generic 保存できませんでした. `unreachable`
-   * mirrors `settingsSave`'s branch of the same name.
+   * mirrors `settingsSave`'s branch of the same name. `defer` holds the write
+   * open until `window.__GOITEI_E2E_RELEASE_ENTRY_SAVE__` is called, which is
+   * the only way to have a save still out while the dialog that started it is
+   * closed and another is opened — see `settingsSave`, which does the same.
    */
-  entrySave?: 'denied' | 'unreachable';
+  entrySave?: 'denied' | 'unreachable' | 'defer';
   /**
    * Fails the entry page this account's export walk reads first. `denied`
    * carries `permission-denied`; `unreachable` carries `unavailable`, so

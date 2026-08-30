@@ -155,6 +155,30 @@ export function EntryFormModal({
    * request that took the lock may give it back.
    */
   const busyFor = useRef<DraftRequest | null>(null);
+  /**
+   * Which run of this dialog is current.
+   *
+   * A save outlives the panel that started it and can outlive the dialog: the
+   * close button stays live while a request is out, on purpose, and closing does
+   * not cancel a `create` that has already gone. Its completion then called
+   * `onSaved` and `onClose` unconditionally — so a reader who closed, reopened
+   * and started again had the second dialog closed under them and was navigated
+   * to the first word.
+   *
+   * Keyed on `open` alone, and *not* on the reset effect's `entry`.
+   *
+   * That was the first version and it broke editing outright. `refresh()`
+   * replaces every entry object, so the `entry` prop arrives with a new identity
+   * the moment a save succeeds — the reset effect re-runs, and a session bumped
+   * there would rule the save that caused it stale. It then skipped its own
+   * `onClose`, and the dialog stayed open over the note it had just written.
+   * Caught by the existing edit test, which found the saved text twice: once on
+   * the page and once in the form that should have closed.
+   *
+   * Opening and closing are the only two things that make a run a different run,
+   * and both are `open` changing.
+   */
+  const session = useRef(0);
   const trackDrafting = (busy: boolean, request: DraftRequest) => {
     if (busy) {
       /*
@@ -204,6 +228,10 @@ export function EntryFormModal({
   }, [json]);
 
   useEffect(() => {
+    session.current += 1;
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return;
     setDraft(entry ? toDraft(entry) : emptyDraft());
     setTab(entry ? 'full' : 'simple');
@@ -212,6 +240,10 @@ export function EntryFormModal({
     setAiError(null);
     setHandedOff(false);
     setDrafting(false);
+    // Reset here as well as guarded in `saveDraft`: a save from the previous run
+    // skips its own `setSaving(false)`, so without this the new dialog opens
+    // with its footer already locked by a write it knows nothing about.
+    setSaving(false);
     // The outstanding request, if there is one, is now nobody's: it may still
     // settle, and what it must not do on the way past is unlock this session.
     busyFor.current = null;
@@ -315,7 +347,11 @@ export function EntryFormModal({
       about a note the quick tab does not show either, and retrying from the
       filled form is the only version of that the reader can act on.
     */
-    if (!(await saveDraft(loaded))) setTab('full');
+    // `mine` rather than reading the ref again: a dialog closed and reopened
+    // during the save is a different dialog, and moving *it* to 詳細 would be
+    // this run reaching into the next one.
+    const mine = session.current;
+    if (!(await saveDraft(loaded)) && session.current === mine) setTab('full');
   };
 
   /**
@@ -330,6 +366,17 @@ export function EntryFormModal({
    * reader on a tab that cannot show what was refused.
    */
   const saveDraft = async (target: EntryDraft): Promise<boolean> => {
+    /*
+      Everything after the write is gated on this still being the current run.
+
+      The write itself is not, and must not be: the note was asked for and it is
+      going to be saved whether or not the reader is still looking. What belongs
+      to the run is the *reaction* — navigating to the new word, closing the
+      dialog, reporting a failure, releasing the footer. Applied to a dialog that
+      has since been closed and reopened, each of those is this save interrupting
+      a session that has nothing to do with it.
+    */
+    const mine = session.current;
     // The clock is read here rather than inside `draftError`, which takes it as
     // an argument so it can be tested on any day — `learnedOn` is now bounded
     // above by today.
@@ -346,11 +393,13 @@ export function EntryFormModal({
         ? (await repository.update(entry.id, target), entry.id)
         : await repository.create(target);
       await refresh();
+      if (session.current !== mine) return false;
       onSaved?.(id);
       onClose();
       return true;
     } catch (cause) {
       console.error(cause);
+      if (session.current !== mine) return false;
       // `permission-denied` here is a lockout, not a mistake in the draft —
       // #22 gave reads that distinction and #23 gives it to saves. Retrying
       // never clears it, which "保存できませんでした" reads as an invitation
@@ -365,7 +414,7 @@ export function EntryFormModal({
       ]);
       return false;
     } finally {
-      setSaving(false);
+      if (session.current === mine) setSaving(false);
     }
   };
 
@@ -480,8 +529,11 @@ export function EntryFormModal({
               source: draft.source,
             }))
           }
+          /* Returned, not `void`ed: the hook awaits it, and that is what keeps
+             this panel locked until the note is written rather than until the
+             reply arrives. */
           onReply={(raw) =>
-            void importJson(raw, 'save', {
+            importJson(raw, 'save', {
               original: draft.context.original,
               source: draft.source,
             })
@@ -513,7 +565,7 @@ export function EntryFormModal({
         <JsonImport
           value={json}
           onChange={setJson}
-          onDrafted={(raw) => void importJson(raw)}
+          onDrafted={(raw) => importJson(raw)}
           aiError={aiError}
           handedOff={handedOff}
           onBusyChange={trackDrafting}

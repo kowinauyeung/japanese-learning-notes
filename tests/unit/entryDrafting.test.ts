@@ -157,3 +157,56 @@ describe('geminiEntryDrafting', () => {
     }
   });
 });
+
+describe('geminiEntryDrafting — the Remote Config refresh it shares', () => {
+  it('starts a new refresh after one it gave up on, instead of waiting out the same deadline forever', async () => {
+    /*
+      `ensureInitialized` is an unbounded IndexedDB read, which is why `draft`
+      puts a deadline on it. The memo beside it was written when the only way out
+      of that promise was for it to settle, so giving up left it installed: every
+      later draft in the session awaited the same dead promise, paid the same
+      three seconds, and could never read a model name published after it.
+
+      The second `ensureInitialized` call is the assertion. A memo left in place
+      would never make one.
+    */
+    vi.useFakeTimers();
+    ensureInitialized.mockImplementationOnce(() => new Promise<void>(() => {}));
+    generateContent.mockResolvedValue({ response: { text: () => 'draft' } });
+    const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
+
+    const first = geminiEntryDrafting.draft('prompt');
+    await vi.advanceTimersByTimeAsync(GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS);
+    await expect(first).resolves.toBe('draft');
+    expect(ensureInitialized).toHaveBeenCalledTimes(1);
+
+    const second = geminiEntryDrafting.draft('prompt');
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(second).resolves.toBe('draft');
+    expect(ensureInitialized).toHaveBeenCalledTimes(2);
+
+    vi.useRealTimers();
+  });
+
+  it('still shares one refresh between drafts that overlap, which is what the memo is for', async () => {
+    // The other side of the same line: dropping the memo when a deadline passes
+    // must not turn it into no memo at all.
+    let settle!: () => void;
+    ensureInitialized.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    generateContent.mockResolvedValue({ response: { text: () => 'draft' } });
+    const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
+
+    const first = geminiEntryDrafting.draft('prompt');
+    const second = geminiEntryDrafting.draft('prompt');
+    settle();
+
+    await expect(first).resolves.toBe('draft');
+    await expect(second).resolves.toBe('draft');
+    expect(ensureInitialized).toHaveBeenCalledTimes(1);
+  });
+});

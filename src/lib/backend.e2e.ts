@@ -42,6 +42,8 @@ declare global {
     __GOITEI_E2E_RELEASE_SETTINGS_SAVE__?: () => void;
     /** Settles the oldest drafting request still held by `entryDraftingHangs`. */
     __GOITEI_E2E_RELEASE_DRAFT__?: () => void;
+    /** Settles an entry `create` held open by `entrySave: 'defer'`. */
+    __GOITEI_E2E_RELEASE_ENTRY_SAVE__?: () => void;
   }
 }
 
@@ -386,6 +388,27 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
       : Promise.resolve();
   };
 
+  /**
+   * The write itself, lifted out of `create` so the deferred path below stores
+   * exactly what the immediate one does rather than a second copy of it.
+   */
+  const commit = (draft: EntryDraft): string => {
+    const id = nextId();
+    const now = stamp();
+    store.set(id, {
+      ...draft,
+      id,
+      ownerUid: uid,
+      publishedId: null,
+      publishedVersion: 0,
+      copiedFrom: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    persist();
+    return id;
+  };
+
   return {
     async list({ limit, cursor }: PageQuery): Promise<Page<Entry>> {
       // Gates the export walk, not the initial notebook load: `Account.tsx`
@@ -414,20 +437,18 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
     create(draft: EntryDraft): Promise<string> {
       if (seed().entrySave === 'denied') return Promise.reject(deniedError());
       if (seed().entrySave === 'unreachable') return Promise.reject(unreachableError());
-      const id = nextId();
-      const now = stamp();
-      store.set(id, {
-        ...draft,
-        id,
-        ownerUid: uid,
-        publishedId: null,
-        publishedVersion: 0,
-        copiedFrom: null,
-        createdAt: now,
-        updatedAt: now,
-      });
-      persist();
-      return Promise.resolve(id);
+      // Held rather than rejected: the write is going to succeed, just not yet.
+      // It is the only way to have a save still out while the dialog that asked
+      // for it has been closed and another opened in its place.
+      if (seed().entrySave === 'defer') {
+        return new Promise<string>((resolve) => {
+          window.__GOITEI_E2E_RELEASE_ENTRY_SAVE__ = () => {
+            delete window.__GOITEI_E2E_RELEASE_ENTRY_SAVE__;
+            resolve(commit(draft));
+          };
+        });
+      }
+      return Promise.resolve(commit(draft));
     },
 
     update(id: string, draft: EntryDraft): Promise<void> {

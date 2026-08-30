@@ -68,30 +68,54 @@ export function useEntryDrafting(onBusyChange?: (busy: boolean, request: DraftRe
   const available = entryDraftingPort.available();
 
   /**
-   * Ask for one draft.
+   * Ask for one draft, and stay busy until what it produced has been dealt with.
    *
-   * Never rejects: both outcomes are handed to a callback instead, so a caller
+   * Never rejects: every outcome is handed to a callback instead, so a caller
    * can write `void draft(...)` without an unhandled rejection and without a
    * `catch` of its own that would have to re-derive the four reasons.
+   *
+   * **`onReply` is awaited, and the lock covers it.** On the quick tab that
+   * handler imports the reply *and writes the note*, so returning as soon as it
+   * was invoked ended the lock while `create` and `refresh` were still out — the
+   * fields and the drafting button came back over a form that was mid-save. The
+   * reachable version was pressing the button a second time, which is a second
+   * draft, a second save, and two entries for one word.
+   *
+   * The port call keeps a `try` of its own inside that. A rejection from
+   * `onReply` is a fault in the handler, not a refusal from the model, and
+   * running it through the four reasons would tell the reader to check their
+   * connection about a save that failed for some other reason entirely.
    */
   const draft = async (
     prompt: string,
-    handlers: { onReply: (raw: string) => void; onFailure: (reason: EntryDraftingFailure) => void },
+    handlers: {
+      onReply: (raw: string) => void | Promise<void>;
+      onFailure: (reason: EntryDraftingFailure) => void;
+    },
   ) => {
     const request: DraftRequest = {};
     setDrafting(true);
     onBusyChange?.(true, request);
     try {
-      const raw = await entryDraftingPort.draft(prompt);
-      if (!alive.current) return;
-      handlers.onReply(raw);
-    } catch (cause) {
-      // Anything that is not the port's own error is `failed` — the one reason
-      // of the four that invites a retry, which is the right default for a
-      // rejection nobody anticipated.
-      if (alive.current) {
-        handlers.onFailure(cause instanceof EntryDraftingError ? cause.reason : 'failed');
+      let raw: string;
+      try {
+        raw = await entryDraftingPort.draft(prompt);
+      } catch (cause) {
+        // Anything that is not the port's own error is `failed` — the one reason
+        // of the four that invites a retry, which is the right default for a
+        // rejection nobody anticipated.
+        if (alive.current) {
+          handlers.onFailure(cause instanceof EntryDraftingError ? cause.reason : 'failed');
+        }
+        return;
       }
+      if (!alive.current) return;
+      await handlers.onReply(raw);
+    } catch (cause) {
+      // Only reachable from `onReply`: the port's own rejection is caught above.
+      // Logged rather than reported, because the handler owns whatever message
+      // its own failure deserves and this has nothing to add to it.
+      console.error('Handling a drafting reply failed', cause);
     } finally {
       // In `finally` rather than after the call: an error path that leaves this
       // true is a button disabled for the rest of the session.

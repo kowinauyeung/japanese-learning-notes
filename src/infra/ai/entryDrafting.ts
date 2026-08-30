@@ -106,10 +106,23 @@ function applyRemoteConfigModelName(config: RemoteConfig): void {
   setConfiguredModelName(getValue(config, GEMINI_MODEL_NAME_CONFIG_KEY).asString());
 }
 
+/**
+ * One refresh at a time, and never one that cannot be abandoned.
+ *
+ * The memo exists so several drafts in a row share a single fetch. It was
+ * written when the only way out of this promise was for it to settle; the
+ * deadline in `draft` below changed that, and a caller that stops waiting for a
+ * refresh which never settles used to leave the memo installed for the life of
+ * the session — so every later draft paid the timeout again and no fresh
+ * attempt was ever made. The deadline drops it instead, and the identity check
+ * here is the other half: an abandoned attempt that finally settles must not
+ * clear the attempt that replaced it.
+ */
 function refreshConfiguredModelName(): Promise<void> {
   const config = ensureRemoteConfig();
   if (!config) return Promise.resolve();
-  remoteConfigFetch ??= (async () => {
+  if (remoteConfigFetch) return remoteConfigFetch;
+  const attempt: Promise<void> = (async () => {
     try {
       await ensureInitialized(config);
     } catch (error) {
@@ -131,9 +144,10 @@ function refreshConfiguredModelName(): Promise<void> {
       console.error('Gemini model Remote Config fetch failed', error);
     }
   })().finally(() => {
-    remoteConfigFetch = undefined;
+    if (remoteConfigFetch === attempt) remoteConfigFetch = undefined;
   });
-  return remoteConfigFetch;
+  remoteConfigFetch = attempt;
+  return attempt;
 }
 
 function ensureModel(): GenerativeModel | undefined {
@@ -240,10 +254,14 @@ export const geminiEntryDrafting: EntryDraftingPort = {
       is the whole reason it is a default, so a deadline here costs nothing but
       a stale model name.
     */
-    if (
-      (await within(refreshConfiguredModelName(), GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS)) ===
-      TIMED_OUT
-    ) {
+    const refreshing = refreshConfiguredModelName();
+    if ((await within(refreshing, GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS)) === TIMED_OUT) {
+      // Dropped here, because nothing else will: the memo is cleared when its
+      // own work settles, and the work this gave up on may never settle at all.
+      // Left installed it would make every later draft in the session wait out
+      // the same deadline for the same answer it already gave up on, and a model
+      // name published after this point could never be read.
+      if (remoteConfigFetch === refreshing) remoteConfigFetch = undefined;
       console.error('Gemini model Remote Config did not settle; using', configuredModelName);
     }
     const generative = ensureModel();

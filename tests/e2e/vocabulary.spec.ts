@@ -606,6 +606,54 @@ test.describe('adding a word', () => {
   });
 
   /**
+   * A save that outlived its dialog does not close the one that replaced it.
+   *
+   * Closing does not cancel a `create` that has already gone, and the close
+   * button stays live while a request is out on purpose. So the write finishes
+   * against a dialog that is no longer there — and its completion used to call
+   * `onSaved` and `onClose` regardless, closing whatever was open by then and
+   * navigating away from wherever the reader had got to.
+   *
+   * The note itself is still written, and that is deliberate: it was asked for.
+   * What belongs to the run that asked is the reaction, not the write.
+   */
+  test('does not close a reopened dialog when the save from the closed one lands', async ({
+    page,
+  }) => {
+    await seed(page, { signedIn: true, entries: WORDS, entrySave: 'defer' });
+
+    await page.goto('/vocabulary');
+    const dialog = addDialog(page);
+
+    await page.getByRole('button', { name: '＋追加' }).click();
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+    // The drafting is done and the write is what is outstanding now.
+    await expect(dialog.getByRole('button', { name: '作成中…' })).toBeVisible();
+    await dialog.getByRole('button', { name: '閉じる' }).click();
+    await expect(dialog).toBeHidden();
+
+    // A second dialog, which knows nothing about the write still in flight.
+    await page.getByRole('button', { name: '＋追加' }).click();
+    await dialog.getByLabel('見出し語').fill('清高');
+
+    await page.evaluate(async () => {
+      (
+        window as unknown as { __GOITEI_E2E_RELEASE_ENTRY_SAVE__?: () => void }
+      ).__GOITEI_E2E_RELEASE_ENTRY_SAVE__?.();
+      // Settled here rather than by asserting straight after: the write's own
+      // continuation and React's commit both run after `evaluate` returns, so an
+      // assertion made outside could pass before the closing it is looking for
+      // had a chance to happen.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('見出し語')).toHaveValue('清高');
+    await expect(page).toHaveURL(/\/vocabulary$/);
+  });
+
+  /**
    * A request that outlived its dialog does not unlock the one that replaced it.
    *
    * The close button stays live while a draft is out, on purpose, as the way out
@@ -643,11 +691,24 @@ test.describe('adding a word', () => {
     await expect(save).toBeDisabled();
 
     // The abandoned one answers. It must change nothing here.
-    await page.evaluate(() =>
+    await page.evaluate(async () => {
       (
         window as unknown as { __GOITEI_E2E_RELEASE_DRAFT__?: () => void }
-      ).__GOITEI_E2E_RELEASE_DRAFT__?.(),
-    );
+      ).__GOITEI_E2E_RELEASE_DRAFT__?.();
+      /*
+        Settled inside the evaluate, and this is the assertion's whole footing.
+
+        Resolving the held promise only queues the reply's continuation; the
+        hook's `finally`, the caller's setter and React's commit all run after
+        `evaluate` returns. `toBeDisabled` passes on its first poll, so asserted
+        outside it can pass simply by arriving before the unlock it is looking
+        for — green whether or not the guard exists.
+
+        Two frames rather than a timeout: the first lets the microtask queue
+        drain and React schedule, the second lets it paint what it scheduled.
+      */
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
     await expect(save).toBeDisabled();
   });
 

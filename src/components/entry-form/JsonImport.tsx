@@ -75,7 +75,7 @@ export function JsonImport({
    * `jsonToDraft` a pasted one goes through. Not `onChange`, because filling
    * the box and importing it are two things and this button does both.
    */
-  onDrafted: (raw: string) => void;
+  onDrafted: (raw: string) => void | Promise<void>;
   /**
    * Why the last drafting request failed, or null.
    *
@@ -252,14 +252,17 @@ export function JsonImport({
       return;
     }
     read
-      .then((text) => {
+      .then(async (text) => {
         if (!alive.current) return;
         // An empty clipboard is not a failure of the button and must not be
         // reported as one; it would also wipe a box the reader had already
         // filled by hand.
         if (!text.trim()) return setPasteFailed(true);
         onChange((prev) => ({ ...prev, raw: text }));
-        onDrafted(text);
+        // Awaited, so `finally` below releases the button once the paste has
+        // been *imported* rather than once it has been handed over. Same reason
+        // the drafting hook awaits its own handler.
+        await onDrafted(text);
       })
       .catch(() => {
         if (alive.current) setPasteFailed(true);

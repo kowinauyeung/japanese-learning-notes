@@ -64,8 +64,13 @@ export function SimpleForm({
    * started it — see `useEntryDrafting`.
    */
   onBusyChange: (busy: boolean, request: DraftRequest) => void;
-  /** The model's reply, verbatim. Parsed by the modal, never here. */
-  onReply: (raw: string) => void;
+  /**
+   * The model's reply, verbatim. Parsed by the modal, never here.
+   *
+   * Awaited by the hook, so a handler that saves keeps this panel locked until
+   * the note is written — see `useEntryDrafting`.
+   */
+  onReply: (raw: string) => void | Promise<void>;
   onFailure: (reason: EntryDraftingFailure) => void;
 }) {
   const { t } = useI18n();

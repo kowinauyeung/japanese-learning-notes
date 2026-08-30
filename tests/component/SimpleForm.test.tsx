@@ -29,7 +29,7 @@ function Harness({
 }: {
   initial?: Partial<EntryDraft>;
   language?: string;
-  onReply?: (raw: string) => void;
+  onReply?: (raw: string) => void | Promise<void>;
   onFailure?: (reason: string) => void;
   onBusyChange?: (busy: boolean) => void;
 }) {
@@ -145,47 +145,45 @@ describe('SimpleForm — while the request is out', () => {
     render(<Harness initial={{ headword: '兆候' }} onBusyChange={onBusyChange} />);
 
     fireEvent.click(drawButton());
+    // Without this call the modal never learns a request is out, so its footer's
+    // 保存する stays pressable over a form this panel has already frozen — and
+    // pressing it writes the note as it was a moment before the model answered.
     expect(onBusyChange).toHaveBeenCalledWith(true, expect.anything());
 
+    // Without the second, that button never comes back: the reader is left with
+    // a dialog they can only close.
     await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false, expect.anything()));
   });
 
   /**
-   * The unlock names the request that took the lock, and two requests never
-   * share a name.
+   * The lock ends when the reply has been dealt with, not when it arrives.
    *
-   * This is what stops a request outliving its own session from unlocking the
-   * next one. The dialog's close button stays live while a request is out — on
-   * purpose, as the way out of one that hangs — so a reader can close, reopen
-   * and press again, and the first reply then arrives with the second still in
-   * flight. Unlocking on the reply alone brought the save back over a form that
-   * reply was about to overwrite. The modal compares these two values; this is
-   * the half that makes the comparison mean anything.
+   * On this tab the handler imports the reply *and writes the note*, so a lock
+   * that ended on invocation left the fields and the drafting button live while
+   * `create` and `refresh` were still out. The reachable version was pressing
+   * the button again — a second draft, a second save, and two entries for one
+   * word.
    */
-  it('gives each request its own name, so a stale one cannot unlock a later session', async () => {
-    const onBusyChange = vi.fn();
-    seedDrafting('failed');
-    const first = render(<Harness initial={{ headword: '兆候' }} onBusyChange={onBusyChange} />);
+  it('stays locked while the reply is being saved, not only while it is awaited', async () => {
+    let finish!: () => void;
+    const onReply = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(<Harness initial={{ headword: '兆候' }} onReply={onReply} />);
 
     fireEvent.click(drawButton());
-    await waitFor(() => expect(onBusyChange).toHaveBeenCalledTimes(2));
-    first.unmount();
+    await waitFor(() => expect(onReply).toHaveBeenCalledTimes(1));
 
-    render(<Harness initial={{ headword: '古い' }} onBusyChange={onBusyChange} />);
-    fireEvent.click(drawButton());
-    await waitFor(() => expect(onBusyChange).toHaveBeenCalledTimes(4));
+    // By its busy label, because that is what it reads while the lock holds —
+    // and a label that had already gone back would be the defect itself.
+    expect(screen.getByRole('button', { name: ja('import.generating') })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: /見出し語/ })).toBeDisabled();
 
-    const [[, lockA], [, unlockA], [, lockB], [, unlockB]] = onBusyChange.mock.calls as [
-      [boolean, object],
-      [boolean, object],
-      [boolean, object],
-      [boolean, object],
-    ];
-    // Each request answers for itself…
-    expect(unlockA).toBe(lockA);
-    expect(unlockB).toBe(lockB);
-    // …and never for the other, across a remount as well as within one.
-    expect(lockB).not.toBe(lockA);
+    finish();
+    await waitFor(() => expect(drawButton()).toBeEnabled());
   });
 
   /**
