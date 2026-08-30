@@ -129,7 +129,7 @@ export function createEntryRepository(db: Firestore, uid: string): EntryReposito
 
     async remove(id: string): Promise<void> {
       const ref = doc(db, 'users', uid, 'entries', id);
-      await writes.write(ref, () => deleteDoc(ref));
+      await writes.write(ref, () => deleteDoc(ref), { missingIsSaved: true });
     },
 
     async settlePendingWrites(): Promise<void> {
