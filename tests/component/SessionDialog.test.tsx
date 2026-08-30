@@ -88,6 +88,9 @@ describe('SessionDialog — a session recorded before the run was kept', () => {
     );
 
     const link = screen.getByRole('link', { name: /切り分け/ });
+    // The row is how a learner gets from a drill they got wrong back to the
+    // note itself. A wrong or missing target here leaves the word readable and
+    // unreachable — the history renders, and nothing in it opens.
     expect(link).toHaveAttribute('href', '/vocabulary/w1');
     expect(within(link).getByText('N2')).toBeInTheDocument();
   });
