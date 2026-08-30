@@ -1,8 +1,9 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { useState } from 'react';
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { StrictMode, useState, type ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SimpleForm } from '@/components/entry-form/SimpleForm';
 import type { EntryDraft } from '@/domain/entry';
+import { I18nProvider } from '@/i18n/I18nProvider';
 import { messages } from '@/i18n/messages';
 import { emptyDraft } from '@/lib/draft';
 import { renderWithI18n as render } from '../fixtures/renderWithI18n';
@@ -49,6 +50,29 @@ function Harness({
 }
 
 const drawButton = () => screen.getByRole('button', { name: ja('import.draftAndSave') });
+
+/**
+ * Mount under `<StrictMode>` the way `main.tsx` does, and *not* through
+ * `renderWithI18n`.
+ *
+ * The wrapper is the reason. Measured, after the first version of these two
+ * tests passed against the very defect they were written for: with any element
+ * outside it — `renderWithI18n` passes `wrapper`, which puts one there —
+ * `<StrictMode>` does not double-invoke at all, and the effect sequence is a
+ * single setup. A guard written against the double mount then passes
+ * vacuously, which is worse than not having it.
+ *
+ * Outermost it double-invokes, including for a component that mounts in a later
+ * update rather than on the first paint — also measured, because that is how
+ * the dialog mounts and the guard would have been vacuous again otherwise.
+ */
+function renderStrict(ui: ReactElement) {
+  return rtlRender(
+    <StrictMode>
+      <I18nProvider locale="ja">{ui}</I18nProvider>
+    </StrictMode>,
+  );
+}
 
 describe('SimpleForm — what arms the drafting button', () => {
   it('refuses to ask about nothing, which would send the model 「（単語）」 to define', () => {
@@ -183,6 +207,44 @@ describe('SimpleForm — while the request is out', () => {
     unmount();
 
     await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false, expect.anything()));
+  });
+});
+
+describe('SimpleForm — under StrictMode, which is how the app actually runs in development', () => {
+  /**
+   * The reply still arrives after React has mounted the panel twice.
+   *
+   * `main.tsx` wraps the app in `<StrictMode>`, which in development mounts,
+   * runs effects, runs their cleanups and runs them again. The unmount guard
+   * was a cleanup with no setup, so it ended that sequence permanently false —
+   * and every reply was then dropped with no import, no save, no message, and a
+   * button stuck on 作成中, because the flag that clears it is behind the same
+   * guard.
+   *
+   * Reported from a real session as "the API answered and the UI did not add
+   * it", which is what a dropped reply looks like from outside. Production does
+   * not double-invoke, so the only build this ever broke is the one the feature
+   * is written in.
+   */
+  it('does not drop the reply after the double mount development runs under', async () => {
+    const onReply = vi.fn();
+    renderStrict(<Harness initial={{ headword: '兆候' }} onReply={onReply} />);
+
+    fireEvent.click(drawButton());
+
+    await waitFor(() => expect(onReply).toHaveBeenCalledTimes(1));
+  });
+
+  it('reports a refusal after the double mount too, rather than failing silently', async () => {
+    // The other half of the same guard, and the reason the failure presented as
+    // "no error" rather than as an error nobody could act on.
+    const onFailure = vi.fn();
+    seedDrafting('quota');
+    renderStrict(<Harness initial={{ headword: '兆候' }} onFailure={onFailure} />);
+
+    fireEvent.click(drawButton());
+
+    await waitFor(() => expect(onFailure).toHaveBeenCalledWith('quota'));
   });
 });
 

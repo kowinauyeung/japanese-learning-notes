@@ -125,12 +125,15 @@ export function JsonImport({
    * to a session that did not ask for it.
    */
   const alive = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // See `useEntryDrafting` for why the setup half is load-bearing: without it
+    // `<StrictMode>` leaves this false from the first mount, and the clipboard
+    // button silently drops every paste in development.
+    alive.current = true;
+    return () => {
       alive.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
 
   /**
    * One import at a time.

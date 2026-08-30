@@ -36,12 +36,27 @@ export function useEntryDrafting(onBusyChange?: (busy: boolean, request: DraftRe
   const [drafting, setDrafting] = useState(false);
 
   const alive = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Set on the way in as well as cleared on the way out, and the setup half is
+    // not ceremony.
+    //
+    // `<StrictMode>` — which `main.tsx` wraps the whole app in — mounts, runs
+    // effects, runs their cleanups and runs them again, in development only. A
+    // cleanup-only effect therefore ends its *first* mount with this false and
+    // nothing anywhere to put it back, so every reply is dropped for the life of
+    // the session: nothing imported, nothing saved, no message, and a button
+    // that never leaves 作成中 because the flag that clears it is behind the same
+    // guard. Three symptoms, one cause, and it reads exactly like a request that
+    // never came back.
+    //
+    // Production does not double-invoke, so this was invisible outside `yarn dev`
+    // — which is where the feature is developed, and where it had never once
+    // worked.
+    alive.current = true;
+    return () => {
       alive.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
 
   /*
     Asked at render rather than stored: `available()` is a synchronous read of
