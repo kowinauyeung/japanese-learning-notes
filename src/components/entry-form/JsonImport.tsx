@@ -80,13 +80,13 @@ export function JsonImport({
    * Why the last drafting request failed, or null.
    *
    * Held by the modal rather than here because this panel is not the only place
-   * that can produce one: the 簡易 tab drafts too, and when its request fails
+   * that can produce one: the 簡単 tab drafts too, and when its request fails
    * the reader is handed to this tab to finish by hand. A reason kept locally
    * would be a reason that vanished on the way over.
    */
   aiError: EntryDraftingFailure | null;
   /**
-   * Whether the reader arrived here from a failed draft on 簡易 rather than by
+   * Whether the reader arrived here from a failed draft on 簡単 rather than by
    * choosing the tab.
    *
    * Worth a sentence of its own, because being moved between tabs is the part
@@ -117,7 +117,7 @@ export function JsonImport({
    * reopening it used to fill the fresh form with the previous word.
    *
    * The drafting request needs the same guard and no longer takes it from here:
-   * `useEntryDrafting` keeps its own, which is what let the 簡易 tab have one
+   * `useEntryDrafting` keeps its own, which is what let the 簡単 tab have one
    * without a second copy of this reasoning.
    *
    * Read after every await. The stale closure reads the *old* instance's ref,

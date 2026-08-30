@@ -1,3 +1,4 @@
+import { SparkleIcon } from '@/components/icons';
 import type { EntryDraft } from '@/domain/entry';
 import { ENTRY_LIMITS, INPUT_LIMITS } from '@/domain/limits';
 import type { EntryDraftingFailure } from '@/domain/ports';
@@ -83,10 +84,16 @@ export function SimpleForm({
 
   const ask = () => {
     onAsk();
-    void askForDraft(buildPrompt(draft.headword.trim(), language, { source: draft.source }), {
-      onReply,
-      onFailure,
-    });
+    void askForDraft(
+      buildPrompt(draft.headword.trim(), language, {
+        original: draft.context.original,
+        source: draft.source,
+      }),
+      {
+        onReply,
+        onFailure,
+      },
+    );
   };
 
   /*
@@ -111,6 +118,27 @@ export function SimpleForm({
           disabled={drafting}
         />
       </Field>
+      {/* Above 出典 because it is the field that changes what comes back:
+          `buildPrompt` only asks for the context analysis when there is a
+          sentence to analyse, and orders the senses by it. 出典 is copied
+          through. Kept for the manual route too — `jsonToDraft` writes it into
+          `context.original` either way, and a note is worth more with the
+          sentence it was met in than without. */}
+      <Field label={t('import.sentence')} hint={t('form.optional')}>
+        <Area
+          value={draft.context.original}
+          onChange={(v) => set('context', { ...draft.context, original: v })}
+          maxLength={ENTRY_LIMITS.context}
+          rows={2}
+          disabled={drafting}
+          placeholder="あやしい兆候ではあるのだろうけれど"
+        />
+      </Field>
+      {/* Only where the model can be reached: it is a statement about what the
+          sentence buys from the draft, and the field is still worth filling
+          without one — it just says nothing new then. */}
+      {available && <p className="text-[11px] text-muted">{t('import.contextHint')}</p>}
+
       <Field label={t('form.source')} hint={t('form.optional')}>
         <Text
           value={draft.source}
@@ -140,8 +168,12 @@ export function SimpleForm({
             type="button"
             onClick={ask}
             disabled={drafting || !canAsk}
-            className="min-h-10 w-full rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-pill bg-accent text-sm font-semibold text-on-accent disabled:opacity-50"
           >
+            {/* No hidden word beside it here, unlike the tab: the label below
+                already says AI in every locale, so a second one would be read
+                twice. */}
+            <SparkleIcon />
             {drafting ? t('import.generating') : t('import.draftAndSave')}
           </button>
           {/* The only place this warning appears on this route. Pressing the

@@ -47,7 +47,7 @@ const ja = (key: keyof (typeof messages)['ja']) => messages.ja[key];
 
 /**
  * Stands in for `EntryFormModal`, which owns the failure reason because the
- * 簡易 tab can produce one too. `handedOff` is false throughout this file: it
+ * 簡単 tab can produce one too. `handedOff` is false throughout this file: it
  * is the flag for a reader moved here by a failure on the other tab, and every
  * case below presses a button on this one.
  */

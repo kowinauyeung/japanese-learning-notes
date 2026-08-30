@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { SparkleIcon } from '@/components/icons';
 import { Modal } from '@/components/Modal';
 import type { Entry, EntryDraft } from '@/domain/entry';
 import type { EntryDraftingFailure } from '@/domain/ports';
 import type { TranslationLanguage } from '@/domain/user';
 import { useI18n } from '@/i18n/context';
 import { localizeFormError } from '@/i18n/localizeFormError';
+import { entryDraftingPort } from '@/lib/backend';
 import { dateKey } from '@/lib/dates';
 import { draftError, emptyDraft, toDraft } from '@/lib/draft';
 import { useEntries } from '@/lib/entries';
@@ -23,7 +25,7 @@ type Tab = 'simple' | 'full' | 'json';
  *
  * `'form'` fills the form and leaves the reader in front of it — the JSON tab's
  * two buttons, where filling the form is the whole point of the tab. `'save'`
- * is the 簡易 tab's one button, which writes the note and leaves; the reader
+ * is the 簡単 tab's one button, which writes the note and leaves; the reader
  * reviews it on its detail page rather than in a twenty-field form they did not
  * ask to be in.
  *
@@ -54,6 +56,17 @@ export function EntryFormModal({
 }) {
   const { refresh, repository } = useEntries();
   const { t } = useI18n();
+  /*
+    Read here as well as in the panels, rather than passed down from one of them.
+
+    It is a synchronous read of whether the SDK initialised, so there is nothing
+    to share and no order to get wrong. What it must not do is disagree with the
+    panel: `SimpleForm` drops its whole drafting group when the answer is false,
+    and a mark left on the tab would then advertise a control that is not behind
+    it. A permanent failure flips this mid-session, which is exactly when the two
+    have to move together.
+  */
+  const canDraft = entryDraftingPort.available();
   const tabs: { id: Tab; label: string }[] = [
     { id: 'simple', label: t('form.simple') },
     { id: 'full', label: t('form.full') },
@@ -99,7 +112,7 @@ export function EntryFormModal({
    * AI-written than fetching it from this one, so the flag cannot depend on
    * which button was pressed.
    *
-   * The 簡易 tab sets it and never shows it: that route saves and leaves, so
+   * The 簡単 tab sets it and never shows it: that route saves and leaves, so
    * there is no filled form to render the warning beside. Its warning is under
    * the button instead, which is the last screen the reader is on. This stays
    * true for that route rather than being special-cased, because a note whose
@@ -112,7 +125,7 @@ export function EntryFormModal({
    * reader is no longer looking at.
    *
    * Both live here rather than in `JsonImport` because either tab can produce
-   * the failure and only one of them can explain it: the 簡易 tab's button has
+   * the failure and only one of them can explain it: the 簡単 tab's button has
    * no room for the manual route underneath it, so a failure there moves the
    * reader to the JSON tab, which has. State held in the panel would be state
    * that unmounted on the way over.
@@ -216,7 +229,7 @@ export function EntryFormModal({
    * drift away from.
    *
    * `context` defaults to the ref rather than to `json` for the reason the ref
-   * documents, and is passed explicitly by the 簡易 tab, whose 出典 is a field
+   * documents, and is passed explicitly by the 簡単 tab, whose 出典 is a field
    * on the draft and has never been in `json` at all.
    */
   const importJson = async (
@@ -226,7 +239,7 @@ export function EntryFormModal({
   ) => {
     // Set here rather than only on the drafting buttons, because every route
     // into this function is an assistant's reply — the JSON panel is labelled
-    // 「AIが返したJSONを貼り付け」 and the 簡易 button says it drafts with AI.
+    // 「AIが返したJSONを貼り付け」 and the 簡単 button says it drafts with AI.
     // Pasting one from a chatbot in another tab is no less AI-written than
     // fetching it from this one, so the warning cannot depend on which button
     // was pressed.
@@ -429,6 +442,18 @@ export function EntryFormModal({
                 tab === item.id ? 'bg-card text-ink shadow-panel' : 'text-muted'
               }`}
             >
+              {/* The mark, and the word it stands for.
+                  「簡単」 says what the form is, not that a model will fill it,
+                  so without something here the one press this dialog exists for
+                  is only discoverable by opening the tab. The icon is
+                  `aria-hidden`; the span beside it is why that is allowed to be
+                  — see `SparkleIcon`. */}
+              {item.id === 'simple' && canDraft && (
+                <>
+                  <SparkleIcon className="mr-1 inline-block h-3 w-3 align-[-0.1em]" />
+                  <span className="sr-only">{t('form.aiBadge')} </span>
+                </>
+              )}
               {item.label}
             </button>
           ))}
@@ -451,10 +476,16 @@ export function EntryFormModal({
             setJson((prev) => ({
               ...prev,
               word: draft.headword.trim(),
+              original: draft.context.original,
               source: draft.source,
             }))
           }
-          onReply={(raw) => void importJson(raw, 'save', { source: draft.source })}
+          onReply={(raw) =>
+            void importJson(raw, 'save', {
+              original: draft.context.original,
+              source: draft.source,
+            })
+          }
           onFailure={(reason) => {
             setAiError(reason);
             setHandedOff(true);

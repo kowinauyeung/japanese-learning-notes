@@ -5,7 +5,7 @@ import { entryDraftingPort } from '@/lib/backend';
 /**
  * One request to the drafting port, with the guards that request needs.
  *
- * Extracted from `JsonImport` when a second caller appeared — the 簡易 tab's
+ * Extracted from `JsonImport` when a second caller appeared — the 簡単 tab's
  * 「AIで作成して保存」. None of what it holds is boilerplate: the unmount guard,
  * the `finally` that clears `drafting`, and the classification of a rejection
  * into one of four reasons are each a defect that was fixed once, and a second
@@ -15,7 +15,7 @@ import { entryDraftingPort } from '@/lib/backend';
  * arrives after its caller is gone must be dropped, not applied: `EntryFormModal`
  * stays mounted when it is closed — `AppLayout` renders it unconditionally and
  * only `Modal` returns null — so a reply resolving after a close would otherwise
- * write into the state the *next* opening is about to reset, and in the 簡易
+ * write into the state the *next* opening is about to reset, and in the 簡単
  * tab's case would create an entry for a dialog the user had dismissed.
  *
  * That makes the mounting position load-bearing. Call this from a component

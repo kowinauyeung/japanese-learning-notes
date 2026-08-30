@@ -355,7 +355,7 @@ test.describe('adding a word', () => {
   });
 
   /**
-   * The 簡易 button saves; it does not fill a form and stop.
+   * The 簡単 button saves; it does not fill a form and stop.
    *
    * Here and not in tests/component because the claim is the span nothing
    * smaller can see: the reply crosses the port, goes through `jsonToDraft`,
@@ -395,7 +395,7 @@ test.describe('adding a word', () => {
   /**
    * A draft that never came back leaves the reader somewhere they can finish.
    *
-   * The 簡易 button has no room under it for the manual route, so a failure
+   * The 簡単 button has no room under it for the manual route, so a failure
    * there moves the reader to the tab that has one — and the word has to make
    * the trip, or the first thing they do on arrival is type it again. Both
    * halves are asserted: the reason the model gave, and the sentence that says
@@ -420,6 +420,79 @@ test.describe('adding a word', () => {
     await expect(dialog.getByRole('textbox', { name: '出典' })).toHaveValue('会議');
     await expect(dialog.getByText(/本日のAI利用回数の上限に達しました/)).toBeVisible();
     await expect(dialog.getByText(/入力した内容はこちらに引き継いでいます/)).toBeVisible();
+  });
+
+  /**
+   * The mark on the quick tab is not the only thing that says AI.
+   *
+   * 「簡単」 describes the form, not that a model will fill it, so the mark is
+   * the whole of the signal — and it is an `aria-hidden` drawing, which is
+   * nothing a screen reader can be asked to interpret. Without the word beside
+   * it, the one press this dialog exists for is discoverable only by opening
+   * the tab and looking.
+   */
+  test('says AI on the quick tab in words, not only in a drawing', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    await expect(addDialog(page).getByRole('button', { name: 'AI 簡単' })).toBeVisible();
+  });
+
+  /**
+   * The mark goes when the thing it promises does.
+   *
+   * `unavailable` is permanent for this reader — a retired model, a project
+   * with the API off, a country it is not offered in — so the port stops
+   * reporting itself available and `SimpleForm` drops its whole drafting group.
+   * A mark left on the tab would then advertise a control that is no longer
+   * behind it, which is worse than never having offered one.
+   */
+  test('drops the mark once drafting has failed for good', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, entryDrafting: 'unavailable' });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+
+    // The reason is on screen, so this is the state after the failure and not
+    // before it.
+    await expect(dialog.getByText(/ここではAI作成を利用できません/)).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '簡単', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'AI 簡単' })).toBeHidden();
+  });
+
+  /**
+   * The sentence the word was met in reaches the note the one press writes.
+   *
+   * It is the one optional field on the quick tab that changes what comes back:
+   * `buildPrompt` asks for the context analysis only when there is a sentence
+   * to analyse, and orders the senses by it. `jsonToDraft` then writes it into
+   * `context.original` whatever the model said, so the reader's own words are
+   * what is stored rather than the model's copy of them.
+   *
+   * The seeded reply leaves `context` out entirely, which is what makes this an
+   * assertion about the threading rather than about the model repeating itself.
+   */
+  test('carries the sentence into the note a one-press draft saves', async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS,
+      entryDraftingReply: JSON.stringify({ headword: '兆候', definition: 'きざし。' }),
+    });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByLabel('出会った文').fill('あやしい兆候ではあるのだろうけれど');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+
+    await expect(page.getByText('この文での使われ方')).toBeVisible();
+    await expect(page.getByText('あやしい兆候ではあるのだろうけれど')).toBeVisible();
   });
 
   /**
@@ -645,7 +718,7 @@ test.describe('adding a word', () => {
     await page.goto('/vocabulary');
     await page.getByRole('button', { name: '＋追加' }).click();
 
-    // On 詳細, because 簡易 no longer carries タグ: everything the drafting
+    // On 詳細, because 簡単 no longer carries タグ: everything the drafting
     // button fills better than a person typing at capture time came off that
     // tab, and the validation is the form's rather than any one tab's.
     const dialog = addDialog(page);
