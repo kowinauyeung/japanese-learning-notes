@@ -90,14 +90,21 @@ export function parseAppCheckDebugTokenArgs(
       errors.push(`unknown argument: ${arg}`);
       continue;
     }
+    // Named by position, never by value. A debug token is a credential, and
+    // the success path already refuses to print one; echoing a rejected one
+    // undoes that for the case most likely to be a real token — a duplicate is
+    // valid by definition, and a UUID that picked up trailing punctuation is
+    // almost all of one. The position is what the operator needs anyway.
     if (!TOKEN_PATTERN.test(arg)) {
-      errors.push(`not a debug token: ${arg} — expected the UUID \`yarn dev\` prints`);
+      errors.push(
+        `not a debug token at argument ${index + 1} — expected the UUID \`yarn dev\` prints`,
+      );
       rejected += 1;
       continue;
     }
     const normalized = arg.toLowerCase();
     if (tokens.includes(normalized)) {
-      errors.push(`duplicate debug token: ${normalized}`);
+      errors.push(`duplicate debug token at argument ${index + 1}`);
       continue;
     }
     tokens.push(normalized);

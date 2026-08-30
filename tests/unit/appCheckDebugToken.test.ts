@@ -11,7 +11,7 @@ describe('app-check-debug-token helpers', () => {
     const parsed = parseAppCheckDebugTokenArgs(['5e05991b-01cf-446b-aa33'], 'MacBookPro');
     expect(parsed.ok).toBe(false);
     expect(parsed.ok === false && parsed.errors).toEqual([
-      'not a debug token: 5e05991b-01cf-446b-aa33 — expected the UUID `yarn dev` prints',
+      'not a debug token at argument 1 — expected the UUID `yarn dev` prints',
     ]);
   });
 
@@ -20,7 +20,7 @@ describe('app-check-debug-token helpers', () => {
     // produces and `debugTokens.create` will not store.
     const parsed = parseAppCheckDebugTokenArgs(['5e05991b-01cf-11ee-aa33-c71a2359a27d'], 'host');
     expect(parsed.ok === false && parsed.errors).toEqual([
-      'not a debug token: 5e05991b-01cf-11ee-aa33-c71a2359a27d — expected the UUID `yarn dev` prints',
+      'not a debug token at argument 1 — expected the UUID `yarn dev` prints',
     ]);
   });
 
@@ -97,9 +97,16 @@ describe('app-check-debug-token helpers', () => {
       ['5E05991B-01CF-446B-AA33-C71A2359A27D', '5e05991b-01cf-446b-aa33-c71a2359a27d'],
       'host',
     );
-    expect(parsed.ok === false && parsed.errors).toEqual([
-      'duplicate debug token: 5e05991b-01cf-446b-aa33-c71a2359a27d',
-    ]);
+    expect(parsed.ok === false && parsed.errors).toEqual(['duplicate debug token at argument 2']);
+  });
+
+  it('parseAppCheckDebugTokenArgs names the argument position rather than echoing a rejected token, which is a credential the success path already refuses to print', () => {
+    const almost = '5e05991b-01cf-446b-aa33-c71a2359a27d,';
+    const parsed = parseAppCheckDebugTokenArgs([almost], 'host');
+    expect(parsed.ok).toBe(false);
+    // The whole token bar the stray comma: rejecting it must not be the thing
+    // that writes it into a shell scrollback or a CI log.
+    expect(parsed.ok === false && parsed.errors.join(' ')).not.toContain(almost.slice(0, -1));
   });
 
   it('readAppIdFromEnvFile reads VITE_FIREBASE_APP_ID past a commented-out line rather than registering against the example value', () => {
