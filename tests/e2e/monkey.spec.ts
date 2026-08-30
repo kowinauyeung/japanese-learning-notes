@@ -160,30 +160,49 @@ async function available(locator: Locator): Promise<AvailableElement[]> {
   );
 }
 
+/**
+ * Bounded, because `Locator.evaluate` resolves its locator by waiting for the
+ * element to be attached rather than by reporting that it is gone — and this
+ * project sets no action timeout, so the wait is the *test's*. A stale index
+ * would therefore hang the run instead of being skipped, which is the failure
+ * the visibility guards in `chooseAction` exist to replace. A second is orders
+ * of magnitude more than reading a label off an attached element takes.
+ */
+const LABEL_TIMEOUT_MS = 1_000;
+
 async function labelOf(locator: Locator): Promise<string> {
-  return locator.evaluate((element) => {
-    const html = element as HTMLElement;
-    const labelled =
-      html.getAttribute('aria-label') ||
-      ('labels' in html ? ((html as HTMLInputElement).labels?.[0]?.textContent ?? '') : '') ||
-      html.textContent ||
-      html.getAttribute('placeholder') ||
-      html.tagName.toLowerCase();
-    return labelled.trim().replace(/\s+/g, ' ').slice(0, 80);
-  });
+  return locator.evaluate(
+    (element) => {
+      const html = element as HTMLElement;
+      const labelled =
+        html.getAttribute('aria-label') ||
+        ('labels' in html ? ((html as HTMLInputElement).labels?.[0]?.textContent ?? '') : '') ||
+        html.textContent ||
+        html.getAttribute('placeholder') ||
+        html.tagName.toLowerCase();
+      return labelled.trim().replace(/\s+/g, ' ').slice(0, 80);
+    },
+    undefined,
+    { timeout: LABEL_TIMEOUT_MS },
+  );
 }
 
 async function safeButtonElements(buttons: Locator): Promise<AvailableElement[]> {
   const elements = await available(buttons);
   const resolved = await Promise.all(
     elements.map(async (element) => {
-      const label = await labelOf(buttons.nth(element.index)).catch(() => '');
+      // `null`, not `''`: this label is a safety filter — it is the only thing
+      // keeping the monkey off ログアウト and アカウントを削除 — so a label that
+      // could not be read must drop its element rather than fall through the
+      // test below as an empty string, which matches nothing and is kept.
+      const label = await labelOf(buttons.nth(element.index)).catch(() => null);
       return { element, label };
     }),
   );
   return resolved
     .filter(
       ({ label }) =>
+        label !== null &&
         !/ログアウト|アカウントを削除|データを削除|書き出す|単語を聞く|音声/.test(label),
     )
     .map(({ element }) => element);
