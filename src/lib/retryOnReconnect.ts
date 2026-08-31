@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useOnline } from '@/lib/useOnline';
 
 /**
@@ -35,7 +35,7 @@ export function useRetryOnReconnect(
 ): void {
   const online = useOnline();
   const reconnectPending = useRef(!online);
-  const retrying = useRef(false);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     if (!online) {
@@ -43,7 +43,7 @@ export function useRetryOnReconnect(
       return;
     }
 
-    if (!reconnectPending.current) return;
+    if (!reconnectPending.current || retrying) return;
 
     // A read that began offline can reject after the online event. Keep that
     // reconnect available until that read either succeeds or publishes a
@@ -55,9 +55,7 @@ export function useRetryOnReconnect(
     if (!failed) return;
 
     reconnectPending.current = false;
-    if (retrying.current) return;
-
-    retrying.current = true;
+    setRetrying(true);
     // `retry` is always a provider's `refresh`, which already catches its
     // own failure into the caller's error state and never rejects — the
     // `catch` here guards the hook's public contract, typed to accept a
@@ -65,7 +63,7 @@ export function useRetryOnReconnect(
     void Promise.resolve(retry())
       .catch(() => undefined)
       .finally(() => {
-        retrying.current = false;
+        setRetrying(false);
       });
-  }, [online, failed, loadSucceeded, retry]);
+  }, [online, failed, loadSucceeded, retry, retrying]);
 }

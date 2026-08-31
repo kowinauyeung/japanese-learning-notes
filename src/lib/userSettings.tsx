@@ -51,7 +51,7 @@ function UserSettingsState({
   const [storedProfile, setStoredProfile] = useState(defaults);
   const [previewDraft, setPreviewDraft] = useState<UserProfileDraft | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadSucceeded, setLoadSucceeded] = useState(false);
+  const [successfulLoadFor, setSuccessfulLoadFor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<LoadFailure | null>(null);
 
@@ -63,7 +63,7 @@ function UserSettingsState({
    * Deliberately does not raise `loading` — see the effect below.
    */
   const refresh = useCallback(async () => {
-    setLoadSucceeded(false);
+    setSuccessfulLoadFor(null);
     const mine = (walk.current += 1);
     try {
       const stored = await userRepository.get(uid);
@@ -82,7 +82,7 @@ function UserSettingsState({
       if (walk.current === mine) {
         setStoredProfile(next);
         setError(null);
-        setLoadSucceeded(true);
+        setSuccessfulLoadFor(uid);
       }
     } catch (cause) {
       console.error(cause);
@@ -107,7 +107,7 @@ function UserSettingsState({
    */
   useRetryOnReconnect(
     error !== null && error.fallback === 'load.settings' && isUnreachable(error.cause),
-    loadSucceeded,
+    successfulLoadFor === uid,
     refresh,
   );
 
@@ -150,8 +150,10 @@ function UserSettingsState({
         throw cause;
       }
       try {
+        setSuccessfulLoadFor(null);
         const stored = await userRepository.get(uid);
         if (stored) setStoredProfile(stored);
+        setSuccessfulLoadFor(uid);
       } catch (cause) {
         console.error(cause);
         // Read wording, because a read is what failed. The server-written
