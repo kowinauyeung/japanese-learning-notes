@@ -97,8 +97,18 @@ console.log(
 // and changes nothing an operator can observe. Signups are open: whoever ran
 // this to restore somebody's access has not restored it, and whoever ran it as
 // step one of closing signups still has two steps left.
+//
+// The two paths differ and the note must not flatten them. Granting really does
+// nothing until `isAllowed()` is back. Revoking ends the session at the next
+// refresh — `revokeRefreshTokens` above is not a no-op — but the account can
+// sign straight back in, so what it is not is a ban.
 console.log(
-  'note: the deployed rules gate on signedIn(), not on this claim, so nothing ' +
-    'about access changed. It matters only when restoring isAllowed() — see ' +
-    '"Operator runbook" in README.md.',
+  revoke
+    ? 'note: the deployed rules gate on signedIn(), not on this claim, so this ' +
+        'ends the session without removing access — the account can sign in ' +
+        'again. Suspension is not something this project has; see "Responding ' +
+        'to abuse" in README.md.'
+    : 'note: the deployed rules gate on signedIn(), not on this claim, so ' +
+        'nothing about access changed. It matters only when restoring ' +
+        'isAllowed() — see "Operator runbook" in README.md.',
 );

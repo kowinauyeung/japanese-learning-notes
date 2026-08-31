@@ -272,15 +272,32 @@ describe("a deleted account's token", () => {
    * did not, and they are the ones worth holding onto.
    *
    * The first is `isOwner(uid)`, covered above: a tombstone is writable for your
-   * own uid and nobody else's. The second is this one. Signing in at all is
-   * still required, and it is the only thing now standing between
-   * `deletedAccounts` and an unauthenticated writer — so if the gate here is
-   * ever loosened again, this is what goes red.
+   * own uid and nobody else's. The second is this pair. Signing in is still
+   * required, and it is the only thing now standing between `deletedAccounts`
+   * and a caller this rule should refuse — so if the gate here is ever loosened,
+   * these are what go red.
+   *
+   * **Both halves are asserted because `signedIn()` is two conditions and
+   * `isOwner()` covers neither.** This block does not go through `mine()`, so
+   * dropping `signedIn()` from the rule would leave `isOwner(uid)` — which
+   * checks that a token exists and names this uid, and says nothing about the
+   * email being verified. With only the unauthenticated case covered, that edit
+   * passed the whole suite.
    */
   it('refuses a tombstone from a caller who is not signed in', async () => {
     await assertFails(
       testEnv
         .unauthenticatedContext()
+        .firestore()
+        .doc(`deletedAccounts/${MALLORY}`)
+        .set({ deletedAt: new Date() }),
+    );
+  });
+
+  it('refuses a tombstone from an authenticated caller whose email is unverified', async () => {
+    await assertFails(
+      testEnv
+        .authenticatedContext(MALLORY, { email_verified: false })
         .firestore()
         .doc(`deletedAccounts/${MALLORY}`)
         .set({ deletedAt: new Date() }),
