@@ -20,7 +20,7 @@
     "test:emulator": "firebase emulators:exec --only firestore --project demo-goitei 'vitest run --project emulator'",
     "test:e2e": "playwright test",
     "test:monkey": "playwright test --config playwright.monkey.config.ts",
-    "test:visual:update": "docker run --rm --init --ipc=host -v \"$PWD\":/w -v goitei-e2e-modules:/w/node_modules -w /w mcr.microsoft.com/playwright:v1.62.1-noble sh -c \"yarn install --frozen-lockfile && npx playwright test tests/e2e/visual.spec.ts --update-snapshots\"",
+    "test:visual:update": "docker run --rm --init --ipc=host --platform linux/amd64 -v \"$PWD\":/w -v goitei-e2e-modules-amd64:/w/node_modules -w /w mcr.microsoft.com/playwright:v1.62.1-noble sh -c \"yarn install --frozen-lockfile && npx playwright test tests/e2e/visual.spec.ts --update-snapshots\"",
     "coverage": "vitest run --project unit --project dom --coverage",
     "release": "commit-and-tag-version",
     "release:dry": "commit-and-tag-version --dry-run",

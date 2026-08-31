@@ -136,8 +136,10 @@ against — or written over — the Chromium file beside it.
   A screenshot diff is a bug report. Investigate it, fix the cause, and if the
   new rendering really is correct, ask the user to regenerate.
 - Regeneration is `yarn test:visual:update`, which runs in the same container
-  image CI uses. Never run `--update-snapshots` outside it: a macOS-authored
-  baseline fails on every CI run.
+  image and `linux/amd64` architecture CI uses. Both are pinned because font
+  rasterisation depends on the container and machine architecture. Never run
+  `--update-snapshots` outside it: a baseline authored by a different renderer
+  fails on CI.
 - Prefer `locator.toHaveScreenshot()` over a full-page shot. Do not add a new
   full-page baseline without asking.
 
