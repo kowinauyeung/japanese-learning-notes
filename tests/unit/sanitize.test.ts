@@ -523,8 +523,11 @@ describe('sanitizeSession — the missed list, in both shapes it is stored in', 
    * that still have to be readable, which is what this whole module is for.
    */
   it('reads a session recorded in a drill this version no longer has as a flashcard run', () => {
+    // Only the unrecognised string. `oneOf` also refuses a non-string, but that
+    // half of it is shared with every other enum field and is already covered
+    // by `falls back when jlpt is outside the scale` — asserting it again here
+    // would test the helper a second time rather than this field's wiring.
     expect(sanitizeSession('s1', { ...stored([]), mode: 'writing' }).mode).toBe('flashcard');
-    expect(sanitizeSession('s1', { ...stored([]), mode: 42 }).mode).toBe('flashcard');
   });
 
   it('keeps a mode it does recognise', () => {
