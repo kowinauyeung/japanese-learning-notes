@@ -373,12 +373,16 @@ Everything below assumes `GOOGLE_APPLICATION_CREDENTIALS`, or `gcloud auth
 application-default login` against the right project.
 
 **Closing signups again.** The rules no longer read the `allowed` claim, so
-`yarn allow` grants nothing today. It is kept, and so are the `allowedUsers`
-documents, because restoring `isAllowed()` in `firestore.rules` is how the door
-shuts — and a rules deploy that lands after the claims have been tidied away
-locks out the operator along with everybody else. So the order is: grant the
-accounts that must keep working, have them sign out and back in, _then_ deploy
-the closed rules.
+`yarn allow` grants nothing today. It is kept because restoring `isAllowed()` in
+`firestore.rules` is how the door shuts, and those rules require a claim that no
+token issued beforehand carries — so a deploy that lands before the grants locks
+out the operator along with everybody else. The order is: grant the accounts that
+must keep working, have them sign out and back in, _then_ deploy the closed rules.
+
+The state that matters is the claim and nothing else. `yarn allow` sets it with
+`setCustomUserClaims` and writes no document; `allowedUsers` is the collection
+the claim replaced, and nothing in the rules or in `src` reads it. Whatever
+remains in it is legacy.
 
 `yarn allow you@example.com prod` targets the repository production project, and
 `yarn allow you@example.com --project your-project-id` targets any other Firebase

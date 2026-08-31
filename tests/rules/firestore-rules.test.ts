@@ -144,8 +144,10 @@ beforeEach(async () => {
   await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
-    // allowedUsers is written by admin tooling only; no rule matches it, so
-    // seeding has to bypass rules exactly as `upload.mjs` does.
+    // allowedUsers is the legacy collection the `allowed` claim replaced.
+    // Nothing writes it any more and no rule matches it, so seeding has to
+    // bypass rules — which is also the only way a leftover document could exist
+    // in production, and the state the unreachability test below is about.
     await db.doc(`allowedUsers/${ALICE}`).set({ email: 'alice@example.com' });
     await db.doc(`allowedUsers/${BOB}`).set({ email: 'bob@example.com' });
 
@@ -411,16 +413,18 @@ describe('open signups', () => {
   });
 
   /**
-   * `allowedUsers` and the `allowed` claim outlive the gate they served, and
-   * deliberately: restoring `isAllowed()` is how signups close again, and a
-   * rules deploy that lands after the documents have been tidied away locks out
-   * the operator along with everybody else.
+   * `allowedUsers` is legacy: the `allowed` claim replaced it, `yarn allow`
+   * writes no document, and nothing in the rules or in `src` reads it. What the
+   * gate needed was never this collection — closing signups again is restoring
+   * `isAllowed()`, which reads the claim.
    *
-   * So the collection has to stay unreachable from a client for the same reason
-   * it always did — it is admin-written state that decides access — and this
-   * test is what keeps that true while nothing in the rules reads it.
+   * The test stays anyway, because "no rule matches this path" is a property of
+   * the file rather than of the collection: the day somebody adds a match block
+   * to sweep the legacy documents away, this is what says the sweep gave a
+   * client a way in. An unreadable leftover is harmless; a writable one is a
+   * write surface nothing accounts for.
    */
-  it('keeps allowedUsers unreachable, so closing signups again still works', async () => {
+  it('keeps the legacy allowedUsers collection unreachable from any client', async () => {
     const db = as(ALICE);
     await assertFails(db.doc(`allowedUsers/${ALICE}`).get());
     await assertFails(db.doc(`allowedUsers/${MALLORY}`).set({ email: 'm@example.com' }));

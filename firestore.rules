@@ -60,11 +60,17 @@ service cloud.firestore {
     // decision and not a detail, and it is not made here.
     //
     // **To close signups again**, restore `isAllowed()` and its two call sites,
-    // `mine()` and the `deletedAccounts` block. That is why `allowedUsers`, the
-    // claim and `yarn allow` are all still here rather than deleted alongside
-    // the gate: the rollback is a rules deploy that takes seconds, and it only
-    // works if the operator's own claim still exists when it lands. Do not tidy
-    // them away.
+    // `mine()` and the `deletedAccounts` block. That is why `yarn allow` is kept
+    // rather than deleted alongside the gate: the rollback is a rules deploy
+    // that takes seconds, and it only works if the operator's own claim is
+    // already minted when it lands — so grant first, sign out and back in, then
+    // deploy.
+    //
+    // The state that matters is the **claim**, and nothing else.
+    // `admin/allow-user.ts` sets it with `setCustomUserClaims` and writes no
+    // document; `allowedUsers` is the collection the claim replaced, has no
+    // match block, and is read by nothing here or in `src`. Whatever is left in
+    // it is legacy, and clearing it would neither close nor reopen anything.
 
     // ---- an account that has been deleted, which its token cannot say ----
     //
