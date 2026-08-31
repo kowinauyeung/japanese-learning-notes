@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { POS } from '@/domain/entry';
+import { PRACTICE_MODES } from '@/domain/practice';
 import { toDraft } from '@/lib/draft';
 import {
   isValidIsoDate,
@@ -32,6 +33,8 @@ const FALLBACK = toDraft(
     learnedOn: '2020-01-01',
   }),
 );
+
+const [FLASHCARD_MODE, DICTATION_MODE] = PRACTICE_MODES;
 
 describe('isValidIsoDate', () => {
   /**
@@ -499,7 +502,7 @@ describe('sanitizeEntry — 品詞 as a set', () => {
 
 describe('sanitizeSession — the missed list, in both shapes it is stored in', () => {
   const stored = (missed: unknown) => ({
-    mode: 'flashcard',
+    mode: FLASHCARD_MODE,
     filterLabel: 'すべて',
     total: 3,
     correct: 1,
@@ -557,11 +560,11 @@ describe('sanitizeSession — the missed list, in both shapes it is stored in', 
     // half of it is shared with every other enum field and is already covered
     // by `falls back when jlpt is outside the scale` — asserting it again here
     // would test the helper a second time rather than this field's wiring.
-    expect(sanitizeSession('s1', { ...stored([]), mode: 'writing' }).mode).toBe('flashcard');
+    expect(sanitizeSession('s1', { ...stored([]), mode: 'writing' }).mode).toBe(FLASHCARD_MODE);
   });
 
   it('keeps a mode it does recognise', () => {
-    expect(sanitizeSession('s1', { ...stored([]), mode: 'dictation' }).mode).toBe('dictation');
+    expect(sanitizeSession('s1', { ...stored([]), mode: DICTATION_MODE }).mode).toBe(DICTATION_MODE);
   });
 });
 
@@ -574,7 +577,7 @@ describe('sanitizeSession — the missed list, in both shapes it is stored in', 
  */
 describe('sanitizeSession — the run', () => {
   const stored = (over: Record<string, unknown>) => ({
-    mode: 'flashcard',
+    mode: FLASHCARD_MODE,
     filterLabel: 'すべて',
     total: 2,
     correct: 1,
