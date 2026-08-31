@@ -563,7 +563,7 @@ describe('sanitizeSession — the missed list, in both shapes it is stored in', 
     expect(sanitizeSession('s1', { ...stored([]), mode: 'writing' }).mode).toBe(FLASHCARD_MODE);
   });
 
-  it('keeps a mode it does recognise', () => {
+  it('does not fall back for a recognized dictation mode', () => {
     expect(sanitizeSession('s1', { ...stored([]), mode: DICTATION_MODE }).mode).toBe(
       DICTATION_MODE,
     );
