@@ -257,12 +257,16 @@ jobs:
       # first means a client is briefly newer than its rules, which fails open:
       # it writes a shape the old rules still permit.
       #
-      # **Two steps come before this workflow runs, and it cannot check them.**
-      # These rules gate on a custom claim, which reaches a client only in a
-      # freshly minted ID token — so every account must be granted with
-      # `yarn allow` and must sign in again first, or it is locked out for up to
-      # an hour. See "Operator runbook" in README.md, which is in the working
-      # tree after merge in a way a pull request description is not.
+      # **No step comes before this workflow any more.** These rules used to
+      # gate on a custom claim, which reaches a client only in a freshly minted
+      # ID token, so every account had to be granted with `yarn allow` and sign
+      # in again first or be locked out for up to an hour. Signups are open and
+      # the gate is `signedIn()`, so there is nothing to grant.
+      #
+      # It comes back the moment `isAllowed()` does. Deploying rules that
+      # require the claim before granting it locks out the operator too — see
+      # "Operator runbook" in README.md, which is in the working tree after
+      # merge in a way a pull request description is not.
       - name: Deploy Firestore rules
         run: yarn firebase deploy --only firestore:rules --project prod --non-interactive
 

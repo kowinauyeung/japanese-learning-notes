@@ -15,10 +15,18 @@ import {
  *   yarn allow you@example.com prod
  *   yarn allow you@example.com --project your-project-id
  *
- * The security rules read `request.auth.token.allowed`, so this is the only
- * thing that opens the door. It replaced an `allowedUsers` document that rules
- * checked with `exists()` on every request — one billed read per request, to
- * answer a question whose answer changes twice in an account's lifetime.
+ * **The deployed rules do not read this claim, so granting it opens nothing
+ * today.** Signups are open: `firestore.rules` gates on `signedIn()`. The claim
+ * is what the *closed* gate reads, and this command is step one of closing it —
+ * grant every account that must keep working, have them sign out and back in,
+ * and only then deploy rules that restore `isAllowed()`. Deploying first locks
+ * out the operator along with everybody else, which is why this survived the
+ * gate rather than being deleted with it. See "Operator runbook" in README.md.
+ *
+ * The claim replaced an `allowedUsers` document that rules checked with
+ * `exists()` on every request — one billed read per request, to answer a
+ * question whose answer changes twice in an account's lifetime. That collection
+ * is read by nothing now and this command has never written it.
  *
  * **A ban lands within the hour, not on the keystroke.** A claim lives inside
  * the ID token the client already holds, and Firestore rules have no revocation
@@ -83,4 +91,14 @@ console.log(
     (revoke
       ? ' — refresh tokens revoked. The ID token already issued stays valid until it expires, so access ends within the hour rather than immediately.'
       : ''),
+);
+
+// Said on every run, because the alternative is a command that reports success
+// and changes nothing an operator can observe. Signups are open: whoever ran
+// this to restore somebody's access has not restored it, and whoever ran it as
+// step one of closing signups still has two steps left.
+console.log(
+  'note: the deployed rules gate on signedIn(), not on this claim, so nothing ' +
+    'about access changed. It matters only when restoring isAllowed() — see ' +
+    '"Operator runbook" in README.md.',
 );
