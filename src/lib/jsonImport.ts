@@ -198,7 +198,7 @@ function delimiterMayStandAt(text: string, from: number): boolean {
 export function jsonToDraft(
   raw: string,
   context: PromptContext = {},
-  now: Date = new Date(),
+  now: Date,
 ): { draft?: EntryDraft; error?: string; oversize?: string[] } {
   // Before the parse, not after: `JSON.parse` on a multi-megabyte paste blocks
   // the main thread long enough to read as a hung tab, and every check below

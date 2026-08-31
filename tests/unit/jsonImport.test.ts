@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { INPUT_LIMITS } from '@/domain/limits';
-import { buildPrompt, jsonToDraft, promptLanguageName, SCHEMA } from '@/lib/jsonImport';
+import {
+  buildPrompt,
+  jsonToDraft as parseJsonToDraft,
+  promptLanguageName,
+  SCHEMA,
+} from '@/lib/jsonImport';
 
 /**
  * The import box takes JSON an assistant wrote somewhere else and a human
@@ -11,6 +16,13 @@ import { buildPrompt, jsonToDraft, promptLanguageName, SCHEMA } from '@/lib/json
  */
 
 const minimal = { headword: '兆候', definition: '何かが起こる前ぶれ。' };
+const testNow = new Date(2026, 7, 24);
+
+const jsonToDraft = (
+  raw: string,
+  context: Parameters<typeof parseJsonToDraft>[1] = {},
+  now: Date = testNow,
+) => parseJsonToDraft(raw, context, now);
 
 describe('jsonToDraft — parsing', () => {
   it('accepts a bare JSON object', () => {

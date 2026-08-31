@@ -290,7 +290,7 @@ export function EntryFormModal({
       written it, so both are setting the value they read.
     */
     setJson((prev) => ({ ...prev, raw }));
-    const { draft: loaded, error: failure, oversize } = jsonToDraft(raw, context);
+    const { draft: loaded, error: failure, oversize } = jsonToDraft(raw, context, new Date());
 
     /*
       A reply that arrived and could not be used is still a reply.
