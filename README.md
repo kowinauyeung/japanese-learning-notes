@@ -79,27 +79,21 @@ Pointing this at a fresh Firebase project takes a few more steps, in order:
 4. `yarn firebase login`, then deploy the rules with `yarn rules:dev` (once the
    alias points at your project) or
    `yarn firebase deploy --only firestore:rules --project <your-project-id>`.
-5. Sign in once, then grant yourself access — the rules deny everything until
-   your account carries the `allowed` custom claim. `yarn allow <your-email> --project <your-project-id>`
-   sets it, and the account must have signed in
-   before that, because the claim goes on the uid Google issued and there is
-   nothing to set it on until then. The repository shortcuts still work too:
-   omit `--project` for `goitei-dev`, or pass `prod` for `goitei`.
-6. **Sign out and sign back in.** A claim reaches the client only in a freshly
-   minted ID token, so the session you granted access to is still denied — for
-   up to an hour, until its token expires on its own.
+5. Sign in. That is the whole of it: signups are open, so a verified Google
+   account gets its own notebook and nothing has to be granted.
 
 `firebase-tools` is a local devDependency, so the CLI is reached through
 `yarn firebase …` unless you have installed it globally.
 
 Step 3 only changes local configuration; nothing is enforced until step 4
-deploys the rules successfully. After step 6 every read and write is scoped to
+deploys the rules successfully. After step 5 every read and write is scoped to
 your account.
 
-Step 6 is a step rather than a note because leaving it out looks exactly like a
-broken build: every screen reports that it could not load, and running step 5
-again changes nothing. `yarn allow` prints the account it granted, so the last
-line of step 5 is not evidence that step 6 has happened.
+**This used to be two more steps**, because the rules denied everything until an
+operator granted the `allowed` custom claim with `yarn allow` and the account
+signed out and back in to pick it up. That gate is gone from the rules and the
+tooling is not: `yarn allow` is how signups close again, and the operator runbook
+below says why it is still here.
 
 `.env.development` and `.env.production` are gitignored. Their values ship inside
 the JS bundle and are not secrets — Firestore rules are what enforce access — but
@@ -230,11 +224,18 @@ yarn firebase deploy --only hosting,firestore:rules --project dev
 ```
 
 `firestore.rules` gives an account read and write over everything beneath its
-own `users/{uid}`, and nothing else; every unlisted path is denied. Access is
-gated on the custom claim `allowed`, which nothing but `yarn allow` sets, so
-signups are closed until an operator grants it. Nothing in front of the site can
-substitute for this: Hosting serves the config that reaches Firestore, so a
+own `users/{uid}`, and nothing else; every unlisted path is denied. **Signups are
+open**: any Google account with a verified email gets a notebook, and no operator
+step stands between signing in and using the app. Nothing in front of the site can
+substitute for the rules: Hosting serves the config that reaches Firestore, so a
 password on the HTML protects the page, not the data.
+
+What the rules do _not_ do is bound how much one account writes. There is no rate
+limit and no cap on how many documents an account creates, because rules see one
+write at a time and have no clock across requests. Those bounds live outside this
+repository — a per-user quota override on the AI proxy, Cloud Monitoring alerts on
+the free Firestore quotas — and the reason an exhausted quota is survivable is the
+Spark plan: it stops serving until the quota resets rather than producing a bill.
 
 Rules deploy before anything that writes through them, so a new top-level field
 is allowlisted before any client can send it. A client that ships a new field
@@ -371,19 +372,35 @@ browser against the dev site or a preview channel.
 Everything below assumes `GOOGLE_APPLICATION_CREDENTIALS`, or `gcloud auth
 application-default login` against the right project.
 
-**Granting access.** `yarn allow you@example.com prod` targets the repository
-production project, and `yarn allow you@example.com --project your-project-id`
-targets any other Firebase project. The account must have signed in once first
-— the claim is set on the uid Google issued, so there is nothing to set it on
-before that. Anything other than `prod`, `--project <project-id>` or
-`--revoke` is rejected rather than ignored.
+**Closing signups again.** The rules no longer read the `allowed` claim, so
+`yarn allow` grants nothing today. It is kept because restoring `isAllowed()` in
+`firestore.rules` is how the door shuts, and those rules require a claim that no
+token issued beforehand carries — so a deploy that lands before the grants locks
+out the operator along with everybody else. The order is: grant the accounts that
+must keep working, have them sign out and back in, _then_ deploy the closed rules.
 
-**Revoking it.** `yarn allow you@example.com prod --revoke`. **This lands within
-the hour, not on the keystroke.** The claim lives inside the ID token the client
-already holds and Firestore rules have no revocation check, so it keeps working
-until that token expires. Revoking the refresh tokens ends the session at the
-next refresh but does not shorten that window. When responding to abuse, delete
-the data — that part takes effect now.
+The state that matters is the claim and nothing else. `yarn allow` sets it with
+`setCustomUserClaims` and writes no document; `allowedUsers` is the collection
+the claim replaced, and nothing in the rules or in `src` reads it. Whatever
+remains in it is legacy.
+
+`yarn allow you@example.com prod` targets the repository production project, and
+`yarn allow you@example.com --project your-project-id` targets any other Firebase
+project. The account must have signed in once first — the claim is set on the uid
+Google issued, so there is nothing to set it on before that. Anything other than
+`prod`, `--project <project-id>` or `--revoke` is rejected rather than ignored.
+`--revoke` takes the claim away, and **lands within the hour rather than on the
+keystroke**, for the same reason granting does: the claim lives inside the ID
+token the client already holds.
+
+**Responding to abuse, which is not the same thing.** There is no suspension
+mechanism now that signups are open, and there was less of one before than it
+looked. Deleting the Auth user stops the account signing in again, but the token
+already in hand keeps writing for up to an hour, and the person can sign up again
+straight away — a deleted account that returns gets a **new** uid, so nothing
+about the ban follows them. What takes effect immediately is deleting the data
+and, if the abuse is the AI, turning drafting off. A ban that actually holds has
+to be keyed on something the person keeps, and that has not been designed.
 
 **Clearing a deletion tombstone.** Deleting an account writes
 `deletedAccounts/{uid}`, and Firestore rules refuse every create and update from
@@ -402,23 +419,19 @@ immediately, because the rule reads the document on each write rather than
 anything in the token.
 
 **Releasing.** Cutting the version — the branch, the changelog and the tag — is
-[docs/releasing.md](docs/releasing.md). What follows is only the access half of
-it, which has an order that matters. Three steps:
+[docs/releasing.md](docs/releasing.md). Run _Deploy (production)_ from the
+Actions tab; there is no access step in front of it any more, because the rules
+being deployed do not require anything a signed-in token lacks.
 
-1. `yarn allow <email> prod` for every account that must keep working.
-2. Ask each of them to sign out and sign back in. A claim reaches the client
-   only in a freshly minted ID token; an open session picks it up at its next
-   refresh, which is up to an hour away.
-3. Run _Deploy (production)_.
+The workflow still deploys rules before hosting, and that order is not a
+preference: a new top-level field has to be allowlisted before any client can
+send it, or `hasOnly` denies every write the new build makes.
 
-The order is not a preference. The workflow deploys rules before hosting on
-purpose, so a new top-level field is allowlisted before any client can send it
-— and because the rules being deployed require a claim that no token issued
-before step 1 carries. Reversing steps 1 and 3 locks out everyone who was
-already signed in, for up to an hour, including whoever is doing the deploy.
-
-This matters most exactly once: the first production run of that workflow _is_
-the migration onto the claim.
+**The access steps this section used to carry belong to the closed gate, and
+that is when to come back for them.** Deploying rules that require the `allowed`
+claim before granting it locks out everyone already signed in — for up to an
+hour, the operator included. So closing signups is: grant, have people sign out
+and back in, deploy.
 
 ### Deploy credentials
 
