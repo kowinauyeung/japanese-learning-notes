@@ -25,53 +25,46 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
-    // The single gate that keeps this a private notebook.
+    // ---- signups are open, and this is what that cost ----
     //
-    // The paths below are already multi-user: every rule is written against
-    // request.auth.uid and nothing depends on there being one account. This
-    // check is the only thing standing between the current state and open
-    // signups, and it is deliberate — the billing plan has no hard spending
-    // cap, so a stranger who signed up would be writing to a project that can
-    // be alerted on but not capped.
+    // Until this change every path below went through `isAllowed()`, which
+    // required the custom claim `allowed` that only `yarn allow` sets. The paths
+    // were already multi-user — every rule is written against
+    // `request.auth.uid` and none of them assumes a single account — so opening
+    // signups was the body of one function. That cheapness is the thing to be
+    // careful about, not the thing to be reassured by.
     //
-    // It is an allowlist collection rather than a hard-coded address so that
-    // adding somebody is a document rather than a rules deploy, and so the same
-    // mechanism becomes a beta invite list later. `allowedUsers` has no match
-    // block of its own, so no client can read or write it — a rules-internal
-    // exists() is not itself subject to rules, and admin tooling writes it.
+    // **The allowlist was standing in for controls this project does not have.**
+    // Not one gate: the substitute for all of them. A signed-in account has no
+    // write rate limit and no cap on how many documents it creates, and rules
+    // cannot give it either — they see one write at a time and have no clock
+    // across requests. What bounds a stranger now lives outside this file: a
+    // per-user quota override on the AI proxy, Cloud Monitoring alerts on the
+    // free Firestore quotas, and the fact that an exhausted quota on the Spark
+    // plan stops the app until it resets rather than producing a bill.
     //
-    // Note this cannot be replaced by anything in front of the site: Firebase
-    // Hosting serves the config that reaches Firestore, so basic auth or any
-    // other gate on the HTML protects the page, not the data.
+    // **What rules still do is ownership, shape and size**, which is the rest of
+    // this file, plus `notDeleted()` below.
     //
-    // To open signups: delete this function and its call sites. Do that
-    // together with App Check and a budget-alert kill switch, not before.
+    // **There is no suspension mechanism, and removing this gate is not what
+    // took it away.** Clearing the claim never landed for up to an hour: the
+    // claim lives in the ID token the client already holds and rules have no
+    // revocation check, which is why `admin/allow-user.ts` revokes the refresh
+    // tokens as well — that ends the session at its next refresh, it does not
+    // invalidate the token in hand. Deleting the Auth user has the same tail and
+    // the same hole under it, because a deleted account that signs up again gets
+    // a **new uid** (measured against the Auth emulator, and the reason the
+    // tombstone below is an existence check rather than a permanent lockout). So
+    // a ban keyed on uid is a ban the banned account leaves by signing in again.
+    // A real one has to be keyed on something the person keeps, which is a
+    // decision and not a detail, and it is not made here.
     //
-    // **A custom claim, not a document read.** exists() here is billed as a
-    // document read on *every request to every path*, which on a public service
-    // doubles the read cost of the whole application to answer a question whose
-    // answer changes perhaps twice in an account's lifetime.
-    //
-    // **What it trades away is immediacy, and the trade is real.** The gate
-    // this replaces was re-evaluated on every request, so removing a document
-    // took effect on the next one. A claim lives inside the ID token the client
-    // is already holding, and Firestore rules have no revocation check — there
-    // is no rules equivalent of `verifyIdToken(..., checkRevoked: true)`. So a
-    // removed claim changes nothing until that token expires: **up to an hour.**
-    //
-    // Revoking the refresh tokens does not shorten it. It stops the *next*
-    // refresh from succeeding, which ends the session — but the ID token
-    // already in hand keeps its claims and keeps being accepted until it runs
-    // out. `admin/allow-user.ts` revokes them anyway, because ending the
-    // session is worth doing; it is not what makes a ban land.
-    //
-    // Closing the window properly means storing a revocation time and comparing
-    // `request.auth.token.auth_time` against it here, which reintroduces the
-    // per-request read this change removed. That is a decision worth making
-    // deliberately if abuse ever becomes a live problem, and not before.
-    function isAllowed() {
-      return signedIn() && request.auth.token.allowed == true;
-    }
+    // **To close signups again**, restore `isAllowed()` and its two call sites,
+    // `mine()` and the `deletedAccounts` block. That is why `allowedUsers`, the
+    // claim and `yarn allow` are all still here rather than deleted alongside
+    // the gate: the rollback is a rules deploy that takes seconds, and it only
+    // works if the operator's own claim still exists when it lands. Do not tidy
+    // them away.
 
     // ---- an account that has been deleted, which its token cannot say ----
     //
@@ -96,12 +89,16 @@ service cloud.firestore {
     //  * Gating `read` would break the export the account screen offers and
     //    change nothing about the race. The defect is data written back.
     //
-    // **This is the per-request read that `isAllowed()` above was changed to
+    // **This is the per-request read the gate above was changed to a claim to
     // avoid, and it is affordable here for a reason worth stating.** That one
     // ran on every request to every path, reads included, which doubles the
     // read cost of an application that loads a whole notebook on sign-in. This
     // one runs on writes alone, and it is called *last* in every rule below so
     // that a write already refused for its shape or its owner never spends it.
+    //
+    // Now that anyone may sign up, this is also the only per-uid check left in
+    // the file, and it stays cheap for the same reason: writes only, called
+    // last.
     function notDeleted(uid) {
       return !exists(/databases/$(database)/documents/deletedAccounts/$(uid));
     }
@@ -421,8 +418,10 @@ service cloud.firestore {
     // rather than allowed. That is the right way round, and it is why adding a
     // path to the app now means adding it here too.
     match /users/{uid} {
+      // `signedIn()` carries the email_verified check, so this is still two
+      // conditions and not one: the account is verified, and it is this uid.
       function mine() {
-        return isOwner(uid) && isAllowed();
+        return isOwner(uid) && signedIn();
       }
 
       allow read, delete: if mine();
@@ -485,14 +484,20 @@ service cloud.firestore {
     // says this record holds the account identifier and the time it was written,
     // and nothing else.
     //
-    // **`isAllowed()`, on the same footing as every other path.** This said
-    // `signedIn()` for one revision, on the reasoning that an account whose
-    // claim had been taken away should still be able to record that it was
-    // gone. That does not survive being written down: draining and deleting are
-    // all behind `mine()`, so such an account cannot delete anything anyway,
-    // and the tombstone would record a deletion that never happened. What the
-    // looser gate actually bought was one document per uid reachable by any
-    // verified Google account, on a project with no hard spending cap.
+    // **On the same footing as every other path**, which since signups opened
+    // means `signedIn()` — the allowlist gate this used to name is gone and the
+    // distinction it drew has collapsed, because every verified Google account
+    // is now an account in good standing. The reasoning is worth keeping anyway,
+    // because it is what stops the gate here being loosened *further*: an
+    // earlier revision argued that an account whose access had been taken away
+    // should still be able to record that it was gone, and that does not survive
+    // being written down. Draining and deleting are all behind `mine()`, so such
+    // an account cannot delete anything anyway, and the tombstone would record a
+    // deletion that never happened.
+    //
+    // What keeps this bounded now is `isOwner(uid)` and the single-field shape,
+    // not the gate: an account can write one small document, for its own uid,
+    // and nothing else.
     //
     // **`create` and `update` both, because deletion is retried.** The flow is
     // not atomic and says so: a failure part way asks the user to press delete
@@ -505,7 +510,7 @@ service cloud.firestore {
     // is what the publishing block below was closed for, and this is closed the
     // same way.
     match /deletedAccounts/{uid} {
-      allow create, update: if isOwner(uid) && isAllowed()
+      allow create, update: if isOwner(uid) && signedIn()
                             && request.resource.data.keys().hasOnly(['deletedAt'])
                             && request.resource.data.deletedAt is timestamp;
       allow read, delete: if false;
@@ -536,6 +541,14 @@ service cloud.firestore {
     // than as rules. The twelve tests that covered them were removed with the
     // rules and are not recoverable from this list — they are in pull request
     // #30, which is where to read them, and their names are the specification.
+    //
+    // The rule fragments quoted below are the removed text verbatim, so they
+    // still say `isAllowed()`, which no longer exists. Read it as `signedIn()`;
+    // it is left as written because falsifying the record of what those rules
+    // said is worse than an outdated identifier in a quotation. What that
+    // substitution *means* has changed and is the first thing to re-decide:
+    // "any allowed account" was a handful of invited people, and is now anybody
+    // with a Google account.
     //
     // Reads first, because they are the access model rather than a detail:
     //

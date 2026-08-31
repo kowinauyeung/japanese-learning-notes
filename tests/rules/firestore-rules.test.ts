@@ -24,25 +24,29 @@ import { makeWordSet } from '../fixtures/wordSet';
 
 const PROJECT_ID = 'demo-goitei';
 
-/** On the allowlist. */
+/** An account with a notebook. */
 const ALICE = 'uid-alice';
-/** On the allowlist, and not Alice — the "some other legitimate user" case. */
+/** Not Alice — the "some other legitimate user" case. */
 const BOB = 'uid-bob';
-/** Authenticated, verified, and deliberately absent from allowedUsers. */
+/** A third account, signed in and unrelated to either of the other two. */
 const MALLORY = 'uid-mallory';
 
 let testEnv: RulesTestEnvironment;
 
 /**
- * Signed in *and* allowed. The gate is a custom claim now rather than a
- * document read, so a test that forgets it is denied for the right reason.
+ * Signed in and verified, and **carrying no `allowed` claim** — which is the
+ * whole point of this helper since signups opened.
+ *
+ * It used to mint `allowed: true`, and leaving that in place would have made
+ * every test below pass under the closed gate as well as the open one: the
+ * suite would have gone green without saying anything about the change. Minting
+ * the plain token instead is what makes the red-green proof mean something —
+ * restore `isAllowed()` in `firestore.rules` and these tests fail, because
+ * nobody here has the claim any more.
+ *
+ * `email_verified` stays, because `signedIn()` still requires it.
  */
-const as = (uid: string) =>
-  testEnv.authenticatedContext(uid, { email_verified: true, allowed: true }).firestore();
-
-/** Signed in, verified, and not on the list. */
-const asStranger = (uid: string) =>
-  testEnv.authenticatedContext(uid, { email_verified: true }).firestore();
+const as = (uid: string) => testEnv.authenticatedContext(uid, { email_verified: true }).firestore();
 
 /**
  * A whole entry, the shape `sanitizeDraft` produces plus what the adapter adds.
@@ -161,7 +165,7 @@ describe('private data under users/{uid}', () => {
     await assertSucceeds(db.collection(`users/${ALICE}/entries`).get());
   });
 
-  it("denies another allowlisted user everything in someone else's notebook", async () => {
+  it("denies another signed-in user everything in someone else's notebook", async () => {
     const db = as(BOB);
     await assertFails(db.doc(`users/${ALICE}/entries/e1`).get());
     await assertFails(db.collection(`users/${ALICE}/entries`).get());
@@ -260,16 +264,38 @@ describe("a deleted account's token", () => {
   });
 
   /**
-   * The same gate as everything else, and it was `signedIn()` here for one
-   * revision on reasoning that does not survive being written down: an account
-   * whose claim is gone cannot drain or delete anything either, because all of
-   * that is behind `mine()`. A tombstone it could still write would record a
-   * deletion that cannot happen — while leaving one document per uid reachable
-   * by any verified Google account on a project with no spending cap.
+   * This used to assert that an account off the allowlist could not write a
+   * tombstone. Opening signups removed the allowlist, so that account is now an
+   * ordinary user and the assertion inverted — which leaves two properties that
+   * did not, and they are the ones worth holding onto.
+   *
+   * The first is `isOwner(uid)`, covered above: a tombstone is writable for your
+   * own uid and nobody else's. The second is this one. Signing in at all is
+   * still required, and it is the only thing now standing between
+   * `deletedAccounts` and an unauthenticated writer — so if the gate here is
+   * ever loosened again, this is what goes red.
    */
-  it('refuses a tombstone from an account that is not on the allowlist', async () => {
+  it('refuses a tombstone from a caller who is not signed in', async () => {
     await assertFails(
-      asStranger(MALLORY).doc(`deletedAccounts/${MALLORY}`).set({ deletedAt: new Date() }),
+      testEnv
+        .unauthenticatedContext()
+        .firestore()
+        .doc(`deletedAccounts/${MALLORY}`)
+        .set({ deletedAt: new Date() }),
+    );
+  });
+
+  /**
+   * The inverse of the test above, stated on purpose rather than left implied:
+   * a brand-new account that nobody invited can delete itself. Account deletion
+   * is the first thing a stranger might want from a service they just tried,
+   * and the tombstone is the first write in that flow — if it were refused the
+   * account could not finish deleting itself, which is the exact state the
+   * tombstone exists to avoid.
+   */
+  it('lets a brand-new account write its own tombstone', async () => {
+    await assertSucceeds(
+      as(MALLORY).doc(`deletedAccounts/${MALLORY}`).set({ deletedAt: new Date() }),
     );
   });
 
@@ -319,52 +345,85 @@ describe("a deleted account's token", () => {
   });
 });
 
-describe('the allowedUsers gate', () => {
-  it('denies a signed-in user who is not on the allowlist', async () => {
-    const db = asStranger(MALLORY);
-    await assertFails(db.doc(`users/${MALLORY}/entries/e1`).set(entry(MALLORY)));
-    await assertFails(db.doc(`users/${MALLORY}/entries/e1`).get());
+/**
+ * What replaced the allowlist, and what it did not.
+ *
+ * This block used to be `describe('the allowedUsers gate')` and its first test
+ * asserted that a signed-in stranger was refused everything. That is the
+ * assertion the change inverts, so it is the one that has to be replaced rather
+ * than deleted: what a stranger may now do is the feature, and the boundary
+ * around it is what still has to hold.
+ *
+ * **One test is gone and nothing here stands in for it.** It was called
+ * "takes away update and delete on what a revoked account already wrote", and
+ * it worked by minting Alice a token with no `allowed` claim — which is exactly
+ * the token every account now carries. There is no revocation any more, and
+ * writing a test that pretended otherwise would be worse than the gap: see the
+ * suspension paragraph in `firestore.rules`, which is where that is recorded
+ * and where the decision about a real ban belongs.
+ */
+describe('open signups', () => {
+  /**
+   * The change itself. `MALLORY` was the stranger this suite refused; the same
+   * uid, the same token, and now the first thing a new reader does — sign in,
+   * get a profile, write a first word.
+   */
+  it('lets an account nobody invited create its own profile and its first word', async () => {
+    const db = as(MALLORY);
+
+    await assertSucceeds(db.doc(`users/${MALLORY}`).set(profile(MALLORY)));
+    await assertSucceeds(db.doc(`users/${MALLORY}/entries/e1`).set(entry(MALLORY)));
+    await assertSucceeds(db.doc(`users/${MALLORY}/entries/e1`).get());
+  });
+
+  /**
+   * Opening the gate is not opening the door between notebooks, and this is the
+   * pair that says so in both directions. A new account is a new tenant, not a
+   * reader of everyone else's.
+   */
+  it('keeps a brand-new account out of an existing notebook, and vice versa', async () => {
+    await assertFails(as(MALLORY).doc(`users/${ALICE}/entries/e1`).get());
+    await assertFails(as(MALLORY).doc(`users/${ALICE}/entries/e2`).set(entry(ALICE)));
+    await assertFails(as(ALICE).doc(`users/${MALLORY}/entries/e1`).get());
+  });
+
+  /**
+   * Publishing is still unbuilt and its paths are still shut — including to the
+   * accounts that can now sign themselves up, which is the population that made
+   * leaving those rules in place a bad idea in the first place.
+   */
+  it('does not open the unbuilt publishing paths to a new account', async () => {
+    const db = as(MALLORY);
     await assertFails(db.doc(`publicEntries/pe-alice`).get());
     await assertFails(db.doc(`publicSets/set-alice`).get());
   });
 
-  it('denies an unverified email even when the uid is on the allowlist', async () => {
+  it('still denies an unverified email', async () => {
     const db = testEnv.authenticatedContext(ALICE, { email_verified: false }).firestore();
     await assertFails(db.doc(`users/${ALICE}/entries/e1`).get());
+    await assertFails(db.doc(`users/${ALICE}/entries/e1`).set(entry(ALICE)));
   });
 
-  it('keeps allowedUsers itself unreachable from any client', async () => {
-    const db = as(ALICE);
-    await assertFails(db.doc(`allowedUsers/${ALICE}`).get());
-    await assertFails(db.doc(`allowedUsers/${MALLORY}`).set({ email: 'm@example.com' }));
+  it('still denies a caller who is not signed in at all', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(db.doc(`users/${ALICE}/entries/e1`).get());
+    await assertFails(db.doc(`users/${MALLORY}/entries/e1`).set(entry(MALLORY)));
   });
 
   /**
-   * Revocation is the claim going away, not a document being deleted.
+   * `allowedUsers` and the `allowed` claim outlive the gate they served, and
+   * deliberately: restoring `isAllowed()` is how signups close again, and a
+   * rules deploy that lands after the documents have been tidied away locks out
+   * the operator along with everybody else.
    *
-   * That is a real change in what "revoked" means: the claim lives in the ID
-   * token, and Firestore rules have no revocation check, so clearing it takes
-   * effect only when that token expires — up to an hour. Revoking the refresh
-   * tokens ends the session at the next refresh but does not invalidate the
-   * token already in hand.
-   *
-   * **This test is the state after the token has turned over**, which is the
-   * one this harness can express: `@firebase/rules-unit-testing` mints tokens
-   * directly, so the window itself is not reachable from here.
-   *
-   * The published-copy version of this went with the publishing rules. The
-   * property survives it: revocation has to take away update and delete on what
-   * the account already wrote, not only create. Gating `create` alone would
-   * leave a revoked account editing its own notebook indefinitely, which is the
-   * gap the first review round found.
+   * So the collection has to stay unreachable from a client for the same reason
+   * it always did — it is admin-written state that decides access — and this
+   * test is what keeps that true while nothing in the rules reads it.
    */
-  it('takes away update and delete on what a revoked account already wrote', async () => {
-    const db = asStranger(ALICE);
-
-    await assertFails(db.doc(`users/${ALICE}/entries/e1`).update({ headword: 'edited' }));
-    await assertFails(db.doc(`users/${ALICE}/entries/e1`).delete());
-    // ...and reading it, which it could do a moment ago.
-    await assertFails(db.doc(`users/${ALICE}/entries/e1`).get());
+  it('keeps allowedUsers unreachable, so closing signups again still works', async () => {
+    const db = as(ALICE);
+    await assertFails(db.doc(`allowedUsers/${ALICE}`).get());
+    await assertFails(db.doc(`allowedUsers/${MALLORY}`).set({ email: 'm@example.com' }));
   });
 });
 
