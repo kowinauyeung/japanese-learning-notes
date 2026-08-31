@@ -59,6 +59,7 @@ const PAGE_SIZE = 200;
 export function EntriesProvider({ uid, children }: { uid: string; children: ReactNode }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadSucceeded, setLoadSucceeded] = useState(false);
   const [error, setError] = useState<LoadFailure | null>(null);
 
   // Rebuilt when the signed-in user changes, so the `users/{uid}` path baked
@@ -93,6 +94,7 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
    * The gate goes up on mount and on an account change, in the effect below.
    */
   const refresh = useCallback(async () => {
+    setLoadSucceeded(false);
     const mine = (walk.current += 1);
     try {
       const all: Entry[] = [];
@@ -109,6 +111,7 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
       if (walk.current === mine) {
         setEntries(all);
         setError(null);
+        setLoadSucceeded(true);
       }
     } catch (cause) {
       console.error(cause);
@@ -127,7 +130,7 @@ export function EntriesProvider({ uid, children }: { uid: string; children: Reac
    * Denial does not belong here: signing back in is what clears it, not the
    * network coming back, and a retry would only repeat the same rejection.
    */
-  useRetryOnReconnect(error !== null && isUnreachable(error.cause), refresh);
+  useRetryOnReconnect(error !== null && isUnreachable(error.cause), loadSucceeded, refresh);
 
   const value = useMemo(
     () => ({ entries, loading, error, refresh, repository }),

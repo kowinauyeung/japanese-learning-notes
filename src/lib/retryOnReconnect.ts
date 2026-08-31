@@ -28,7 +28,11 @@ import { useOnline } from '@/lib/useOnline';
  * (the stale result is discarded), but it is still a second read charged for
  * no reason, which is exactly the overlap #84 asked this hook to avoid.
  */
-export function useRetryOnReconnect(failed: boolean, retry: () => void | Promise<void>): void {
+export function useRetryOnReconnect(
+  failed: boolean,
+  loadSucceeded: boolean,
+  retry: () => void | Promise<void>,
+): void {
   const online = useOnline();
   const reconnectPending = useRef(!online);
   const retrying = useRef(false);
@@ -39,9 +43,16 @@ export function useRetryOnReconnect(failed: boolean, retry: () => void | Promise
       return;
     }
 
+    if (!reconnectPending.current) return;
+
     // A read that began offline can reject after the online event. Keep that
-    // reconnect available until the failure is published and can use it.
-    if (!reconnectPending.current || !failed) return;
+    // reconnect available until that read either succeeds or publishes a
+    // failure that can use it.
+    if (loadSucceeded) {
+      reconnectPending.current = false;
+      return;
+    }
+    if (!failed) return;
 
     reconnectPending.current = false;
     if (retrying.current) return;
@@ -56,5 +67,5 @@ export function useRetryOnReconnect(failed: boolean, retry: () => void | Promise
       .finally(() => {
         retrying.current = false;
       });
-  }, [online, failed, retry]);
+  }, [online, failed, loadSucceeded, retry]);
 }

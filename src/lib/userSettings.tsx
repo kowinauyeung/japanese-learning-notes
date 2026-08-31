@@ -51,6 +51,7 @@ function UserSettingsState({
   const [storedProfile, setStoredProfile] = useState(defaults);
   const [previewDraft, setPreviewDraft] = useState<UserProfileDraft | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadSucceeded, setLoadSucceeded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<LoadFailure | null>(null);
 
@@ -62,6 +63,7 @@ function UserSettingsState({
    * Deliberately does not raise `loading` — see the effect below.
    */
   const refresh = useCallback(async () => {
+    setLoadSucceeded(false);
     const mine = (walk.current += 1);
     try {
       const stored = await userRepository.get(uid);
@@ -80,6 +82,7 @@ function UserSettingsState({
       if (walk.current === mine) {
         setStoredProfile(next);
         setError(null);
+        setLoadSucceeded(true);
       }
     } catch (cause) {
       console.error(cause);
@@ -104,6 +107,7 @@ function UserSettingsState({
    */
   useRetryOnReconnect(
     error !== null && error.fallback === 'load.settings' && isUnreachable(error.cause),
+    loadSucceeded,
     refresh,
   );
 
