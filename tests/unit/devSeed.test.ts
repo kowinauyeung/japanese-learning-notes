@@ -57,12 +57,19 @@ describe('devSeed', () => {
    * the day somebody typed the fixture in.
    */
   it('moves its dates with the clock rather than being pinned to the day it was written', () => {
-    const later = devSeed(new Date('2027-03-04T10:00:00+09:00'));
+    const laterNow = new Date('2027-03-04T10:00:00+09:00');
+    const later = devSeed(laterNow);
     const newest = (data: typeof seed) =>
       (data.entries ?? []).map((entry) => entry.learnedOn ?? '').sort();
 
     expect(newest(seed).at(-1)).toBe(dateKey(NOW));
-    expect(newest(later).at(-1)).toBe('2027-03-04');
+    // Through `dateKey`, like the line above it, rather than as the calendar
+    // date the instant was written as. `dateKey` reads `getFullYear`,
+    // `getMonth` and `getDate`, which are local — and nothing pins `TZ` for
+    // this suite, so `2027-03-04T01:00Z` is the third of March on any runner
+    // two hours or more behind UTC. Hard-coded, this passed in the timezone it
+    // was written in and failed across the Atlantic.
+    expect(newest(later).at(-1)).toBe(dateKey(laterNow));
   });
 
   /** Signed in, or the dev server still opens on the login screen. */
