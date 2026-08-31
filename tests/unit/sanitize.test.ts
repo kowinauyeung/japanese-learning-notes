@@ -437,7 +437,7 @@ describe('sanitizeEntry — a document from the previous schema', () => {
 describe('sanitizeProgressMap', () => {
   it('keeps the good rows when one key holds something unusable', () => {
     const rows = sanitizeProgressMap({
-      good: { status: 'correct', lastMode: 'dictation', attempts: 2, correctCount: 2 },
+      good: { status: 'correct', lastMode: DICTATION_MODE, attempts: 2, correctCount: 2 },
       broken: 'not an object',
     });
 
@@ -564,7 +564,9 @@ describe('sanitizeSession — the missed list, in both shapes it is stored in', 
   });
 
   it('keeps a mode it does recognise', () => {
-    expect(sanitizeSession('s1', { ...stored([]), mode: DICTATION_MODE }).mode).toBe(DICTATION_MODE);
+    expect(sanitizeSession('s1', { ...stored([]), mode: DICTATION_MODE }).mode).toBe(
+      DICTATION_MODE,
+    );
   });
 });
 
