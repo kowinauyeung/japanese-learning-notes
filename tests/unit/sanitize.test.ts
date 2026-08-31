@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { POS } from '@/domain/entry';
 import { toDraft } from '@/lib/draft';
 import {
   isValidIsoDate,
@@ -467,6 +468,35 @@ describe('sanitizeProgressMap', () => {
  * be recovered. So the reader takes both, and the old shape reads back as a
  * snapshot with nothing in it, which is what it is.
  */
+/**
+ * 品詞 read back from a document nobody is editing.
+ *
+ * `togglePos` puts the form's own list in `POS` order, but a reader who never
+ * touches a 品詞 chip never rewrites the field — so every note stored before
+ * that, and every note imported from an assistant that listed them its own way,
+ * would keep the order it arrived in. `EntryHeadline` and the manifest row in
+ * `EntryBody` map `pos` as stored, so that order is what is drawn.
+ */
+describe('sanitizeEntry — 品詞 as a set', () => {
+  it('reads a stored order back in the order the app renders, so a note nobody edits stops disagreeing with one that was', () => {
+    const [first, second] = POS;
+
+    expect(sanitizeEntry('e1', { pos: [second, first] }).pos).toEqual([first, second]);
+  });
+
+  it('drops a repeat rather than drawing the same part of speech twice', () => {
+    const [first] = POS;
+
+    expect(sanitizeEntry('e1', { pos: [first, first] }).pos).toEqual([first]);
+  });
+
+  it('still refuses a value that is not a part of speech at all', () => {
+    const [first] = POS;
+
+    expect(sanitizeEntry('e1', { pos: [first, 'ヌルポ', 42, null] }).pos).toEqual([first]);
+  });
+});
+
 describe('sanitizeSession — the missed list, in both shapes it is stored in', () => {
   const stored = (missed: unknown) => ({
     mode: 'flashcard',
@@ -510,6 +540,28 @@ describe('sanitizeSession — the missed list, in both shapes it is stored in', 
 
   it('reads a missed list that is not a list at all as empty', () => {
     expect(sanitizeSession('s1', stored('w1')).missed).toEqual([]);
+  });
+
+  /**
+   * The drill a session was recorded in, when it is one this version does not
+   * have. `PracticeMode` is a closed union, so an unrecognised string read
+   * straight off the document is a value the type says cannot exist — and it
+   * reaches `SessionDialog`, which picks its heading and its chips from it.
+   *
+   * Named for the mode rather than for the sanitiser because that is the fact
+   * that decides it: a drill removed in a later version leaves sessions behind
+   * that still have to be readable, which is what this whole module is for.
+   */
+  it('reads a session recorded in a drill this version no longer has as a flashcard run', () => {
+    // Only the unrecognised string. `oneOf` also refuses a non-string, but that
+    // half of it is shared with every other enum field and is already covered
+    // by `falls back when jlpt is outside the scale` — asserting it again here
+    // would test the helper a second time rather than this field's wiring.
+    expect(sanitizeSession('s1', { ...stored([]), mode: 'writing' }).mode).toBe('flashcard');
+  });
+
+  it('keeps a mode it does recognise', () => {
+    expect(sanitizeSession('s1', { ...stored([]), mode: 'dictation' }).mode).toBe('dictation');
   });
 });
 

@@ -209,31 +209,57 @@ test.describe('with the network off', () => {
     // is drawn in Zen Maru Gothic 700 too — so a test that asked only whether
     // *a* 700 face had loaded would stay green with 兆 and 候 both missing from
     // the precache, which is the one thing it is here to notice.
-    await page.waitForFunction(() => document.fonts.status === 'loaded');
-    const covers = await page.evaluate(() => {
-      const inRange = (range: string, cp: number) =>
-        range.split(',').some((part) => {
-          const [start, end] = part.trim().replace(/^u\+/i, '').split('-');
-          const low = parseInt(start ?? '', 16);
-          return cp >= low && cp <= (end === undefined ? low : parseInt(end, 16));
-        });
-      const loaded = [...document.fonts].filter(
-        (face) =>
-          face.family.replace(/["']/g, '') === 'Zen Maru Gothic' &&
-          face.weight === '700' &&
-          face.status === 'loaded',
-      );
-      return {
-        faces: loaded.length,
-        // 兆 and 候 — the headword the dashboard is showing.
-        cho: loaded.some((face) => inRange(face.unicodeRange, 0x5146)),
-        ko: loaded.some((face) => inRange(face.unicodeRange, 0x5019)),
-      };
-    });
+    // `document.fonts.ready`, not `status === 'loaded'`. `status` reports
+    // whether the font loading process is *currently* active, so it reads
+    // `loaded` before any face has begun — including on the tick this reload
+    // arrives, ahead of the layout that asks for Zen Maru Gothic at all. The
+    // wait then returns immediately and the single read below reports no faces
+    // on a build that is correct.
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    const read = () =>
+      page.evaluate(() => {
+        const inRange = (range: string, cp: number) =>
+          range.split(',').some((part) => {
+            const [start, end] = part.trim().replace(/^u\+/i, '').split('-');
+            const low = parseInt(start ?? '', 16);
+            return cp >= low && cp <= (end === undefined ? low : parseInt(end, 16));
+          });
+        const loaded = [...document.fonts].filter(
+          (face) =>
+            face.family.replace(/["']/g, '') === 'Zen Maru Gothic' &&
+            face.weight === '700' &&
+            face.status === 'loaded',
+        );
+        return {
+          faces: loaded.length,
+          // 兆 and 候 — the headword the dashboard is showing.
+          cho: loaded.some((face) => inRange(face.unicodeRange, 0x5146)),
+          ko: loaded.some((face) => inRange(face.unicodeRange, 0x5019)),
+        };
+      });
 
-    expect(covers.faces, 'no Zen Maru Gothic 700 face loaded offline at all').toBeGreaterThan(0);
-    expect(covers.cho, '兆 (U+5146) is in no loaded face').toBe(true);
-    expect(covers.ko, '候 (U+5019) is in no loaded face').toBe(true);
+    // What breaks when this goes red: the dashboard is showing 兆候, and a
+    // headword whose characters are in no loaded face is drawn in whatever the
+    // device falls back to — legible, and in the wrong letterforms, which is
+    // the one thing a reader copying strokes off the screen must not be given.
+    //
+    // Polled as one predicate rather than gated on the count first. Every face
+    // of this family reports the same family and weight, and
+    // `src/fonts.css:2209` is a 700 face covering only kana and punctuation —
+    // it carries the header's brand mark, so it loads early and reliably while
+    // chunks 77 and 94 are still arriving. Waiting for `faces > 0` therefore
+    // waits for that face and nothing else, which is exactly the condition the
+    // note above says this test must not settle for.
+    //
+    // Polling does not soften the claim: a chunk genuinely absent from the
+    // precache fails on the last attempt as surely as on the first. The whole
+    // record is polled rather than a boolean so a timeout prints which of the
+    // two characters is missing, and whether any face loaded at all.
+    await expect
+      .poll(read, {
+        message: 'no Zen Maru Gothic 700 face covering 兆 (U+5146) and 候 (U+5019) loaded offline',
+      })
+      .toMatchObject({ cho: true, ko: true });
   });
 
   test('keeps every font chunk a file, so the runtime half cannot ride into the precache', async ({

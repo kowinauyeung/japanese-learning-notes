@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.1.0](https://github.com/kowinauyeung/japanese-learning-notes/compare/v1.0.0...v1.1.0) (2026-08-30)
+
+### Features
+
+* **admin:** register App Check debug tokens with a command ([#146](https://github.com/kowinauyeung/japanese-learning-notes/issues/146)) ([fc75cac](https://github.com/kowinauyeung/japanese-learning-notes/commit/fc75cacd9e5fe5fabc2dbe7e4adb39faf272182c))
+* **entry-form:** draft and save a word from the quick tab in one press ([#147](https://github.com/kowinauyeung/japanese-learning-notes/issues/147)) ([72dd8b5](https://github.com/kowinauyeung/japanese-learning-notes/commit/72dd8b5447acbe8f6f8f9b0ab5a28c402261f476))
+* **history:** record every word a session deals, with its own copy of each ([#143](https://github.com/kowinauyeung/japanese-learning-notes/issues/143)) ([15d979b](https://github.com/kowinauyeung/japanese-learning-notes/commit/15d979b1af4df2dc1bd8ef669e920d2571ab9ee1))
+* **mobile:** one control shape, a bottom navigation, and filters that start folded ([#145](https://github.com/kowinauyeung/japanese-learning-notes/issues/145)) ([f0d1d67](https://github.com/kowinauyeung/japanese-learning-notes/commit/f0d1d67e0ada444c6cf7fa6b8a3f70c704ac9b91))
+* **providers:** retry a failed read once the connection returns ([#131](https://github.com/kowinauyeung/japanese-learning-notes/issues/131)) ([3b46dfc](https://github.com/kowinauyeung/japanese-learning-notes/commit/3b46dfcb2c652f89ffaad6b64766894b494d14e6)), closes [#84](https://github.com/kowinauyeung/japanese-learning-notes/issues/84), references [#84](https://github.com/kowinauyeung/japanese-learning-notes/issues/84)
+* **vocab:** show the whole note in the word dialog, with an edit button ([#115](https://github.com/kowinauyeung/japanese-learning-notes/issues/115)) ([5dd032e](https://github.com/kowinauyeung/japanese-learning-notes/commit/5dd032e05690b06d4a28d3e5dd21f1bf86492702))
+* **wordsets:** open a set on its words, with the editor behind 編集 ([#141](https://github.com/kowinauyeung/japanese-learning-notes/issues/141)) ([9888a65](https://github.com/kowinauyeung/japanese-learning-notes/commit/9888a65f5bc74c41b0b0faa6ae03cce72cad9bd0))
+
+### Bug Fixes
+
+* **account:** refuse writes from a deleted account's outstanding token ([#136](https://github.com/kowinauyeung/japanese-learning-notes/issues/136)) ([535e25e](https://github.com/kowinauyeung/japanese-learning-notes/commit/535e25eae9a4f70a4f32838b5e2731ed6eeade6e))
+* **admin:** set ADC quota project for allow ([#134](https://github.com/kowinauyeung/japanese-learning-notes/issues/134)) ([3cc4e45](https://github.com/kowinauyeung/japanese-learning-notes/commit/3cc4e45e34180c73d709a316fbf40363ff8c1558))
+* **ai:** hide drafting after permanent model failure ([#117](https://github.com/kowinauyeung/japanese-learning-notes/issues/117)) ([0b6139f](https://github.com/kowinauyeung/japanese-learning-notes/commit/0b6139f8291aedb42f5db0c7edbcccd9533e2d39))
+* **ai:** read Gemini model name from Remote Config ([#127](https://github.com/kowinauyeung/japanese-learning-notes/issues/127)) ([5dbf2d8](https://github.com/kowinauyeung/japanese-learning-notes/commit/5dbf2d8e0f59de16deb7b77c68fb65fc3a1856f3))
+* **dashboard:** re-pin heatmap after viewport shrink ([#124](https://github.com/kowinauyeung/japanese-learning-notes/issues/124)) ([8ffd3a7](https://github.com/kowinauyeung/japanese-learning-notes/commit/8ffd3a7a0fbeb302295ec66acc658c2a4c348e38))
+* **errors:** distinguish a denied write from a dropped connection ([#128](https://github.com/kowinauyeung/japanese-learning-notes/issues/128)) ([7cbe09a](https://github.com/kowinauyeung/japanese-learning-notes/commit/7cbe09ab7603121f279c05b5814cc59e3f9d49e7))
+* **firebase:** resolve offline writes after local persistence ([#130](https://github.com/kowinauyeung/japanese-learning-notes/issues/130)) ([c0e11e7](https://github.com/kowinauyeung/japanese-learning-notes/commit/c0e11e73a5aa8e511cf3f0cd27f54f605e77d5ad))
+* **import:** default learnedOn to today instead of trusting the assistant's guess ([#114](https://github.com/kowinauyeung/japanese-learning-notes/issues/114)) ([86289a7](https://github.com/kowinauyeung/japanese-learning-notes/commit/86289a7f1302359698c840873fdb0bc671e01431))
+* **practice:** let PracticeSetup's weak-toggle row say why progress failed to load ([#129](https://github.com/kowinauyeung/japanese-learning-notes/issues/129)) ([3ef83b0](https://github.com/kowinauyeung/japanese-learning-notes/commit/3ef83b0d9e42696ceac4bb632a28507fc39cb74b)), closes [#24](https://github.com/kowinauyeung/japanese-learning-notes/issues/24), references [#23](https://github.com/kowinauyeung/japanese-learning-notes/issues/23)
+* **profile:** bound a persisted nickname by the product limit, not the rules limit ([#118](https://github.com/kowinauyeung/japanese-learning-notes/issues/118)) ([cf2f1df](https://github.com/kowinauyeung/japanese-learning-notes/commit/cf2f1dfc2336842838c39904cd58396f70661efe))
+* **pwa:** self-host the app's fonts as unicode-range chunks ([#138](https://github.com/kowinauyeung/japanese-learning-notes/issues/138)) ([de0e830](https://github.com/kowinauyeung/japanese-learning-notes/commit/de0e830e2ef1345fd9b7b2e1b79782e295ad611f)), references [#81](https://github.com/kowinauyeung/japanese-learning-notes/issues/81) [#78](https://github.com/kowinauyeung/japanese-learning-notes/issues/78)
+* **update:** surface a failed activation instead of discarding the rejection ([#122](https://github.com/kowinauyeung/japanese-learning-notes/issues/122)) ([0bea7d1](https://github.com/kowinauyeung/japanese-learning-notes/commit/0bea7d18cee85d46bf3320857e4952f9b53f6d51))
+* **vocabulary:** label the tag filter as recent, not exhaustive ([#123](https://github.com/kowinauyeung/japanese-learning-notes/issues/123)) ([4ffb599](https://github.com/kowinauyeung/japanese-learning-notes/commit/4ffb599901c6bc7c4249589269ecb4f4d7e9a3f1)), references [#103](https://github.com/kowinauyeung/japanese-learning-notes/issues/103)
 ## [1.0.0](https://github.com/kowinauyeung/japanese-learning-notes/compare/v0.1.0...v1.0.0) (2026-08-23)
 
 ### Features

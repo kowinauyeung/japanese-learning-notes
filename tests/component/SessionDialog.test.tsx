@@ -88,6 +88,9 @@ describe('SessionDialog — a session recorded before the run was kept', () => {
     );
 
     const link = screen.getByRole('link', { name: /切り分け/ });
+    // The row is how a learner gets from a drill they got wrong back to the
+    // note itself. A wrong or missing target here leaves the word readable and
+    // unreachable — the history renders, and nothing in it opens.
     expect(link).toHaveAttribute('href', '/vocabulary/w1');
     expect(within(link).getByText('N2')).toBeInTheDocument();
   });
@@ -248,7 +251,14 @@ describe('SessionDialog — the run, printed in full', () => {
   });
 
   it('says so plainly when a filter selects nothing', () => {
+    // Pinned rather than left on the base fixture's 1 / 3, for the reason
+    // given at the top of this block: the dialog prints the score from
+    // `total`/`correct` and the chips from `words`, so a default carried in
+    // here would draw 1 / 3 over a single word and describe a run the app
+    // cannot record.
     renderDialog({
+      total: 1,
+      correct: 0,
       words: [{ entryId: 'w1', headword: '切り分け', reading: 'きりわけ', correct: false }],
       missed: [{ entryId: 'w1', headword: '切り分け', reading: 'きりわけ' }],
     });

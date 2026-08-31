@@ -108,7 +108,7 @@ export function createWordSetRepository(db: Firestore, uid: string): WordSetRepo
      */
     async remove(id: string): Promise<void> {
       const ref = setRef(id);
-      await writes.write(ref, () => deleteDoc(ref));
+      await writes.write(ref, () => deleteDoc(ref), { missingIsSaved: true });
     },
 
     async settlePendingWrites(): Promise<void> {

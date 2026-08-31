@@ -43,11 +43,22 @@ export function VocabDialog() {
    *
    * A boolean survives the dialog being closed with the form up, and the next
    * word opened from any list would then arrive already in a form nobody asked
-   * to fill in. Comparing against `openId` makes a stale value inert without an
-   * effect having to reset it.
+   * to fill in. Comparing against `openId` makes a stale value inert for every
+   * *other* word — but not for the one it names, which is the case it was
+   * written to prevent.
+   *
+   * Back is the path that reaches it: `popstate` in `VocabDialogProvider`
+   * clears `openId` directly, so the form's own `onClose` never runs, and this
+   * component stays mounted for the whole session. The id then outlives the
+   * dialog it belonged to, and reopening that same word lands straight in the
+   * form. So it is cleared when the dialog closes as well as compared.
    */
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Adjusted during render rather than from an effect: React re-renders this
+  // component before committing either result, so no form is ever painted for
+  // a dialog that has already closed.
+  if (openId === null && editingId !== null) setEditingId(null);
   if (openId === null) return null;
   const entry = entries.find((item) => item.id === openId);
 

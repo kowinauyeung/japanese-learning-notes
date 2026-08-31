@@ -150,6 +150,34 @@ test.describe('browsing', () => {
     await expect(page.getByText('3 語')).toBeVisible();
   });
 
+  /**
+   * Back, with the edit form up rather than the preview.
+   *
+   * `VocabDialog` remembers which word it is editing rather than a boolean, so
+   * that a form left open when the dialog closes cannot greet the *next* word
+   * with itself. Back does not go through the form's own close: `popstate` in
+   * `VocabDialogProvider` clears the dialog directly, and `VocabDialog` is
+   * mounted for the whole session — so the remembered id survives, and the one
+   * word it still matches is the word it came from. Reopening that word then
+   * skips the note entirely and hands the reader a form they did not ask for.
+   */
+  test('reopens a word on its note after the edit form was closed by going back', async ({
+    page,
+  }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+    await previewDialog(page).getByRole('button', { name: '編集' }).click();
+    await expect(editDialog(page)).toBeVisible();
+
+    await page.goBack();
+    await expect(editDialog(page)).toBeHidden();
+
+    await page.getByRole('link', { name: /兆候/ }).click();
+
+    await expect(previewDialog(page)).toBeVisible();
+    await expect(editDialog(page)).toBeHidden();
+  });
+
   test('reaches the full page from the dialog', async ({ page }) => {
     await page.goto('/vocabulary');
     await page.getByRole('link', { name: /兆候/ }).click();
