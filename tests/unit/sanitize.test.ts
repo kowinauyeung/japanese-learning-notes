@@ -511,6 +511,28 @@ describe('sanitizeSession — the missed list, in both shapes it is stored in', 
   it('reads a missed list that is not a list at all as empty', () => {
     expect(sanitizeSession('s1', stored('w1')).missed).toEqual([]);
   });
+
+  /**
+   * The drill a session was recorded in, when it is one this version does not
+   * have. `PracticeMode` is a closed union, so an unrecognised string read
+   * straight off the document is a value the type says cannot exist — and it
+   * reaches `SessionDialog`, which picks its heading and its chips from it.
+   *
+   * Named for the mode rather than for the sanitiser because that is the fact
+   * that decides it: a drill removed in a later version leaves sessions behind
+   * that still have to be readable, which is what this whole module is for.
+   */
+  it('reads a session recorded in a drill this version no longer has as a flashcard run', () => {
+    // Only the unrecognised string. `oneOf` also refuses a non-string, but that
+    // half of it is shared with every other enum field and is already covered
+    // by `falls back when jlpt is outside the scale` — asserting it again here
+    // would test the helper a second time rather than this field's wiring.
+    expect(sanitizeSession('s1', { ...stored([]), mode: 'writing' }).mode).toBe('flashcard');
+  });
+
+  it('keeps a mode it does recognise', () => {
+    expect(sanitizeSession('s1', { ...stored([]), mode: 'dictation' }).mode).toBe('dictation');
+  });
 });
 
 /**
