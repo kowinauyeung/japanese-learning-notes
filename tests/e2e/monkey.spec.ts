@@ -293,28 +293,36 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
     return {
       description: `change ${chosen.type} index ${chosen.index}`,
       run: async () => {
-        const label = await labelOf(field);
-        await test.step(`resolved ${chosen.type} “${label}”`, async () => {
-          if (chosen.type === 'checkbox' || chosen.type === 'radio') return field.click();
-          if (chosen.type === 'date')
-            return field.fill(['', '2026-02-28', '2026-06-24'][Math.floor(valueDraw * 3)] ?? '', {
+        const skipped = `skipped field index ${chosen.index}, no longer on screen`;
+        if (!(await field.isVisible().catch(() => false))) return skipped;
+        const label = await labelOf(field).catch(() => null);
+        if (label === null) return skipped;
+        try {
+          await test.step(`resolved ${chosen.type} “${label}”`, async () => {
+            if (chosen.type === 'checkbox' || chosen.type === 'radio') return field.click();
+            if (chosen.type === 'date')
+              return field.fill(['', '2026-02-28', '2026-06-24'][Math.floor(valueDraw * 3)] ?? '', {
+                timeout: 4000,
+              });
+            if (chosen.type === 'number')
+              return field.fill(['-1', '0', '2.7', '999999'][Math.floor(valueDraw * 4)] ?? '0', {
+                timeout: 4000,
+              });
+            if (chosen.type === 'range') {
+              const bounds = await field.evaluate((element) => {
+                const input = element as HTMLInputElement;
+                return { min: input.min || '0', max: input.max || '100' };
+              });
+              return field.fill(valueDraw < 0.5 ? bounds.min : bounds.max);
+            }
+            return field.fill(TEXT_CORPUS[Math.floor(valueDraw * TEXT_CORPUS.length)] ?? '', {
               timeout: 4000,
             });
-          if (chosen.type === 'number')
-            return field.fill(['-1', '0', '2.7', '999999'][Math.floor(valueDraw * 4)] ?? '0', {
-              timeout: 4000,
-            });
-          if (chosen.type === 'range') {
-            const bounds = await field.evaluate((element) => {
-              const input = element as HTMLInputElement;
-              return { min: input.min || '0', max: input.max || '100' };
-            });
-            return field.fill(valueDraw < 0.5 ? bounds.min : bounds.max);
-          }
-          return field.fill(TEXT_CORPUS[Math.floor(valueDraw * TEXT_CORPUS.length)] ?? '', {
-            timeout: 4000,
           });
-        });
+        } catch (error) {
+          if (!(await field.isVisible().catch(() => false))) return skipped;
+          throw error;
+        }
         return `change ${chosen.type} “${label}”`;
       },
     };
@@ -329,11 +337,19 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
     return {
       description: `choose option in select index ${chosen.index}`,
       run: async () => {
-        const label = await labelOf(select);
-        await test.step(`resolved select “${label}”`, async () => {
-          const count = await select.locator('option').count();
-          if (count > 0) await select.selectOption({ index: Math.floor(valueDraw * count) });
-        });
+        const skipped = `skipped select index ${chosen.index}, no longer on screen`;
+        if (!(await select.isVisible().catch(() => false))) return skipped;
+        const label = await labelOf(select).catch(() => null);
+        if (label === null) return skipped;
+        try {
+          await test.step(`resolved select “${label}”`, async () => {
+            const count = await select.locator('option').count();
+            if (count > 0) await select.selectOption({ index: Math.floor(valueDraw * count) });
+          });
+        } catch (error) {
+          if (!(await select.isVisible().catch(() => false))) return skipped;
+          throw error;
+        }
         return `choose option in “${label}”`;
       },
     };
@@ -446,6 +462,29 @@ async function attachHistory(testInfo: TestInfo, seedValue: string, history: str
   await testInfo.attach('monkey-actions', {
     body: [`seed=${seedValue}`, `steps=${history.length}`, '', ...history].join('\n'),
     contentType: 'text/plain',
+  });
+}
+
+const STALE_CONTROLS = [
+  { categoryDraw: 0.5, element: 'input', expected: 'skipped field index 0, no longer on screen' },
+  { categoryDraw: 0.6, element: 'select', expected: 'skipped select index 0, no longer on screen' },
+];
+
+for (const { categoryDraw, element, expected } of STALE_CONTROLS) {
+  test(`skips a stale ${element} before resolving its label`, async ({ page }) => {
+    await page.setContent('<main></main>');
+    await page.evaluate((tagName) => {
+      const control = document.createElement(tagName);
+      control.setAttribute('aria-label', 'Monkey control');
+      if (control instanceof HTMLSelectElement) control.add(new Option('Option'));
+      document.body.append(control);
+    }, element);
+
+    const draws = [categoryDraw, 0, 0];
+    const action = await chooseAction(page, () => draws.shift() ?? 0);
+    await page.locator(element).evaluate((control) => control.remove());
+
+    await expect(action.run()).resolves.toBe(expected);
   });
 }
 
