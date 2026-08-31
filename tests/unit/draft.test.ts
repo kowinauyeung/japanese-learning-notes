@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { EntryDraft } from '@/domain/entry';
+import type { EntryDraft, Pos } from '@/domain/entry';
+import { POS } from '@/domain/entry';
 import { ENTRY_LIMITS } from '@/domain/limits';
 import {
   describeSizeProblem,
@@ -9,6 +10,7 @@ import {
   invalidTags,
   parseTags,
   toDraft,
+  togglePos,
 } from '@/lib/draft';
 import { wordSetError } from '@/lib/wordSetDraft';
 import { makeEntry } from '../fixtures/entry';
@@ -364,5 +366,37 @@ describe('wordSetError', () => {
    */
   it('measures the trimmed value, which is what the write path sends', () => {
     expect(wordSetError({ ...ok, name: `${'あ'.repeat(30)}   ` })).toBeNull();
+  });
+});
+
+/**
+ * 品詞 is a set, and the order it renders in is `POS`.
+ *
+ * Nothing downstream sorts it: `EntryHeadline` and the manifest row in
+ * `EntryBody` map `entry.pos` as stored, and `sanitizeEntry` filters without
+ * reordering. So an order that came out of the form in the order the chips
+ * were pressed is the order that reached Firestore, came back, and was drawn —
+ * two readers with the same two parts of speech seeing 名詞／動詞 and
+ * 動詞／名詞.
+ */
+describe('togglePos', () => {
+  it('returns the same order however the chips were pressed, which is what the display and the stored draft both take as given', () => {
+    const forwards = togglePos(togglePos([], '名詞'), '動詞');
+    const backwards = togglePos(togglePos([], '動詞'), '名詞');
+
+    expect(forwards).toEqual(backwards);
+    expect(forwards).toEqual(POS.filter((part) => part === '名詞' || part === '動詞'));
+  });
+
+  it('removes one without disturbing the order of the rest', () => {
+    const three = POS.slice(0, 3) as Pos[];
+    const [, second] = three;
+
+    expect(togglePos(three, second as Pos)).toEqual([three[0], three[2]]);
+  });
+
+  it('adds one that was not there and drops one that was', () => {
+    expect(togglePos([], '名詞')).toEqual(['名詞']);
+    expect(togglePos(['名詞'], '名詞')).toEqual([]);
   });
 });

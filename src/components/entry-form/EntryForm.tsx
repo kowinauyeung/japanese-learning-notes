@@ -1,22 +1,13 @@
 import { chipClass, DateControl, SelectControl } from '@/components/controls';
-import type { EntryDraft, Pos } from '@/domain/entry';
+import type { EntryDraft } from '@/domain/entry';
 import { JLPT_LEVELS, POLITENESS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import { ENTRY_LIMITS, TAG_INPUT_MAX } from '@/domain/limits';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
-import { parseTags } from '@/lib/draft';
+import { parseTags, togglePos } from '@/lib/draft';
 import { accentKana } from '@/lib/mora';
 import { Area, Field, RepeatableList, Select, Text } from './fields';
 import { PitchAccentField } from './PitchAccentField';
-
-/**
- * Order is not preserved: 品詞 is a set, and `POS` is the order it renders in.
- * Written out rather than reused from the filter panels because those toggle
- * `string[]` and this has to stay a `Pos[]` for the draft.
- */
-function togglePos(list: Pos[], value: Pos): Pos[] {
-  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
-}
 
 export function EntryForm({
   draft,
