@@ -330,7 +330,14 @@ export function summariseSession(input: {
   filterLabel: string;
   answers: readonly Answer[];
   startedAt: string;
+  /**
+   * The words that were dealt, so each one can be copied into the record rather
+   * than only pointed at — see `MissedWord`. The queue, not the whole notebook:
+   * an answer can only name a card this session dealt.
+   */
+  entries: readonly Entry[];
 }): PracticeSessionDraft {
+  const byId = new Map(input.entries.map((entry) => [entry.id, entry]));
   return {
     mode: input.mode,
     /*
@@ -348,7 +355,25 @@ export function summariseSession(input: {
     filterLabel: ellipsise(input.filterLabel, SESSION_LIMITS.filterLabel),
     total: input.answers.length,
     correct: input.answers.filter((answer) => answer.correct).length,
-    missed: input.answers.filter((answer) => !answer.correct).map((answer) => answer.entryId),
+    /*
+      Every answer, right and wrong, in the order they were given — `answers`
+      is appended to as the session runs, so its order is the deal order.
+
+      A word the queue cannot name still gets a row, with an empty snapshot.
+      That should not happen, and if it does the honest record is the id: it is
+      the part that was actually observed, and dropping the answer would put
+      `words.length` below `total` in the one record whose whole job is to say
+      what happened.
+    */
+    words: input.answers.map((answer) => {
+      const entry = byId.get(answer.entryId);
+      return {
+        entryId: answer.entryId,
+        headword: entry?.headword ?? '',
+        reading: entry?.reading ?? '',
+        correct: answer.correct,
+      };
+    }),
     startedAt: input.startedAt,
   };
 }

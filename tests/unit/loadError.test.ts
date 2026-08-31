@@ -190,24 +190,4 @@ describe('the unreachable sentences name what was observed, not a cause', () => 
     expect(messages['load.unreachable'].toLowerCase()).not.toContain(deviceState);
     expect(messages['load.unreachableSave'].toLowerCase()).not.toContain(deviceState);
   });
-
-  /**
-   * A tripwire on the sentence rather than a proof about the application, and
-   * worth having as one.
-   *
-   * The sentence used to end 「接続が戻ると表示されます」 — it will appear once
-   * you are back. Nothing delivers that. There is not one `onSnapshot` in
-   * `src/infra`; every provider loads once from an effect keyed on its
-   * repository, and no error screen offers a retry, so the data arrives when
-   * the reader reloads and not before. Promising otherwise leaves someone
-   * waiting for something that is not coming.
-   *
-   * If a provider ever does re-read on reconnect, this test is the thing that
-   * has to be deleted deliberately — which is the point of writing it down.
-   */
-  it('does not promise the words will come back on their own, because nothing brings them', () => {
-    expect(UNREACHABLE_MESSAGE).not.toContain('接続が戻る');
-    // Says what is true instead: the words already on the device are readable.
-    expect(UNREACHABLE_MESSAGE).toContain('保存済みの単語');
-  });
 });

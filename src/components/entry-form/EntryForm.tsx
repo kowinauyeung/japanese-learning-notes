@@ -1,11 +1,12 @@
-import type { EntryDraft, Pos } from '@/domain/entry';
+import { chipClass, DateControl, SelectControl } from '@/components/controls';
+import type { EntryDraft } from '@/domain/entry';
 import { JLPT_LEVELS, POLITENESS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import { ENTRY_LIMITS, TAG_INPUT_MAX } from '@/domain/limits';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
-import { parseTags } from '@/lib/draft';
+import { parseTags, togglePos } from '@/lib/draft';
 import { accentKana } from '@/lib/mora';
-import { Area, Field, RepeatableList, Select, Text, inputClass } from './fields';
+import { Area, Field, RepeatableList, Select, Text } from './fields';
 import { PitchAccentField } from './PitchAccentField';
 
 export function EntryForm({
@@ -51,11 +52,9 @@ export function EntryForm({
           />
         </Field>
         <Field label={t('form.learnedOn')}>
-          <input
-            type="date"
+          <DateControl
             value={draft.learnedOn}
             onChange={(event) => set('learnedOn', event.target.value)}
-            className={inputClass}
           />
         </Field>
         <Field label={t('form.source')} hint={t('form.optional')}>
@@ -75,27 +74,37 @@ export function EntryForm({
         </Field>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Field label={t('vocabulary.partOfSpeech')} hint={t('form.multiple')}>
-          <select
-            multiple
-            size={5}
-            value={draft.pos}
-            onChange={(event) =>
-              set(
-                'pos',
-                [...event.target.selectedOptions].map((o) => o.value as Pos),
-              )
-            }
-            className={`${inputClass} min-h-28 py-1`}
-          >
-            {POS.map((part) => (
-              <option key={part} value={part}>
-                {entryLabel(part)}
-              </option>
-            ))}
-          </select>
-        </Field>
+      {/*
+        Chips rather than the `<select multiple size={5}>` this was.
+        A multi-select is the one native widget with no mobile rendering worth
+        having: iOS collapses it to a single line reading 「0 Items」, which
+        names the count of a selection it will not show and ignores the height
+        the list box was given, so the field said nothing about what was chosen
+        until it was opened. Chips are the same control the filters already
+        use, they render identically in both engines, and what is selected is
+        readable without touching anything.
+      */}
+      <fieldset className="space-y-1.5">
+        <legend className="text-[11px] text-muted">
+          {t('vocabulary.partOfSpeech')}
+          <span className="ml-1 opacity-70">{t('form.multiple')}</span>
+        </legend>
+        <div className="flex flex-wrap gap-1.5">
+          {POS.map((part) => (
+            <button
+              key={part}
+              type="button"
+              aria-pressed={draft.pos.includes(part)}
+              onClick={() => set('pos', togglePos(draft.pos, part))}
+              className={chipClass(draft.pos.includes(part))}
+            >
+              {entryLabel(part)}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
+      <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-3">
           <Field label={t('vocabulary.jlptLevel')}>
             <Select
@@ -139,10 +148,9 @@ export function EntryForm({
       </div>
 
       <Field label={t('form.frequency')}>
-        <select
+        <SelectControl
           value={draft.freq}
           onChange={(event) => set('freq', Number(event.target.value) as EntryDraft['freq'])}
-          className={inputClass}
         >
           {[1, 2, 3, 4, 5].map((value) => (
             <option key={value} value={value}>
@@ -150,7 +158,7 @@ export function EntryForm({
               {'☆'.repeat(5 - value)}
             </option>
           ))}
-        </select>
+        </SelectControl>
       </Field>
 
       <div className="space-y-3">

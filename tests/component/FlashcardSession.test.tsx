@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Modal } from '@/components/Modal';
 import { FlashcardSession } from '@/components/practice/FlashcardSession';
 import { makeEntry } from '../fixtures/entry';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 /**
  * The keyboard shortcuts, which are the only way this card is meant to be
@@ -159,7 +159,7 @@ describe('FlashcardSession — long secondary text', () => {
 /**
  * The card under an overlay it was never told about.
  *
- * `AppLayout` renders ＋追加 and the mobile ＋ button on every route,
+ * `AppLayout` renders ＋追加 and the phone's 追加 tab on every route,
  * `/practice/:mode` included, so the add-word sheet can be open over a running
  * card while `FlashcardSession` still has `keyboard` true — it only knows
  * about the quit dialog its own parent renders. A document-level listener then

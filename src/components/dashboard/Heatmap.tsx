@@ -132,6 +132,14 @@ export function Heatmap({
     return result;
   }, [countsByDay]);
 
+  const pinLatestWeek = useCallback(() => {
+    const node = scrollerRef.current;
+    if (!node || pinned.current) return;
+    if (node.scrollWidth <= node.clientWidth) return;
+    node.scrollLeft = node.scrollWidth;
+    pinned.current = true;
+  }, []);
+
   /**
    * The year runs oldest to newest, so on a viewport too narrow to show all
    * fifty-three columns the browser opens on the *oldest* weeks and today sits
@@ -141,15 +149,24 @@ export function Heatmap({
    * Before paint, so the reader never sees last August first. Once per mount:
    * `weeks` is rebuilt whenever an entry is added, and re-pinning there would
    * yank someone who had deliberately scrolled back into their history. When
-   * nothing overflows, `scrollLeft` clamps to 0 and this is a no-op.
+   * nothing overflows, leave the scroller unpinned so a later viewport shrink
+   * can still move the newly overflowing year to today.
    */
   useLayoutEffect(() => {
+    pinLatestWeek();
+  }, [pinLatestWeek, weeks]);
+
+  useEffect(() => {
     const node = scrollerRef.current;
     if (!node || pinned.current) return;
-    if (node.scrollWidth <= node.clientWidth) return;
-    node.scrollLeft = node.scrollWidth;
-    pinned.current = true;
-  }, [weeks]);
+
+    const observer = new ResizeObserver(() => {
+      pinLatestWeek();
+      if (pinned.current) observer.disconnect();
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [pinLatestWeek, weeks]);
 
   return (
     <section className="rounded-card bg-card p-5 shadow-panel">

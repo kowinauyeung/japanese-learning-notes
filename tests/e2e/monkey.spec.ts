@@ -92,6 +92,9 @@ function makeMonkeyEntry(index: number): SeedEntry {
 
 const MONKEY_ENTRIES = Array.from({ length: 50 }, (_, index) => makeMonkeyEntry(index));
 
+/** The 200-character headword, named because the session fixture snapshots it. */
+const MONKEY_WORD_1 = makeMonkeyEntry(0);
+
 const MONKEY_SET = {
   id: 'monkey-set',
   name: 'W'.repeat(200),
@@ -157,30 +160,49 @@ async function available(locator: Locator): Promise<AvailableElement[]> {
   );
 }
 
+/**
+ * Bounded, because `Locator.evaluate` resolves its locator by waiting for the
+ * element to be attached rather than by reporting that it is gone — and this
+ * project sets no action timeout, so the wait is the *test's*. A stale index
+ * would therefore hang the run instead of being skipped, which is the failure
+ * the visibility guards in `chooseAction` exist to replace. A second is orders
+ * of magnitude more than reading a label off an attached element takes.
+ */
+const LABEL_TIMEOUT_MS = 1_000;
+
 async function labelOf(locator: Locator): Promise<string> {
-  return locator.evaluate((element) => {
-    const html = element as HTMLElement;
-    const labelled =
-      html.getAttribute('aria-label') ||
-      ('labels' in html ? ((html as HTMLInputElement).labels?.[0]?.textContent ?? '') : '') ||
-      html.textContent ||
-      html.getAttribute('placeholder') ||
-      html.tagName.toLowerCase();
-    return labelled.trim().replace(/\s+/g, ' ').slice(0, 80);
-  });
+  return locator.evaluate(
+    (element) => {
+      const html = element as HTMLElement;
+      const labelled =
+        html.getAttribute('aria-label') ||
+        ('labels' in html ? ((html as HTMLInputElement).labels?.[0]?.textContent ?? '') : '') ||
+        html.textContent ||
+        html.getAttribute('placeholder') ||
+        html.tagName.toLowerCase();
+      return labelled.trim().replace(/\s+/g, ' ').slice(0, 80);
+    },
+    undefined,
+    { timeout: LABEL_TIMEOUT_MS },
+  );
 }
 
 async function safeButtonElements(buttons: Locator): Promise<AvailableElement[]> {
   const elements = await available(buttons);
   const resolved = await Promise.all(
     elements.map(async (element) => {
-      const label = await labelOf(buttons.nth(element.index)).catch(() => '');
+      // `null`, not `''`: this label is a safety filter — it is the only thing
+      // keeping the monkey off ログアウト and アカウントを削除 — so a label that
+      // could not be read must drop its element rather than fall through the
+      // test below as an empty string, which matches nothing and is kept.
+      const label = await labelOf(buttons.nth(element.index)).catch(() => null);
       return { element, label };
     }),
   );
   return resolved
     .filter(
       ({ label }) =>
+        label !== null &&
         !/ログアウト|アカウントを削除|データを削除|書き出す|単語を聞く|音声/.test(label),
     )
     .map(({ element }) => element);
@@ -208,6 +230,32 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
       description: `click button index ${chosen.index}`,
       run: async () => {
         const button = buttons.nth(chosen.index);
+        /*
+         * The index is from a snapshot, and the snapshot can be of the previous
+         * page. `available()` rejects anything a reader could not press —
+         * `display: none` included — but it runs while the action is being
+         * chosen, and the step before this one may have been a click on a link:
+         * every route here is `lazy`, so the old page is still mounted while the
+         * new one loads and the DOM under a given index changes out from under
+         * the choice. Seed 33181645649 hit it exactly: 003 clicked 単語, 004
+         * resolved index 2 against the vocabulary page it had become, where that
+         * position holds a filter toggle that is `nav:hidden` on a desktop
+         * width, and the run failed on a four second click timeout.
+         *
+         * Rechecking is the whole fix, because clicking it is not something this
+         * suite may report: a control the browser is not painting is one no
+         * reader can reach, so a monkey that presses it is testing nothing and
+         * failing anyway. The skip goes into the history, so a run that keeps
+         * doing this is visible rather than quietly shorter.
+         */
+        // Visibility before the label, and not the other way round: `labelOf`
+        // goes through `Locator.evaluate`, which *waits* for an element that
+        // is not there rather than reporting that it is gone. Resolving the
+        // label first therefore turns the very staleness described above into
+        // a run that hangs to its timeout with no skip recorded, which is the
+        // failure this guard exists to replace.
+        if (!(await button.isVisible()))
+          return `skipped button index ${chosen.index}, no longer on screen`;
         const label = await labelOf(button);
         await test.step(`resolved button “${label}”`, () => button.click({ timeout: 4000 }));
         return `click button “${label}”`;
@@ -224,6 +272,11 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
       description: `click link index ${chosen.index}`,
       run: async () => {
         const link = links.nth(chosen.index);
+        // Same staleness as the button above, and the same answer — including
+        // the order: the index is the only label available for something that
+        // is no longer on the page to be asked for one.
+        if (!(await link.isVisible()))
+          return `skipped link index ${chosen.index}, no longer on screen`;
         const label = await labelOf(link);
         await test.step(`resolved link “${label}”`, () => link.click({ timeout: 4000 }));
         return `click link “${label}”`;
@@ -414,7 +467,16 @@ for (const scenario of SCENARIOS) {
           filterLabel: `単語集:${MONKEY_SET.name}`,
           total: 12,
           correct: 7,
-          missed: ['monkey-word-1'],
+          // Snapshot taken from the entry itself, so the 200-character headword
+          // this fixture exists to be hostile with reaches the history dialog
+          // too, not only the word list.
+          missed: [
+            {
+              entryId: MONKEY_WORD_1.id,
+              headword: MONKEY_WORD_1.headword ?? '',
+              reading: MONKEY_WORD_1.reading ?? '',
+            },
+          ],
           startedAt: '2026-06-23T00:00:00.000Z',
           finishedAt: '2026-06-23T00:05:00.000Z',
         },

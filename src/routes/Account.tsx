@@ -15,6 +15,7 @@ import { authPort, userRepository } from '@/lib/backend';
 import { appVersion, buildLine } from '@/lib/build';
 import { newErrorId } from '@/lib/diagnostics';
 import { useEntries } from '@/lib/entries';
+import { loadErrorMessage } from '@/lib/loadError';
 import { useProgress } from '@/lib/progress';
 import { useUserSettings } from '@/lib/userSettingsContext';
 import { useWordSets } from '@/lib/wordSets';
@@ -77,7 +78,16 @@ export function Component() {
       setError(
         cause instanceof Error && cause.message.startsWith('エクスポートが終わりませんでした')
           ? t('load.exportWalk')
-          : t('account.exportError'),
+          : // A denial fell through to the generic 「エクスポートできませんでした」,
+            // indistinguishable from any other failure and unclearable by
+            // retrying. `loadErrorMessage` is the seam #22 built for exactly
+            // this distinction.
+            loadErrorMessage(
+              cause,
+              t('account.exportError'),
+              t('load.accessDenied'),
+              t('load.unreachableExport'),
+            ),
       );
     } finally {
       setBusy(null);

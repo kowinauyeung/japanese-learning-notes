@@ -1,8 +1,13 @@
 import type { ReactNode } from 'react';
+import { SelectControl, controlClass, textAreaClass } from '@/components/controls';
 import { useI18n } from '@/i18n/context';
 
-export const inputClass =
-  'rounded-panel border-line bg-bg text-ink placeholder:text-muted min-h-10 w-full border px-3 text-sm';
+/**
+ * Kept as a name because half the form imports it, but it is no longer this
+ * file's own shape: every control in the app is sized by `src/components/controls.tsx`
+ * so that a dropdown, a date field and a text box in the same row are the same box.
+ */
+export const inputClass = controlClass;
 
 export function Field({
   label,
@@ -52,11 +57,14 @@ export function Text({
   onChange,
   maxLength,
   placeholder,
+  disabled,
 }: {
   value: string;
   onChange: (value: string) => void;
   maxLength: number;
   placeholder?: string;
+  /** See `Area`: a field a request in flight is about to answer for. */
+  disabled?: boolean;
 }) {
   return (
     <input
@@ -64,6 +72,7 @@ export function Text({
       value={value}
       maxLength={maxLength}
       placeholder={placeholder}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
       className={inputClass}
     />
@@ -99,7 +108,7 @@ export function Area({
       placeholder={placeholder}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
-      className={`${inputClass} prose-cjk py-2 leading-relaxed disabled:opacity-50`}
+      className={`${textAreaClass} prose-cjk leading-relaxed`}
     />
   );
 }
@@ -118,14 +127,14 @@ export function Select({
   blank?: string;
 }) {
   return (
-    <select value={value} onChange={(event) => onChange(event.target.value)} className={inputClass}>
+    <SelectControl value={value} onChange={(event) => onChange(event.target.value)}>
       <option value="">{blank}</option>
       {options.map((option) => (
         <option key={option} value={option}>
           {formatOption(option)}
         </option>
       ))}
-    </select>
+    </SelectControl>
   );
 }
 

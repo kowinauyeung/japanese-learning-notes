@@ -73,6 +73,39 @@ service cloud.firestore {
       return signedIn() && request.auth.token.allowed == true;
     }
 
+    // ---- an account that has been deleted, which its token cannot say ----
+    //
+    // Deleting the Auth user does not invalidate the ID tokens already minted
+    // for it. There is no revocation check here and there cannot be one — rules
+    // are evaluated without a round trip to Auth — so a second tab signed in as
+    // the same uid keeps writing for up to an hour after the account and all of
+    // its data are gone. What it writes lands under a uid nothing will ever
+    // issue a token for again: unreachable by the app, and invisible to the
+    // export and delete paths, because both start from a signed-in session.
+    //
+    // The tombstone is the one thing rules can see that the token cannot carry.
+    // `deleteEverything` writes it before it drains anything.
+    //
+    // **It gates `create` and `update` and deliberately gates neither `read`
+    // nor `delete`**, which is the whole design and not an omission:
+    //
+    //  * Gating `delete` would stop the account finishing its own deletion —
+    //    the tombstone is written first, and everything after it is a delete —
+    //    and would strand whatever a half-finished run left behind, which is
+    //    the exact state this exists to avoid creating.
+    //  * Gating `read` would break the export the account screen offers and
+    //    change nothing about the race. The defect is data written back.
+    //
+    // **This is the per-request read that `isAllowed()` above was changed to
+    // avoid, and it is affordable here for a reason worth stating.** That one
+    // ran on every request to every path, reads included, which doubles the
+    // read cost of an application that loads a whole notebook on sign-in. This
+    // one runs on writes alone, and it is called *last* in every rule below so
+    // that a write already refused for its shape or its owner never spends it.
+    function notDeleted(uid) {
+      return !exists(/databases/$(database)/documents/deletedAccounts/$(uid));
+    }
+
     // ---- shape and size ----
     //
     // These exist for one threat and it is not shape: an account that is
@@ -206,9 +239,13 @@ service cloud.firestore {
       ];
     }
 
+    // `missed` is here for documents already written, not for new ones. A
+    // session records `words` — the whole run — and the wrong answers are
+    // derived from it on read, so nothing has written `missed` since. Removing
+    // it would refuse an update to a session written before that change.
     function sessionFields() {
       return [
-        'ownerUid', 'mode', 'filterLabel', 'total', 'correct', 'missed',
+        'ownerUid', 'mode', 'filterLabel', 'total', 'correct', 'missed', 'words',
         'startedAt', 'finishedAt'
       ];
     }
@@ -311,6 +348,13 @@ service cloud.firestore {
         && str(d.get('description', ''), 1000)
         // The one unbounded list in the schema, and the one a set is made of.
         && list(d.get('entryIds', []), 1000)
+        // Only the element count is bounded here. Rules can index a known list
+        // position, but cannot iterate across all elements, so a single topic can
+        // still carry a large string until Firestore's document limit stops it.
+        // For the one-owner release this is accepted explicitly; before a second
+        // account exists, move these writes behind a trusted backend, flatten the
+        // schema, or keep accepting the risk with quota alerting rather than
+        // validation.
         && list(d.get('topics', []), 20)
         // The rest of what `wordSetFields()` permits. Naming a field and never
         // reading it is the hole `hasOnly` was added to close, and closing it
@@ -319,7 +363,12 @@ service cloud.firestore {
         && str(d.get('level', ''), 10)
         && (d.get('publishedId', null) == null || str(d.get('publishedId', ''), 200))
         && d.get('publishedVersion', 0) is int && d.get('publishedVersion', 0) >= 0
-        && (d.get('copiedFrom', null) == null || d.get('copiedFrom', {}).size() <= 10)
+        // The map shape is still deliberately loose, but the known nickname
+        // value is named directly and bounded.
+        && (d.get('copiedFrom', null) == null
+            || (d.get('copiedFrom', {}) is map
+                && d.get('copiedFrom', {}).size() <= 10
+                && str(d.get(['copiedFrom', 'ownerNickname'], ''), 50)))
         && d.createdAt is timestamp
         && d.updatedAt is timestamp;
     }
@@ -332,7 +381,13 @@ service cloud.firestore {
         && d.get('total', 0) is int && d.get('total', 0) >= 0 && d.get('total', 0) <= 2000
         && d.get('correct', 0) is int && d.get('correct', 0) >= 0
         && d.get('correct', 0) <= d.get('total', 0)
+        // Element count only. Rules can index a known position, but cannot
+        // iterate across all 2,000 recorded words; see the `validWordSet` note
+        // for the accepted client-only tradeoff. Both fields are bounded at the
+        // same 2,000 as `total`, because `words` holds one element per card
+        // dealt and `missed` held one per card missed.
         && list(d.get('missed', []), 2000)
+        && list(d.get('words', []), 2000)
         // Same again, and `mode` is bounded by length rather than by value on
         // purpose. `PRACTICE_MODES` in `src/domain/practice.ts` holds two words
         // today, and an earlier version of this comment said four — but writing
@@ -371,21 +426,21 @@ service cloud.firestore {
       }
 
       allow read, delete: if mine();
-      allow create, update: if mine() && validUser(uid) && keepsCreatedAt();
+      allow create, update: if mine() && validUser(uid) && keepsCreatedAt() && notDeleted(uid);
 
       match /entries/{entryId} {
         allow read, delete: if mine();
-        allow create, update: if mine() && validEntry(uid) && keepsCreatedAt();
+        allow create, update: if mine() && validEntry(uid) && keepsCreatedAt() && notDeleted(uid);
       }
 
       match /wordSets/{setId} {
         allow read, delete: if mine();
-        allow create, update: if mine() && validWordSet(uid) && keepsCreatedAt();
+        allow create, update: if mine() && validWordSet(uid) && keepsCreatedAt() && notDeleted(uid);
       }
 
       match /practiceSessions/{sessionId} {
         allow read, delete: if mine();
-        allow create, update: if mine() && validSession(uid) && keepsCreatedAt();
+        allow create, update: if mine() && validSession(uid) && keepsCreatedAt() && notDeleted(uid);
       }
 
       // One document holding every entry's progress — see ProgressRepository
@@ -407,8 +462,53 @@ service cloud.firestore {
         // notebook this design expects and far short of that ceiling.
         allow create, update: if mine() && ownedBy(uid)
                               && request.resource.data.keys().hasOnly(['ownerUid', 'entries'])
-                              && request.resource.data.get('entries', {}).size() <= 5000;
+                              && request.resource.data.get('entries', {}).size() <= 5000
+                              && notDeleted(uid);
       }
+    }
+
+    // The tombstone itself.
+    //
+    // Written by the account it names, at the top of `deleteEverything`, and
+    // never removable by anyone holding a token — which is the whole of what
+    // makes it a tombstone rather than a flag. Admin tooling bypasses rules and
+    // can still clear one; see README's operator runbook for the one case that
+    // needs it.
+    //
+    // **Bounded to one field, because of who writes it.** This is the one path
+    // reachable by the session the rest of this feature exists to refuse: the
+    // deletion writes it, and the token that wrote it stays valid for up to an
+    // hour afterwards. Left open it would be the only unbounded write surface
+    // in this file — a megabyte per deleted account, rewritable — which is the
+    // threat the "shape and size" section above is entirely about. It would
+    // also make the retention paragraph in `src/content/privacy.ts` untrue: that
+    // says this record holds the account identifier and the time it was written,
+    // and nothing else.
+    //
+    // **`isAllowed()`, on the same footing as every other path.** This said
+    // `signedIn()` for one revision, on the reasoning that an account whose
+    // claim had been taken away should still be able to record that it was
+    // gone. That does not survive being written down: draining and deleting are
+    // all behind `mine()`, so such an account cannot delete anything anyway,
+    // and the tombstone would record a deletion that never happened. What the
+    // looser gate actually bought was one document per uid reachable by any
+    // verified Google account, on a project with no hard spending cap.
+    //
+    // **`create` and `update` both, because deletion is retried.** The flow is
+    // not atomic and says so: a failure part way asks the user to press delete
+    // again, and a second run writes this document a second time. Refusing that
+    // would leave the account permanently unable to finish deleting itself.
+    //
+    // **No read, deliberately.** Nothing in the application reads this
+    // document — `markDeleted` only writes it, and `notDeleted()` reads it from
+    // inside rules, which is not itself subject to rules. A grant nothing uses
+    // is what the publishing block below was closed for, and this is closed the
+    // same way.
+    match /deletedAccounts/{uid} {
+      allow create, update: if isOwner(uid) && isAllowed()
+                            && request.resource.data.keys().hasOnly(['deletedAt'])
+                            && request.resource.data.deletedAt is timestamp;
+      allow read, delete: if false;
     }
 
     // ---- publishing: closed until it exists ----

@@ -88,9 +88,9 @@ const session = (ownerUid: string, over: Record<string, unknown> = {}) => ({
   ownerUid,
   finishedAt: new Date('2026-08-13T00:01:00.000Z'),
   filterLabel: 'すべて',
-  total: 10,
-  correct: 8,
-  missed: ['e1'],
+  total: 1,
+  correct: 0,
+  words: [{ entryId: 'e1', headword: '切り分け', reading: 'きりわけ', correct: false }],
   ...over,
 });
 
@@ -107,6 +107,9 @@ const profile = (uid: string, over: Record<string, unknown> = {}) => ({
 
 /** `n` characters, for the length caps. */
 const long = (n: number) => 'あ'.repeat(n);
+
+/** ASCII keeps the fixture below Firestore's 1 MiB document ceiling. */
+const ascii = (n: number) => 'a'.repeat(n);
 
 const snapshotEntry = (ownerUid: string) => ({
   ownerUid,
@@ -181,6 +184,138 @@ describe('private data under users/{uid}', () => {
     const db = testEnv.unauthenticatedContext().firestore();
     await assertFails(db.doc(`users/${ALICE}/entries/e1`).get());
     await assertFails(db.doc(`publicEntries/pe-alice`).get());
+  });
+});
+
+/**
+ * The window between deleting an account and its last ID token expiring.
+ *
+ * Deleting the Auth user does not invalidate tokens already minted for it, and
+ * rules have no revocation check — so a second tab signed in as the same uid
+ * keeps writing for up to an hour after the account and its data are gone. What
+ * it writes lands under a uid nothing will ever issue a token for again, which
+ * makes it unreachable by the app and invisible to both the export and the
+ * delete paths, since each starts from a signed-in session.
+ *
+ * The tombstone is what rules can see that a token cannot carry. It gates
+ * `create` and `update` and deliberately gates neither `read` nor `delete` —
+ * see the tests below for why each of those two would be a defect.
+ */
+describe("a deleted account's token", () => {
+  const tombstone = async (uid: string) => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc(`deletedAccounts/${uid}`).set({ deletedAt: new Date() });
+    });
+  };
+
+  it('refuses a write to every private collection once the tombstone exists', async () => {
+    await tombstone(ALICE);
+    const db = as(ALICE);
+    // Every path the app writes. A gate that misses one is the whole defect
+    // wearing a different collection name, so they are asserted together.
+    await assertFails(db.doc(`users/${ALICE}/entries/e9`).set(entry(ALICE)));
+    await assertFails(db.doc(`users/${ALICE}/wordSets/s9`).set(wordSet(ALICE)));
+    await assertFails(db.doc(`users/${ALICE}/practiceSessions/p9`).set(session(ALICE)));
+    await assertFails(
+      db.doc(`users/${ALICE}/progress/entries`).set({ ownerUid: ALICE, entries: {} }),
+    );
+    await assertFails(db.doc(`users/${ALICE}`).set(profile(ALICE)));
+  });
+
+  it('refuses an update to a document written before the account was deleted', async () => {
+    await tombstone(ALICE);
+    await assertFails(as(ALICE).doc(`users/${ALICE}/entries/e1`).update({ headword: 'x' }));
+  });
+
+  /**
+   * Not an oversight, and the reason it is asserted rather than left implied:
+   * `deleteEverything` writes the tombstone *before* it drains, so gating
+   * deletes would make the account unable to finish deleting itself — and
+   * would strand whatever a half-finished run left behind, which is the state
+   * this whole feature exists to avoid creating.
+   */
+  it('still allows delete, so a half-finished deletion stays finishable', async () => {
+    await tombstone(ALICE);
+    await assertSucceeds(as(ALICE).doc(`users/${ALICE}/entries/e1`).delete());
+  });
+
+  /**
+   * Reads are ungated on purpose: the defect is data written back, not data
+   * seen. Denying reads here would break the export the account screen offers
+   * and change nothing about the race.
+   */
+  it('still allows read, because the defect is the write and not the read', async () => {
+    await tombstone(ALICE);
+    await assertSucceeds(as(ALICE).doc(`users/${ALICE}/entries/e1`).get());
+  });
+
+  it('refuses to let the account delete its own tombstone, which is what makes it one', async () => {
+    await tombstone(ALICE);
+    await assertFails(as(ALICE).doc(`deletedAccounts/${ALICE}`).delete());
+  });
+
+  it('lets an account write its own tombstone and nobody else write it for them', async () => {
+    await assertSucceeds(as(ALICE).doc(`deletedAccounts/${ALICE}`).set({ deletedAt: new Date() }));
+    await assertFails(as(BOB).doc(`deletedAccounts/${ALICE}`).set({ deletedAt: new Date() }));
+  });
+
+  /**
+   * The same gate as everything else, and it was `signedIn()` here for one
+   * revision on reasoning that does not survive being written down: an account
+   * whose claim is gone cannot drain or delete anything either, because all of
+   * that is behind `mine()`. A tombstone it could still write would record a
+   * deletion that cannot happen — while leaving one document per uid reachable
+   * by any verified Google account on a project with no spending cap.
+   */
+  it('refuses a tombstone from an account that is not on the allowlist', async () => {
+    await assertFails(
+      asStranger(MALLORY).doc(`deletedAccounts/${MALLORY}`).set({ deletedAt: new Date() }),
+    );
+  });
+
+  /**
+   * This path is written by an account that is being deleted, which means it is
+   * written by a token that outlives the deletion — so it is reachable by
+   * exactly the session the rest of this feature exists to refuse. Without a
+   * shape it would be the one unbounded write surface left in the file, and it
+   * would make the retention paragraph in `src/content/privacy.ts` untrue: that
+   * says the record holds the account identifier and the time, and nothing else.
+   */
+  it('refuses a tombstone carrying anything beyond the time it was written', async () => {
+    const db = as(ALICE);
+    await assertFails(
+      db.doc(`deletedAccounts/${ALICE}`).set({ deletedAt: new Date(), note: long(5000) }),
+    );
+    await assertFails(db.doc(`deletedAccounts/${ALICE}`).set({ deletedAt: 'yesterday' }));
+    await assertFails(db.doc(`deletedAccounts/${ALICE}`).set({}));
+  });
+
+  /**
+   * Nothing in the application reads this document — `markDeleted` only writes
+   * it, and `notDeleted()` reads it from inside rules, which is not itself
+   * subject to rules. A grant nothing uses is the shape the publishing rules
+   * were closed for, so this one is closed the same way rather than tested open.
+   */
+  it('keeps the tombstone unreadable from any client, its own account included', async () => {
+    await tombstone(ALICE);
+    await assertFails(as(ALICE).doc(`deletedAccounts/${ALICE}`).get());
+    await assertFails(as(BOB).doc(`deletedAccounts/${ALICE}`).get());
+  });
+
+  /**
+   * A retry has to be able to run. `deleteEverything` is not atomic and says so
+   * — a failure part way asks the user to press delete again — so a second run
+   * writes the tombstone a second time and must not be refused for it.
+   */
+  it('accepts the tombstone being written twice, because deletion is retried and not atomic', async () => {
+    const db = as(ALICE);
+    await assertSucceeds(db.doc(`deletedAccounts/${ALICE}`).set({ deletedAt: new Date() }));
+    await assertSucceeds(db.doc(`deletedAccounts/${ALICE}`).set({ deletedAt: new Date() }));
+  });
+
+  it("is scoped to one uid: another account's tombstone stops nothing here", async () => {
+    await tombstone(BOB);
+    await assertSucceeds(as(ALICE).doc(`users/${ALICE}/entries/e9`).set(entry(ALICE)));
   });
 });
 
@@ -481,6 +616,39 @@ describe('bounds on what an owner may write', () => {
   });
 
   /**
+   * The same for a session, which grows by one element per card dealt.
+   *
+   * Both sides of the bound, because a denial on its own does not say *where*
+   * the line is: a rule that refused every list would pass it. 2,000 is the
+   * ceiling `total` already carries, so a run longer than that describes a
+   * drill the same document says did not happen.
+   */
+  it('refuses a session recording more words than a drill could have dealt', async () => {
+    const db = as(ALICE);
+    const run = (length: number) =>
+      Array.from({ length }, (_, i) => ({
+        entryId: `e${i}`,
+        headword: 'x',
+        reading: '',
+        correct: false,
+      }));
+
+    // `total` moves with the run: rules do not compare the two, but a fixture
+    // that says one card was dealt and lists two thousand is describing a
+    // document the app cannot write.
+    await assertSucceeds(
+      db
+        .doc(`users/${ALICE}/practiceSessions/at-limit`)
+        .set(session(ALICE, { total: 2000, correct: 0, words: run(2000) })),
+    );
+    await assertFails(
+      db
+        .doc(`users/${ALICE}/practiceSessions/over`)
+        .set(session(ALICE, { total: 2000, correct: 0, words: run(2001) })),
+    );
+  });
+
+  /**
    * **How `size()` counts, measured rather than assumed.**
    *
    * The client bounds every field with `String.length`, which counts UTF-16
@@ -653,6 +821,71 @@ describe('bounds on what an owner may write', () => {
       db
         .doc(`users/${ALICE}/practiceSessions/x`)
         .set(session(ALICE, { finishedAt: '2026-08-13T00:01:00.000Z' })),
+    );
+  });
+
+  /**
+   * Client-only rules can check a known list index, but not every element in a
+   * list. This list-element limit is accepted deliberately for the one-owner
+   * release; the mitigation before adding another account is a backend/schema
+   * decision or quota alerting, not an all-elements rule Firestore can express.
+   */
+  it('documents the accepted list element string size limit in client-only rules', async () => {
+    const db = as(ALICE);
+    const shortNestedString = ascii(10);
+    const largeNestedString = ascii(500_000);
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/short-topic`).set(
+        wordSet(ALICE, {
+          topics: [shortNestedString],
+        }),
+      ),
+    );
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/practiceSessions/short-recorded-word`).set(
+        session(ALICE, {
+          words: [shortNestedString],
+        }),
+      ),
+    );
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/large-topic`).set(
+        wordSet(ALICE, {
+          topics: [largeNestedString],
+        }),
+      ),
+    );
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/practiceSessions/large-recorded-word`).set(
+        session(ALICE, {
+          words: [largeNestedString],
+        }),
+      ),
+    );
+  });
+
+  it('bounds the copied word set owner nickname that rules can name directly', async () => {
+    const db = as(ALICE);
+
+    await assertSucceeds(
+      db.doc(`users/${ALICE}/wordSets/short-copy-source`).set(
+        wordSet(ALICE, {
+          copiedFrom: {
+            ownerNickname: ascii(10),
+          },
+        }),
+      ),
+    );
+    await assertFails(
+      db.doc(`users/${ALICE}/wordSets/large-copy-source`).set(
+        wordSet(ALICE, {
+          copiedFrom: {
+            ownerNickname: ascii(51),
+          },
+        }),
+      ),
     );
   });
 
@@ -877,7 +1110,10 @@ describe('what the adapters write is what the rules accept', () => {
       filterLabel: 'すべて',
       total: 10,
       correct: 8,
-      missed: ['e1', 'e2'],
+      words: [
+        { entryId: 'e1', headword: '切り分け', reading: 'きりわけ', correct: false },
+        { entryId: 'e2', headword: '兆候', reading: 'ちょうこう', correct: false },
+      ],
       startedAt: '2026-08-13T00:00:00.000Z',
     };
     await assertSucceeds(

@@ -15,6 +15,7 @@ import { EntryDraftingError } from '@/domain/ports';
 import type { EntryProgress, PracticeSession, PracticeSessionDraft } from '@/domain/practice';
 import type { UserProfile, UserProfileDraft } from '@/domain/user';
 import type { WordSet, WordSetDraft } from '@/domain/wordSet';
+import { devSeed } from './devSeed';
 import type { E2ESeed } from './e2eSeed';
 import { sanitizeEntry, sanitizeSession, sanitizeWordSet } from './sanitize';
 
@@ -39,15 +40,69 @@ declare global {
     __GOITEI_E2E__?: E2ESeed;
     __GOITEI_E2E_READS__?: Record<'entries' | 'progress' | 'wordSets', number>;
     __GOITEI_E2E_RELEASE_SETTINGS_SAVE__?: () => void;
+    /** Settles the oldest drafting request still held by `entryDraftingHangs`. */
+    __GOITEI_E2E_RELEASE_DRAFT__?: () => void;
+    /** Settles an entry `create` held open by `entrySave: 'defer'`. */
+    __GOITEI_E2E_RELEASE_ENTRY_SAVE__?: () => void;
   }
 }
 
-const seed = (): E2ESeed => (typeof window === 'undefined' ? {} : (window.__GOITEI_E2E__ ?? {}));
+/**
+ * The default a hand-driven `vite dev --mode e2e` falls back to, and nothing
+ * else. See `devSeed`.
+ *
+ * Both conjuncts are load-bearing, and each excludes a different caller that
+ * has to keep seeing an empty notebook:
+ *
+ * - `DEV` excludes Playwright, which serves `vite build --mode e2e` (see
+ *   `playwright.config.ts`). That is a production build, so this is statically
+ *   false there and every spec keeps the fixtures it seeds by hand.
+ * - `MODE === 'e2e'` excludes vitest, whose mode is `test`. `vitest.config.ts`
+ *   aliases this module into the component project, and `JsonImport.test.tsx`
+ *   deletes `window.__GOITEI_E2E__` between cases — so a `DEV`-only check would
+ *   hand thirteen words and four word sets to a test that had just asked for
+ *   none.
+ *
+ * Built once at module load rather than inside `seed()`. Two reasons, and the
+ * second is the one that bites: `devSeed` reads the clock, so a per-call value
+ * would have the notebook and the heatmap disagree about the date across
+ * midnight — and `entryDraftingPort` compares the seed **by identity** to know
+ * whether it is still in the same test, which a fresh object every call defeats.
+ */
+const DEV_FALLBACK: E2ESeed =
+  import.meta.env.DEV && import.meta.env.MODE === 'e2e' ? devSeed(new Date()) : {};
+
+/**
+ * The seed every store below reads.
+ *
+ * An injected seed always wins, and `addInitScript` runs before any of this, so
+ * a spec that seeds `{}` gets `{}` — a case asserting an empty notebook cannot
+ * be handed a full one.
+ */
+const seed = (): E2ESeed =>
+  typeof window === 'undefined' ? {} : (window.__GOITEI_E2E__ ?? DEV_FALLBACK);
 
 function countRead(store: 'entries' | 'progress' | 'wordSets'): void {
   if (typeof window === 'undefined') return;
   const reads = (window.__GOITEI_E2E_READS__ ??= { entries: 0, progress: 0, wordSets: 0 });
   reads[store] += 1;
+}
+
+/** Shaped like the SDK's own rejection, keyed by the `code` `isAccessDenied`/`isUnreachable` read. */
+function deniedError(): Error {
+  return Object.assign(new Error('Missing or insufficient permissions.'), {
+    code: 'permission-denied',
+  });
+}
+function unreachableError(): Error {
+  return Object.assign(new Error('Failed to get document because the client is offline.'), {
+    code: 'unavailable',
+  });
+}
+
+/** Backs `failWhileOffline` — see its doc comment on `E2ESeed`. */
+function offlineRead(store: 'entries' | 'progress' | 'wordSets' | 'settings'): boolean {
+  return (seed().failWhileOffline ?? []).includes(store) && !navigator.onLine;
 }
 
 const E2E_USER: AuthUser = {
@@ -191,6 +246,7 @@ let settingsSaved = false;
 
 export const userRepository: UserRepository = {
   get(uid): Promise<UserProfile | null> {
+    if (offlineRead('settings')) return Promise.reject(unreachableError());
     // Fails only the read that follows a committed save, which is the whole
     // point: the transaction succeeded and the profile is durable, and the
     // question is what the interface says about it.
@@ -241,7 +297,20 @@ export const userRepository: UserRepository = {
     save(`profile.${uid}`, null);
     return Promise.resolve();
   },
+  /**
+   * Nothing here can reproduce what this is for — the defect is a second tab
+   * holding a token this process never issued — so the stand-in records the
+   * call and no more. What the tombstone actually stops is a rules property,
+   * and it is under test where rules are: `tests/rules`.
+   */
+  markDeleted(uid): Promise<void> {
+    deletedAccounts.add(uid);
+    return Promise.resolve();
+  },
 };
+
+/** Marked deleted this session. Read by nothing; see `markDeleted`. */
+const deletedAccounts = new Set<string>();
 
 function persistProfile(uid: string, draft: UserProfileDraft): void {
   const existing = persistedProfile(uid);
@@ -311,18 +380,54 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
   const persist = () => {
     save(`entries.${uid}`, [...store.values()]);
   };
+  /** Backs `entriesReadDelayMs` — only the read that is actually going to succeed. */
+  const waitForRead = () => {
+    const milliseconds = seed().entriesReadDelayMs ?? 0;
+    return milliseconds > 0
+      ? new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
+      : Promise.resolve();
+  };
+
+  /**
+   * The write itself, lifted out of `create` so the deferred path below stores
+   * exactly what the immediate one does rather than a second copy of it.
+   */
+  const commit = (draft: EntryDraft): string => {
+    const id = nextId();
+    const now = stamp();
+    store.set(id, {
+      ...draft,
+      id,
+      ownerUid: uid,
+      publishedId: null,
+      publishedVersion: 0,
+      copiedFrom: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    persist();
+    return id;
+  };
 
   return {
-    list({ limit, cursor }: PageQuery): Promise<Page<Entry>> {
+    async list({ limit, cursor }: PageQuery): Promise<Page<Entry>> {
+      // Gates the export walk, not the initial notebook load: `Account.tsx`
+      // drains this same method directly, and nothing on that page renders
+      // `EntriesProvider`'s own read of it, so failing both is unobservable
+      // except through the one path #23 is about.
+      if (seed().accountExport === 'denied') return Promise.reject(deniedError());
+      if (seed().accountExport === 'unreachable') return Promise.reject(unreachableError());
+      if (offlineRead('entries')) return Promise.reject(unreachableError());
+      await waitForRead();
       countRead('entries');
       const all = [...store.values()].sort(newestFirst);
       const start = cursor ? all.findIndex((entry) => entry.id === cursor) + 1 : 0;
       const items = all.slice(start, start + limit);
       const more = start + items.length < all.length;
-      return Promise.resolve({
+      return {
         items,
         cursor: more ? (items[items.length - 1]?.id ?? null) : null,
-      });
+      };
     },
 
     get(id: string): Promise<Entry | null> {
@@ -330,23 +435,25 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
     },
 
     create(draft: EntryDraft): Promise<string> {
-      const id = nextId();
-      const now = stamp();
-      store.set(id, {
-        ...draft,
-        id,
-        ownerUid: uid,
-        publishedId: null,
-        publishedVersion: 0,
-        copiedFrom: null,
-        createdAt: now,
-        updatedAt: now,
-      });
-      persist();
-      return Promise.resolve(id);
+      if (seed().entrySave === 'denied') return Promise.reject(deniedError());
+      if (seed().entrySave === 'unreachable') return Promise.reject(unreachableError());
+      // Held rather than rejected: the write is going to succeed, just not yet.
+      // It is the only way to have a save still out while the dialog that asked
+      // for it has been closed and another opened in its place.
+      if (seed().entrySave === 'defer') {
+        return new Promise<string>((resolve) => {
+          window.__GOITEI_E2E_RELEASE_ENTRY_SAVE__ = () => {
+            delete window.__GOITEI_E2E_RELEASE_ENTRY_SAVE__;
+            resolve(commit(draft));
+          };
+        });
+      }
+      return Promise.resolve(commit(draft));
     },
 
     update(id: string, draft: EntryDraft): Promise<void> {
+      if (seed().entrySave === 'denied') return Promise.reject(deniedError());
+      if (seed().entrySave === 'unreachable') return Promise.reject(unreachableError());
       const existing = store.get(id);
       // Matching Firestore's updateDoc, which rejects a write to a missing
       // document rather than creating one.
@@ -359,6 +466,10 @@ export const entryRepositoryFor = (uid: string): EntryRepository => {
     remove(id: string): Promise<void> {
       store.delete(id);
       persist();
+      return Promise.resolve();
+    },
+
+    settlePendingWrites(): Promise<void> {
       return Promise.resolve();
     },
   };
@@ -401,14 +512,19 @@ function sessionsFor(uid: string): PracticeSession[] {
   const existing = sessionStores.get(uid);
   if (existing) return existing;
 
-  const persisted = load<PracticeSession[] | null>(`sessions.${uid}`, null);
-  const restored =
-    persisted ??
-    (seed().sessions ?? []).map((raw, index) => {
-      const row = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
-      const id = typeof row.id === 'string' ? row.id : `e2e-session-${index + 1}`;
-      return sanitizeSession(id, row);
-    });
+  // Both branches go through `sanitizeSession`, because both are untrusted for
+  // the same reason the Firestore adapter's reads are: what came back was
+  // written by some earlier version of this code. `sessionStorage` outlives a
+  // rebuild in the same tab, so a session persisted before `words` existed
+  // reaches a build that expects it — and `JSON.parse` cast straight to
+  // `PracticeSession[]` would hand `words: undefined` to a reader whose type
+  // says the absence has already been normalised to null.
+  const persisted = load<unknown[] | null>(`sessions.${uid}`, null);
+  const restored = (persisted ?? seed().sessions ?? []).map((raw, index) => {
+    const row = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+    const id = typeof row.id === 'string' ? row.id : `e2e-session-${index + 1}`;
+    return sanitizeSession(id, row);
+  });
 
   for (const session of restored) {
     const n = Number(/^e2e-session-(\d+)$/.exec(session.id)?.[1]);
@@ -428,13 +544,26 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
 
   return {
     listAll(): Promise<EntryProgress[]> {
+      if (seed().progressLoad === 'denied') return Promise.reject(deniedError());
+      if (seed().progressLoad === 'unreachable') return Promise.reject(unreachableError());
+      if (offlineRead('progress')) return Promise.reject(unreachableError());
       countRead('progress');
       return Promise.resolve([...progress.values()]);
     },
 
     recordSession(session: PracticeSessionDraft, rows: EntryProgress[]): Promise<string> {
       const id = `e2e-session-${++sessionSequence}`;
-      sessions.push({ ...session, id, finishedAt: new Date().toISOString() });
+      // `missed` is derived on read from Firestore, so it is derived here too:
+      // a substitute that stored it would let the two disagree in the one place
+      // the end-to-end suite reads them both.
+      sessions.push({
+        ...session,
+        id,
+        finishedAt: new Date().toISOString(),
+        missed: session.words
+          .filter((word) => !word.correct)
+          .map(({ entryId, headword, reading }) => ({ entryId, headword, reading })),
+      });
       // Merging row by row, not replacing the map — the real adapter writes
       // with `merge: true` and a substitute that clobbered would hide it.
       for (const row of rows) progress.set(row.entryId, row);
@@ -459,6 +588,10 @@ export const progressRepositoryFor = (uid: string): ProgressRepository => {
       sessions.length = 0;
       save(`progress.${uid}`, []);
       save(`sessions.${uid}`, []);
+      return Promise.resolve();
+    },
+
+    settlePendingWrites(): Promise<void> {
       return Promise.resolve();
     },
   };
@@ -510,15 +643,25 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
   const persist = () => {
     save(`wordSets.${uid}`, [...store.values()]);
   };
+  const pendingWrites = new Set<Promise<unknown>>();
   const waitForWrite = () => {
     const milliseconds = seed().wordSetWriteDelayMs ?? 0;
     return milliseconds > 0
       ? new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds))
       : Promise.resolve();
   };
+  const track = <T>(write: Promise<T>): Promise<T> => {
+    pendingWrites.add(write);
+    void write.then(
+      () => pendingWrites.delete(write),
+      () => pendingWrites.delete(write),
+    );
+    return write;
+  };
 
   return {
     list({ limit, cursor }: PageQuery): Promise<Page<WordSet>> {
+      if (offlineRead('wordSets')) return Promise.reject(unreachableError());
       countRead('wordSets');
       const all = [...store.values()].sort(
         (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
@@ -536,42 +679,58 @@ export const wordSetRepositoryFor = (uid: string): WordSetRepository => {
       return Promise.resolve(store.get(id) ?? null);
     },
 
-    async create(draft: WordSetDraft): Promise<string> {
-      await waitForWrite();
-      const id = `e2e-set-${++setSequence}`;
-      const now = stamp();
-      store.set(id, {
-        ...draft,
-        entryIds: [...new Set(draft.entryIds)],
-        id,
-        ownerUid: uid,
-        publishedId: null,
-        publishedVersion: 0,
-        copiedFrom: null,
-        createdAt: now,
-        updatedAt: now,
-      });
-      persist();
-      return id;
+    create(draft: WordSetDraft): Promise<string> {
+      return track(
+        (async () => {
+          await waitForWrite();
+          const id = `e2e-set-${++setSequence}`;
+          const now = stamp();
+          store.set(id, {
+            ...draft,
+            entryIds: [...new Set(draft.entryIds)],
+            id,
+            ownerUid: uid,
+            publishedId: null,
+            publishedVersion: 0,
+            copiedFrom: null,
+            createdAt: now,
+            updatedAt: now,
+          });
+          persist();
+          return id;
+        })(),
+      );
     },
 
-    async update(id: string, draft: WordSetDraft): Promise<void> {
-      const existing = store.get(id);
-      if (!existing) return Promise.reject(new Error(`no word set ${id}`));
-      await waitForWrite();
-      store.set(id, {
-        ...existing,
-        ...draft,
-        entryIds: [...new Set(draft.entryIds)],
-        updatedAt: stamp(),
-      });
-      persist();
+    update(id: string, draft: WordSetDraft): Promise<void> {
+      return track(
+        (async () => {
+          const existing = store.get(id);
+          if (!existing) return Promise.reject(new Error(`no word set ${id}`));
+          await waitForWrite();
+          store.set(id, {
+            ...existing,
+            ...draft,
+            entryIds: [...new Set(draft.entryIds)],
+            updatedAt: stamp(),
+          });
+          persist();
+        })(),
+      );
     },
 
-    async remove(id: string): Promise<void> {
-      await waitForWrite();
-      store.delete(id);
-      persist();
+    remove(id: string): Promise<void> {
+      return track(
+        (async () => {
+          await waitForWrite();
+          store.delete(id);
+          persist();
+        })(),
+      );
+    },
+
+    async settlePendingWrites(): Promise<void> {
+      await Promise.all([...pendingWrites]);
     },
   };
 };
@@ -609,6 +768,9 @@ let draftingIsSpent = false;
  */
 let draftingSeed: E2ESeed | undefined;
 
+/** Drafting requests held open by `entryDraftingHangs`, oldest first. */
+const held: (() => void)[] = [];
+
 export const entryDraftingPort: EntryDraftingPort = {
   available: () => {
     // The flag's memory is the seed's, not the session's: a flag that outlived
@@ -629,6 +791,25 @@ export const entryDraftingPort: EntryDraftingPort = {
       if (failure === 'unavailable') draftingIsSpent = true;
       return Promise.reject(new EntryDraftingError(failure));
     }
+    // Before the generated reply, not after: a spec that supplies one is
+    // asking about what the app does with it, and deriving a headword from the
+    // prompt would be answering a question it did not ask.
+    const supplied = seed().entryDraftingReply;
+
+    if (seed().entryDraftingHangs) {
+      return new Promise<string>((resolve) => {
+        held.push(() => resolve(supplied ?? '{"headword":"兆候","definition":"きざし。"}'));
+        // Reassigned on every request rather than installed once, so the handle
+        // a spec holds always settles the oldest outstanding one — two requests
+        // in flight is the whole reason this exists.
+        window.__GOITEI_E2E_RELEASE_DRAFT__ = () => {
+          held.shift()?.();
+          if (held.length === 0) delete window.__GOITEI_E2E_RELEASE_DRAFT__;
+        };
+      });
+    }
+    if (supplied !== undefined) return Promise.resolve(supplied);
+
     const headword = /^「(.+?)」/.exec(prompt)?.[1] ?? '兆候';
     // Fenced, because a real reply is: the prompt asks for a ```json block and
     // `jsonToDraft` strips one. An unfenced fixture would leave that unexercised.

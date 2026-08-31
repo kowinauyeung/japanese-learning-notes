@@ -35,6 +35,54 @@ export interface E2ESeed {
   settingsSave?: 'fail' | 'defer' | 'unreachable';
   /** Fail the profile re-read that follows a committed save, and only that one. */
   settingsRefresh?: 'fail';
+  /**
+   * Fails an entry `create`/`update`. `denied` carries Firestore's own
+   * `permission-denied`, so `EntryFormModal` renders the account-denial
+   * sentence rather than the generic 保存できませんでした. `unreachable`
+   * mirrors `settingsSave`'s branch of the same name. `defer` holds the write
+   * open until `window.__GOITEI_E2E_RELEASE_ENTRY_SAVE__` is called, which is
+   * the only way to have a save still out while the dialog that started it is
+   * closed and another is opened — see `settingsSave`, which does the same.
+   */
+  entrySave?: 'denied' | 'unreachable' | 'defer';
+  /**
+   * Fails the entry page this account's export walk reads first. `denied`
+   * carries `permission-denied`; `unreachable` carries `unavailable`, so
+   * `Account.tsx` renders export wording rather than `settingsSave`'s save
+   * wording for the same code. See the comment on `entryRepositoryFor`'s
+   * `list` for why this does not also break the notebook itself.
+   */
+  accountExport?: 'denied' | 'unreachable';
+  /**
+   * Rejects the named provider's read with Firestore's `unavailable` while
+   * `navigator.onLine` is false, and lets it through once true. Models the one
+   * thing a reconnect retry (#84) needs to observe: a read that failed because
+   * the network was down, and would succeed if asked again now that it is not.
+   *
+   * Independent of `entrySave`/`progressLoad`/`accountExport`, which fail
+   * unconditionally — a retry against one of those would just repeat the same
+   * rejection, which is a different claim from this one.
+   */
+  failWhileOffline?: Array<'entries' | 'progress' | 'wordSets' | 'settings'>;
+  /**
+   * Hold the notebook's successful read open this long before resolving it.
+   *
+   * Only for the read that actually succeeds — `failWhileOffline`'s rejection
+   * is unaffected — so this exists to make a reconnect retry (#84) slow enough
+   * to observe: `EntriesProvider.refresh` used to clear its error before the
+   * new read landed, and against the in-memory adapter's usual same-tick
+   * resolution that gap is too fast for a spec to see.
+   */
+  entriesReadDelayMs?: number;
+  /**
+   * Fails the progress read `ProgressProvider` makes on sign-in. `denied`
+   * carries `permission-denied`, `unreachable` carries `unavailable` — the two
+   * codes `PracticeSetup`'s 苦手のみ row must tell apart rather than collapsing
+   * to one hard-coded sentence (#24). Independent of `entries`, so the setup
+   * screen still renders: a full lockout fails that read too and `Practice.tsx`
+   * returns its own message first, which is why this needs its own seed.
+   */
+  progressLoad?: 'denied' | 'unreachable';
   /** Put a waiting build on screen, so `UpdatePrompt` can be laid out against. */
   updateWaiting?: boolean;
   /**
@@ -48,4 +96,31 @@ export interface E2ESeed {
    * offering to try again forever.
    */
   entryDrafting?: 'unavailable' | 'quota' | 'blocked' | 'failed';
+  /**
+   * What the model answers with, instead of the stand-in's own reply.
+   *
+   * Exists because the recovery paths are about replies the app cannot use, and
+   * a stand-in that only ever answers correctly cannot produce one. The limits
+   * rule out the alternative: `INPUT_LIMITS.importWord` is `ENTRY_LIMITS.headword`,
+   * so no word a reader can type makes the drafted note too long for itself.
+   *
+   * Substituting what an external service says is the seam this file already
+   * is, and the app is unchanged by it — the reply crosses the port and goes
+   * through the same `jsonToDraft` every other reply does.
+   *
+   * Ignored when `entryDrafting` is set: a request that failed has no reply.
+   */
+  entryDraftingReply?: string;
+  /**
+   * Hold every drafting request open until the spec releases it.
+   *
+   * The only way to have two of them in flight at once, which is what the
+   * modal's lock is about: a request can outlive the dialog that started it,
+   * and the one that settles is not always the one being waited on. Released
+   * oldest-first through `window.__GOITEI_E2E_RELEASE_DRAFT__`, so a spec can
+   * settle the stale one while the current one is still out.
+   *
+   * `entryDrafting` still wins: a request that failed did not hang.
+   */
+  entryDraftingHangs?: boolean;
 }

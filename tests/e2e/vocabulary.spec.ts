@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { INPUT_LIMITS } from '../../src/domain/limits';
-import { seedSignedIn, watchForBlanking } from './fixtures';
+import { DETAILED_WORD, seed, seedSignedIn, watchForBlanking, WORDS } from './fixtures';
 
 /**
  * The notebook's whole reason to exist: find a word, read it, add one, change
@@ -25,8 +25,39 @@ test.beforeEach(async ({ page }) => {
  */
 const addDialog = (page: Page) => page.getByRole('dialog', { name: '単語を追加' });
 const editDialog = (page: Page) => page.getByRole('dialog', { name: '単語を編集' });
+/**
+ * `exact`, unlike the two above. Playwright matches an accessible name by
+ * substring, so a bare 「単語」 also matches 「単語を編集」 — and an assertion
+ * that the preview is showing would then pass while the edit form is on screen.
+ */
+const previewDialog = (page: Page) => page.getByRole('dialog', { name: '単語', exact: true });
 
 test.describe('browsing', () => {
+  /**
+   * The filters are around 480px of a 390px screen, so on a phone they start
+   * folded — otherwise the first word of the notebook is two scrolls below the
+   * page the reader opened to read it.
+   *
+   * The second half is what makes the first half safe: folding hides the
+   * controls, and it must never hide the fact that a filter is on. The
+   * removable chips are outside the panel for that reason, and this is what
+   * says so — a narrowed list that looks unnarrowed is the failure mode of
+   * every collapsed filter panel.
+   */
+  test('folds the filters on a phone, but not what is narrowing the list', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/vocabulary?jlpt=N1');
+
+    const panel = page.getByText('最近のタグ');
+    await expect(page.getByText('1 語')).toBeVisible();
+    await expect(panel).toBeHidden();
+    await expect(page.getByRole('button', { name: 'N1 ✕' })).toBeVisible();
+
+    await page.getByRole('button', { name: /絞り込み/ }).click();
+
+    await expect(panel).toBeVisible();
+  });
+
   test('lists every word, then narrows on a substring', async ({ page }) => {
     await page.goto('/vocabulary');
     await expect(page.getByText('3 語')).toBeVisible();
@@ -119,6 +150,34 @@ test.describe('browsing', () => {
     await expect(page.getByText('3 語')).toBeVisible();
   });
 
+  /**
+   * Back, with the edit form up rather than the preview.
+   *
+   * `VocabDialog` remembers which word it is editing rather than a boolean, so
+   * that a form left open when the dialog closes cannot greet the *next* word
+   * with itself. Back does not go through the form's own close: `popstate` in
+   * `VocabDialogProvider` clears the dialog directly, and `VocabDialog` is
+   * mounted for the whole session — so the remembered id survives, and the one
+   * word it still matches is the word it came from. Reopening that word then
+   * skips the note entirely and hands the reader a form they did not ask for.
+   */
+  test('reopens a word on its note after the edit form was closed by going back', async ({
+    page,
+  }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+    await previewDialog(page).getByRole('button', { name: '編集' }).click();
+    await expect(editDialog(page)).toBeVisible();
+
+    await page.goBack();
+    await expect(editDialog(page)).toBeHidden();
+
+    await page.getByRole('link', { name: /兆候/ }).click();
+
+    await expect(previewDialog(page)).toBeVisible();
+    await expect(editDialog(page)).toBeHidden();
+  });
+
   test('reaches the full page from the dialog', async ({ page }) => {
     await page.goto('/vocabulary');
     await page.getByRole('link', { name: /兆候/ }).click();
@@ -136,6 +195,90 @@ test.describe('browsing', () => {
     await page.goBack();
     await expect(page).toHaveURL(/\/vocabulary$/);
     await expect(page.getByText('3 語')).toBeVisible();
+  });
+
+  /**
+   * What the dialog is *for*, seeded against a note that has more than a
+   * definition in it.
+   *
+   * The dialog used to render its own summary — the sense descriptions, one
+   * example, and nothing else — so a word opened from a list dropped the
+   * sentence it was met in, its second meaning, its usage notes and its related
+   * words, all without saying anything was missing. Against `WORDS`, which
+   * record a definition and no more, a summary and the whole note look the
+   * same; `DETAILED_WORD` is what tells them apart.
+   */
+  test('shows the whole note in the dialog, not a summary of it', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: [DETAILED_WORD] });
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+
+    const dialog = previewDialog(page);
+    await expect(dialog.getByRole('heading', { name: '概要' })).toBeVisible();
+    // The sentence the word was met in, which the summary had no place for.
+    await expect(dialog.getByText('景気回復の兆候が見えてきた。')).toBeVisible();
+    // The *second* sense and the second example: the summary showed one of each.
+    await expect(dialog.getByText('病気のはじまりを示すしるし。')).toBeVisible();
+    await expect(dialog.getByText('春の兆候を感じる。')).toBeVisible();
+    await expect(dialog.getByText('「症状」とは違い、病気そのものを指さない。')).toBeVisible();
+    // `exact`, or it also matches 「意味：捕捉地震的前兆」 in the sense above it.
+    await expect(dialog.getByText('前兆', { exact: true })).toBeVisible();
+
+    // Still a dialog over the list, not a navigation to the page.
+    await expect(page.getByText('1 語')).toBeVisible();
+    await expect(page).toHaveURL(/\/vocabulary\/w-choukou$/);
+  });
+
+  /**
+   * Editing was deliberately absent here on the grounds that a write would
+   * leave the page underneath stale. It does not: both screens read the same
+   * `EntriesProvider`, and every save ends in its `refresh()`. This is that
+   * claim, measured — the list behind the dialog counts the change without
+   * being navigated to.
+   */
+  test('edits the word from the dialog and the list behind it agrees', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+    await previewDialog(page).getByRole('button', { name: '編集' }).click();
+
+    const form = editDialog(page);
+    // One dialog at a time: the form replaces the preview rather than stacking
+    // a second focus trap and a second Escape listener on top of it.
+    await expect(previewDialog(page)).toBeHidden();
+    await form.getByLabel('意味・説明').fill('起こる前のしるし。');
+    await form.getByRole('button', { name: '保存する' }).click();
+
+    // Back to the preview, reading the entry the save refreshed.
+    await expect(previewDialog(page).getByText('起こる前のしるし。')).toBeVisible();
+
+    // And the list underneath, which was never navigated away from.
+    await page.keyboard.press('Escape');
+    await expect(previewDialog(page)).toBeHidden();
+    await expect(page.getByText('起こる前のしるし。')).toBeVisible();
+    await expect(page.getByText('何かが起こる前ぶれ。')).toBeHidden();
+  });
+
+  /**
+   * Whether the form is open is a fact about *which word* it was opened for,
+   * not a flag. Held as a boolean it survives the dialog closing, and the next
+   * word opened from any list arrives already inside a form nobody asked for.
+   */
+  test('opening another word after leaving the form lands on the preview', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+    await previewDialog(page).getByRole('button', { name: '編集' }).click();
+    await expect(editDialog(page)).toBeVisible();
+
+    // Away from the word entirely, without cancelling the form first.
+    await page.goBack();
+    await expect(editDialog(page)).toBeHidden();
+
+    // ちょっと and not 切り分け: a card's accessible name interleaves the ruby
+    // reading with the word, so 切り分け reads as 「切きりり分わけ」 and no
+    // regex over the headword alone matches it.
+    await page.getByRole('link', { name: /ちょっと/ }).click();
+    await expect(previewDialog(page)).toBeVisible();
+    await expect(editDialog(page)).toBeHidden();
   });
 
   test('says so plainly when nothing matches', async ({ page }) => {
@@ -172,7 +315,6 @@ test.describe('adding a word', () => {
 
     const dialog = addDialog(page);
     await dialog.getByLabel('見出し語').fill('清高');
-    await dialog.getByLabel('読み方').fill('せいこう');
     await dialog.getByLabel('意味・説明').fill('清らかで気高いこと。');
     await dialog.getByRole('button', { name: '保存する' }).click();
 
@@ -238,6 +380,364 @@ test.describe('adding a word', () => {
 
     await page.goto('/vocabulary');
     await expect(page.getByText('4 語')).toBeVisible();
+  });
+
+  /**
+   * The 簡単 button saves; it does not fill a form and stop.
+   *
+   * Here and not in tests/component because the claim is the span nothing
+   * smaller can see: the reply crosses the port, goes through `jsonToDraft`,
+   * skips the tab switch every other import route performs, is written through
+   * the repository, and lands the reader on the entry's own page with the
+   * modal gone. `tests/component/SimpleForm.test.tsx` already covers which
+   * fields arm the button, in milliseconds, so this does not re-check that.
+   *
+   * The reply is `backend.e2e.ts`'s stand-in, which answers from the prompt —
+   * so 「兆候」 below is an assertion about this request rather than about a
+   * fixture that would pass for any word.
+   */
+  test('saves a drafted word outright instead of stopping at the twenty-field form', async ({
+    page,
+  }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+
+    // The URL and the closed dialog together, and neither alone.
+    //
+    // React writes a textarea's value into its text content, so 「兆候の意味」
+    // is on screen either way — once as the entry, once as the 意味・説明 box
+    // of a 詳細 tab that never saved. Measured: with the direct save reverted,
+    // a text assertion passed while the modal was still open in front of it.
+    await expect(page).toHaveURL(/\/vocabulary\/[^/]+$/);
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText('兆候の意味')).toBeVisible();
+
+    await page.goto('/vocabulary');
+    await expect(page.getByText('4 語')).toBeVisible();
+  });
+
+  /**
+   * A draft that never came back leaves the reader somewhere they can finish.
+   *
+   * The 簡単 button has no room under it for the manual route, so a failure
+   * there moves the reader to the tab that has one — and the word has to make
+   * the trip, or the first thing they do on arrival is type it again. Both
+   * halves are asserted: the reason the model gave, and the sentence that says
+   * their input came with them.
+   *
+   * `quota` rather than `unavailable`, because `unavailable` also makes the
+   * port stop reporting itself available — which would confound "the word was
+   * carried over" with "the drafting controls went away".
+   */
+  test('carries the word to the JSON tab when the model does not answer', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, entryDrafting: 'quota' });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByLabel('出典').fill('会議');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+
+    await expect(dialog.getByRole('textbox', { name: '単語' })).toHaveValue('兆候');
+    await expect(dialog.getByRole('textbox', { name: '出典' })).toHaveValue('会議');
+    await expect(dialog.getByText(/本日のAI利用回数の上限に達しました/)).toBeVisible();
+    await expect(dialog.getByText(/入力した内容はこちらに引き継いでいます/)).toBeVisible();
+  });
+
+  /**
+   * The mark on the quick tab is not the only thing that says AI.
+   *
+   * 「簡単」 describes the form, not that a model will fill it, so the mark is
+   * the whole of the signal — and it is an `aria-hidden` drawing, which is
+   * nothing a screen reader can be asked to interpret. Without the word beside
+   * it, the one press this dialog exists for is discoverable only by opening
+   * the tab and looking.
+   */
+  test('says AI on the quick tab in words, not only in a drawing', async ({ page }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    await expect(addDialog(page).getByRole('button', { name: 'AI 簡単' })).toBeVisible();
+  });
+
+  /**
+   * The mark goes when the thing it promises does.
+   *
+   * `unavailable` is permanent for this reader — a retired model, a project
+   * with the API off, a country it is not offered in — so the port stops
+   * reporting itself available and `SimpleForm` drops its whole drafting group.
+   * A mark left on the tab would then advertise a control that is no longer
+   * behind it, which is worse than never having offered one.
+   */
+  test('drops the mark once drafting has failed for good', async ({ page }) => {
+    await seed(page, { signedIn: true, entries: WORDS, entryDrafting: 'unavailable' });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+
+    // The reason is on screen, so this is the state after the failure and not
+    // before it.
+    await expect(dialog.getByText(/ここではAI作成を利用できません/)).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '簡単', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'AI 簡単' })).toBeHidden();
+  });
+
+  /**
+   * The sentence the word was met in reaches the note the one press writes.
+   *
+   * It is the one optional field on the quick tab that changes what comes back:
+   * `buildPrompt` asks for the context analysis only when there is a sentence
+   * to analyse, and orders the senses by it. `jsonToDraft` then writes it into
+   * `context.original` whatever the model said, so the reader's own words are
+   * what is stored rather than the model's copy of them.
+   *
+   * The seeded reply leaves `context` out entirely, which is what makes this an
+   * assertion about the threading rather than about the model repeating itself.
+   */
+  test('carries the sentence into the note a one-press draft saves', async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS,
+      entryDraftingReply: JSON.stringify({ headword: '兆候', definition: 'きざし。' }),
+    });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByLabel('出会った文').fill('あやしい兆候ではあるのだろうけれど');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+
+    await expect(page.getByText('この文での使われ方')).toBeVisible();
+    await expect(page.getByText('あやしい兆候ではあるのだろうけれど')).toBeVisible();
+  });
+
+  /**
+   * A reply that will not import stays on screen to be corrected.
+   *
+   * The drafting button is also the only button that can throw the reply away,
+   * and the allowance is spent by the time it does. `JsonImport` used to write
+   * the raw box itself; moving the import into the modal dropped that for the
+   * tab it came from, so a malformed reply was refused into an empty box with
+   * nothing left to fix.
+   *
+   * The reply is seeded rather than provoked: `INPUT_LIMITS.importWord` is
+   * `ENTRY_LIMITS.headword`, so no word a reader can type produces a note too
+   * long for itself, and the stand-in otherwise always answers correctly.
+   */
+  test('leaves a malformed reply in the paste box instead of discarding it', async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS,
+      entryDraftingReply: 'sorry, I cannot do that',
+    });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByRole('button', { name: 'JSON' }).click();
+    await dialog.getByLabel('単語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成' }).click();
+
+    await expect(dialog.getByText('JSON として解析できませんでした。')).toBeVisible();
+    await expect(dialog.getByRole('textbox', { name: 'AI の返した JSON を貼り付け' })).toHaveValue(
+      'sorry, I cannot do that',
+    );
+  });
+
+  /**
+   * A note can import cleanly and still be refused by the save.
+   *
+   * `sanitizeDraft` will not bound the pitch accent against the reading — its
+   * comment says the form owns that rule, "where it can be shown and corrected
+   * instead" — so a model answering 9 for a three-mora word passes the import
+   * and fails `draftError`. The quick tab has neither the reading nor the
+   * accent on it, so a refusal there left the reader reading a sentence about
+   * an accent on a form with no accent on it.
+   */
+  test('moves a refused draft to the form that has the field it was refused for', async ({
+    page,
+  }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS,
+      entryDraftingReply: JSON.stringify({
+        headword: '兆候',
+        reading: 'ちょうこう',
+        definition: 'きざし。',
+        pitchAccent: 9,
+      }),
+    });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+
+    // The detailed form, with the drafted values in it and the accent on screen
+    // — not the quick tab it was pressed from, and not a saved note.
+    await expect(dialog.getByLabel('読み方')).toHaveValue('ちょうこう');
+    await expect(dialog.getByLabel(/アクセント/)).toBeVisible();
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveURL(/\/vocabulary$/);
+  });
+
+  /**
+   * A reason that has been superseded stops being shown.
+   *
+   * `JsonImport.generate` cleared it as its first act; lifting the state into
+   * the modal dropped that. So a draft that failed and then worked on a retry
+   * left the failure behind on the JSON panel, waiting to describe a request
+   * that had since succeeded to whoever next opened that tab.
+   *
+   * The seed is edited between the two presses rather than reseeded: the
+   * stand-in reads it per request, and a reload would take the modal with it.
+   */
+  test('drops a failure the retry disproved, instead of showing it on the next visit', async ({
+    page,
+  }) => {
+    await seed(page, { signedIn: true, entries: WORDS, entryDrafting: 'quota' });
+
+    await page.goto('/vocabulary');
+    await page.getByRole('button', { name: '＋追加' }).click();
+
+    const dialog = addDialog(page);
+    const quota = dialog.getByText(/本日のAI利用回数の上限に達しました/);
+    await dialog.getByRole('button', { name: 'JSON' }).click();
+    await dialog.getByLabel('単語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成' }).click();
+    await expect(quota).toBeVisible();
+
+    await page.evaluate(() => {
+      delete (window as unknown as { __GOITEI_E2E__: { entryDrafting?: string } }).__GOITEI_E2E__
+        .entryDrafting;
+    });
+    await dialog.getByRole('button', { name: 'AIで作成' }).click();
+    await expect(dialog.getByLabel('読み方')).toHaveValue('ちょうこう');
+
+    await dialog.getByRole('button', { name: 'JSON' }).click();
+    await expect(quota).toBeHidden();
+  });
+
+  /**
+   * A save that outlived its dialog does not close the one that replaced it.
+   *
+   * Closing does not cancel a `create` that has already gone, and the close
+   * button stays live while a request is out on purpose. So the write finishes
+   * against a dialog that is no longer there — and its completion used to call
+   * `onSaved` and `onClose` regardless, closing whatever was open by then and
+   * navigating away from wherever the reader had got to.
+   *
+   * The note itself is still written, and that is deliberate: it was asked for.
+   * What belongs to the run that asked is the reaction, not the write.
+   */
+  test('does not close a reopened dialog when the save from the closed one lands', async ({
+    page,
+  }) => {
+    await seed(page, { signedIn: true, entries: WORDS, entrySave: 'defer' });
+
+    await page.goto('/vocabulary');
+    const dialog = addDialog(page);
+
+    await page.getByRole('button', { name: '＋追加' }).click();
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+    // The drafting is done and the write is what is outstanding now.
+    await expect(dialog.getByRole('button', { name: '作成中…' })).toBeVisible();
+    await dialog.getByRole('button', { name: '閉じる' }).click();
+    await expect(dialog).toBeHidden();
+
+    // A second dialog, which knows nothing about the write still in flight.
+    await page.getByRole('button', { name: '＋追加' }).click();
+    await dialog.getByLabel('見出し語').fill('清高');
+
+    await page.evaluate(async () => {
+      (
+        window as unknown as { __GOITEI_E2E_RELEASE_ENTRY_SAVE__?: () => void }
+      ).__GOITEI_E2E_RELEASE_ENTRY_SAVE__?.();
+      // Settled here rather than by asserting straight after: the write's own
+      // continuation and React's commit both run after `evaluate` returns, so an
+      // assertion made outside could pass before the closing it is looking for
+      // had a chance to happen.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('見出し語')).toHaveValue('清高');
+    await expect(page).toHaveURL(/\/vocabulary$/);
+  });
+
+  /**
+   * A request that outlived its dialog does not unlock the one that replaced it.
+   *
+   * The close button stays live while a draft is out, on purpose, as the way out
+   * of a request that hangs. So a reader can close, reopen and press again, and
+   * the first reply then lands with the second still in flight. Reporting the
+   * unlock on the reply alone brought 保存する back over a form the second reply
+   * was about to overwrite — the exact case the lock exists to prevent.
+   *
+   * Here rather than in tests/component: what is under test is the modal's own
+   * bookkeeping, and `EntryFormModal` resolves its repository through a provider
+   * no component test may reach. `SimpleForm.test.tsx` covers the other half —
+   * that two requests never share a name — which is what makes the comparison
+   * this asserts mean anything.
+   */
+  test('does not let a request from a closed dialog unlock the one that replaced it', async ({
+    page,
+  }) => {
+    await seed(page, { signedIn: true, entries: WORDS, entryDraftingHangs: true });
+
+    await page.goto('/vocabulary');
+    const dialog = addDialog(page);
+    const save = dialog.getByRole('button', { name: '保存する' });
+
+    // First request, then abandoned by closing the dialog.
+    await page.getByRole('button', { name: '＋追加' }).click();
+    await dialog.getByLabel('見出し語').fill('兆候');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+    await expect(save).toBeDisabled();
+    await dialog.getByRole('button', { name: '閉じる' }).click();
+
+    // Second request, in a session that knows nothing about the first.
+    await page.getByRole('button', { name: '＋追加' }).click();
+    await dialog.getByLabel('見出し語').fill('清高');
+    await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
+    await expect(save).toBeDisabled();
+
+    // The abandoned one answers. It must change nothing here.
+    await page.evaluate(async () => {
+      (
+        window as unknown as { __GOITEI_E2E_RELEASE_DRAFT__?: () => void }
+      ).__GOITEI_E2E_RELEASE_DRAFT__?.();
+      /*
+        Settled inside the evaluate, and this is the assertion's whole footing.
+
+        Resolving the held promise only queues the reply's continuation; the
+        hook's `finally`, the caller's setter and React's commit all run after
+        `evaluate` returns. `toBeDisabled` passes on its first poll, so asserted
+        outside it can pass simply by arriving before the unlock it is looking
+        for — green whether or not the guard exists.
+
+        Two frames rather than a timeout: the first lets the microtask queue
+        drain and React schedule, the second lets it paint what it scheduled.
+      */
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+    await expect(save).toBeDisabled();
   });
 
   /**
@@ -307,7 +807,11 @@ test.describe('adding a word', () => {
     await page.goto('/vocabulary');
     await page.getByRole('button', { name: '＋追加' }).click();
 
+    // On 詳細, because 簡単 no longer carries タグ: everything the drafting
+    // button fills better than a person typing at capture time came off that
+    // tab, and the validation is the form's rather than any one tab's.
     const dialog = addDialog(page);
+    await dialog.getByRole('button', { name: '詳細' }).click();
     await dialog.getByLabel('見出し語').fill('清高');
     await dialog.getByLabel('意味・説明').fill('清らかで気高いこと。');
     await dialog.getByLabel('タグ').fill('a/b');
@@ -328,6 +832,41 @@ test.describe('editing and deleting', () => {
 
     await expect(page.getByText('起こる前のしるし。')).toBeVisible();
     await expect(page.getByText('何かが起こる前ぶれ。')).toBeHidden();
+  });
+
+  /**
+   * #23: a denied save used to render the same 保存できませんでした as a typo
+   * or a dropped connection — retrying a lockout never clears it, which is the
+   * ambiguity `loadErrorMessage` exists to remove. End-to-end because the layer
+   * under test is the wiring — `entryRepositoryFor` (`src/lib/backend.e2e.ts`)
+   * rejecting with Firestore's own `permission-denied`, and the modal choosing
+   * what to render. The branch itself is `tests/unit/loadError.test.ts`.
+   */
+  test('shows the access-denied message on a denied save, not the generic one', async ({
+    page,
+  }) => {
+    await seed(page, { signedIn: true, entries: WORDS, entrySave: 'denied' });
+    await page.goto('/vocabulary/w-choukou');
+    await page.getByRole('button', { name: '編集' }).click();
+
+    const dialog = editDialog(page);
+    await dialog.getByLabel('意味・説明').fill('起こる前のしるし。');
+    await dialog.getByRole('button', { name: '保存する' }).click();
+
+    await expect(
+      dialog.getByText(
+        'アクセスが許可されていません。一度サインアウトして、サインインし直してください。',
+      ),
+    ).toBeVisible();
+    await expect(dialog.getByText('保存できませんでした。', { exact: true })).toBeHidden();
+
+    // Not only the message: the denial is rejected before the in-memory store
+    // is touched (`entryRepositoryFor.update` in `src/lib/backend.e2e.ts`
+    // checks `entrySave` first), so the stored entry must still read the way
+    // it did before this attempt.
+    await page.reload();
+    await expect(page.getByText('何かが起こる前ぶれ。')).toBeVisible();
+    await expect(page.getByText('起こる前のしるし。')).toBeHidden();
   });
 
   /**

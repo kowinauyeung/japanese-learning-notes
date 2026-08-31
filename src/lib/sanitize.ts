@@ -11,8 +11,9 @@ import type {
   Sense,
   UsageNotes,
 } from '@/domain/entry';
+import { USER_LIMITS } from '@/domain/limits';
 import { PRACTICE_MODES } from '@/domain/practice';
-import type { EntryProgress, PracticeSession } from '@/domain/practice';
+import type { EntryProgress, MissedWord, PracticeSession, PractisedWord } from '@/domain/practice';
 import { THEME_PREFERENCES, TRANSLATION_LANGUAGES, UI_LANGUAGES } from '@/domain/user';
 import type { UserProfile } from '@/domain/user';
 import type { WordSet } from '@/domain/wordSet';
@@ -39,6 +40,25 @@ export { isValidIsoDate };
 
 const str = (value: unknown): string =>
   typeof value === 'string' ? value : typeof value === 'number' ? String(value) : '';
+
+/**
+ * 品詞 as a set, in the order it renders in.
+ *
+ * `POS.filter` rather than a filter over the stored list, so this normalises as
+ * well as validates. Nothing downstream sorts `pos` — `EntryHeadline` and the
+ * manifest row in `EntryBody` map it as stored — so a document written in the
+ * order its chips were pressed, or imported from an assistant that listed them
+ * its own way, is drawn in that order forever. Reading it through the canonical
+ * order settles it for every note already in the notebook, which toggling a
+ * chip cannot: a reader who never touches 品詞 never rewrites it.
+ *
+ * De-duplication comes with it, and is wanted for the same reason: a set that
+ * lists 名詞 twice is not one.
+ */
+const posList = (value: unknown): (typeof POS)[number][] => {
+  const stored = strings(value);
+  return POS.filter((part) => stored.includes(part));
+};
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
   typeof value === 'string' && (allowed as readonly string[]).includes(value)
@@ -196,9 +216,7 @@ export function sanitizeDraft(value: unknown, fallback: EntryDraft = emptyDraft(
     headword: str(raw.headword).trim() || fallback.headword,
     reading: str(raw.reading) || fallback.reading,
     pitchAccent: pitchAccent(raw.pitchAccent),
-    pos: strings(raw.pos).filter((p): p is (typeof POS)[number] =>
-      (POS as readonly string[]).includes(p),
-    ),
+    pos: posList(raw.pos),
     jlpt: oneOf(raw.jlpt, JLPT_LEVELS, fallback.jlpt),
     origin: oneOfOptional(raw.origin, WORD_ORIGINS),
     style: oneOfOptional(raw.style, STYLES),
@@ -252,7 +270,19 @@ export function sanitizeUserProfile(uid: string, data: unknown): UserProfile {
   const raw = record(data);
   return {
     uid,
-    nickname: str(raw.nickname).trim().slice(0, 50),
+    // The rules bound this at 50, deliberately wider than the product's own
+    // limit, so a longer value can already be stored. Everything downstream —
+    // the avatar initial, the header, the settings field — assumes the product
+    // limit, so this is where the two have to agree.
+    //
+    // The slice is by UTF-16 code unit, same as the limit, so a cut landing
+    // inside a surrogate pair leaves a lone high surrogate — not a character,
+    // and unencodable as UTF-8 — as the last unit. `ellipsise` in practice.ts
+    // drops the same orphan for the same reason.
+    nickname: str(raw.nickname)
+      .trim()
+      .slice(0, USER_LIMITS.nickname)
+      .replace(/[\uD800-\uDBFF]$/u, ''),
     language: oneOf(raw.language, UI_LANGUAGES, 'en'),
     translationLanguage: oneOf(raw.translationLanguage, TRANSLATION_LANGUAGES, 'en'),
     theme: oneOf(raw.theme, THEME_PREFERENCES, 'system'),
@@ -298,6 +328,85 @@ export function sanitizeProgressMap(value: unknown): EntryProgress[] {
   return Object.entries(raw).map(([entryId, row]) => progressRow(entryId, row));
 }
 
+/**
+ * The missed list, in either of the two shapes Firestore may hold it in.
+ *
+ * A bare string is a session written before `MissedWord` existed. It reads as a
+ * snapshot with nothing in it, which is exactly what it is — the id resolves
+ * against the notebook or the row is dropped, the way every session behaved
+ * before. There is no backfill: a headword for a word already deleted cannot be
+ * recovered, and one copied from a note that still exists would be today's
+ * value pretending to be the day's.
+ *
+ * An element with no `entryId` is dropped rather than kept on its snapshot
+ * alone. The id is what makes the row a link when the word survives, and a
+ * record that can never link is not one this screen has a place for.
+ */
+const missedList = (value: unknown): MissedWord[] =>
+  Array.isArray(value)
+    ? value.flatMap((item) => {
+        if (typeof item === 'string')
+          return item ? [{ entryId: item, headword: '', reading: '' }] : [];
+        const raw = record(item);
+        const entryId = str(raw.entryId);
+        return entryId ? [{ entryId, headword: str(raw.headword), reading: str(raw.reading) }] : [];
+      })
+    : [];
+
+/**
+ * The full run, or null for a session recorded before it was kept.
+ *
+ * Null and `[]` are deliberately different here, which is why this does not
+ * fall through to the empty list the way every other array field does: an
+ * absent list means the session never recorded one, and an empty list would
+ * claim a drill that dealt no cards. The dialog prints the run for the first
+ * and prints nothing for the second, and it cannot tell them apart otherwise.
+ *
+ * `correct` is `=== true` rather than truthy: an unreadable answer reads as
+ * wrong, the direction `sanitizeProgressMap` already defaults in, and for the
+ * same reason — a word shown as missed gets looked at, one shown as correct
+ * does not.
+ */
+const practisedList = (value: unknown): PractisedWord[] | null =>
+  Array.isArray(value)
+    ? value.flatMap((item) => {
+        const raw = record(item);
+        const entryId = str(raw.entryId);
+        return entryId
+          ? [
+              {
+                entryId,
+                headword: str(raw.headword),
+                reading: str(raw.reading),
+                correct: raw.correct === true,
+              },
+            ]
+          : [];
+      })
+    : null;
+
+/**
+ * The two list fields together, because one is derived from the other.
+ *
+ * A session written now stores `words` and no `missed`; one written before
+ * `words` existed stores `missed` and nothing else. Splitting these apart would
+ * let a caller read `missed` from a document that has a `words` field and get
+ * the empty list.
+ */
+const missedAndWords = (
+  raw: Record<string, unknown>,
+): Pick<PracticeSession, 'words' | 'missed'> => {
+  const words = practisedList(raw.words);
+  return {
+    words,
+    missed: words
+      ? words
+          .filter((word) => !word.correct)
+          .map(({ entryId, headword, reading }) => ({ entryId, headword, reading }))
+      : missedList(raw.missed),
+  };
+};
+
 export function sanitizeSession(id: string, data: unknown): PracticeSession {
   const raw = record(data);
   return {
@@ -306,7 +415,7 @@ export function sanitizeSession(id: string, data: unknown): PracticeSession {
     filterLabel: str(raw.filterLabel),
     total: nonNegativeInt(raw.total),
     correct: nonNegativeInt(raw.correct),
-    missed: strings(raw.missed),
+    ...missedAndWords(raw),
     startedAt: isoDateTime(raw.startedAt),
     finishedAt: isoDateTime(raw.finishedAt),
   };

@@ -58,3 +58,40 @@ describe('user profile persistence', () => {
     expect(await repo.get(uid)).toBeNull();
   });
 });
+
+/**
+ * The one thing no other layer can see: that the adapter and the rules are
+ * talking about the same document.
+ *
+ * `notDeleted()` in `firestore.rules` refuses a write when
+ * `deletedAccounts/{uid}` exists, and `markDeleted` is what puts it there. The
+ * rules tests seed that path by hand and the unit tests hold a mock of the
+ * port, so an adapter writing `deleted_accounts/{uid}`, or a field under the
+ * uid instead of a document at it, leaves every one of them green while the
+ * gate never closes on anything. The path below is written out rather than
+ * imported for that reason — sharing a constant with the adapter would make
+ * both wrong together.
+ *
+ * `deletedAt` is checked as a resolved `Timestamp` because `serverTimestamp()`
+ * is a sentinel until the write lands, and the rule requires a timestamp.
+ */
+describe('marking an account deleted', () => {
+  it('writes the document the rules gate reads, at the path they both name', async () => {
+    const uid = `it-${randomUUID()}`;
+    await createUserRepository(db).markDeleted(uid);
+
+    const raw = await getDoc(doc(db, 'deletedAccounts', uid));
+    expect(raw.exists()).toBe(true);
+    expect(raw.get('deletedAt')).toBeInstanceOf(Timestamp);
+  });
+
+  it('accepts being called twice, because deletion is retried and is not atomic', async () => {
+    const uid = `it-${randomUUID()}`;
+    const repo = createUserRepository(db);
+    await repo.markDeleted(uid);
+    await repo.markDeleted(uid);
+
+    const raw = await getDoc(doc(db, 'deletedAccounts', uid));
+    expect(raw.get('deletedAt')).toBeInstanceOf(Timestamp);
+  });
+});

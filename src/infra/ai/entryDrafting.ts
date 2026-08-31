@@ -5,7 +5,22 @@ import {
   getAI,
   getGenerativeModel,
 } from 'firebase/ai';
+import {
+  ensureInitialized,
+  fetchAndActivate,
+  getRemoteConfig,
+  getValue,
+  type RemoteConfig,
+} from 'firebase/remote-config';
 import { EntryDraftingError, type EntryDraftingPort } from '@/domain/ports';
+import { TIMED_OUT, within } from '@/infra/ai/deadline';
+import {
+  DEFAULT_GEMINI_MODEL,
+  GEMINI_DRAFT_TIMEOUT_MS,
+  GEMINI_MODEL_NAME_CONFIG_KEY,
+  GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS,
+  GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS,
+} from '@/infra/ai/modelConfig';
 import { app } from '@/infra/firebase/client';
 
 /**
@@ -27,13 +42,13 @@ import { app } from '@/infra/firebase/client';
  */
 
 /**
- * Flash rather than Pro, named here rather than configured.
+ * Flash rather than Pro, kept here as the Remote Config default.
  *
  * The no-cost tier covers the Flash family only, and filling a fixed schema for
- * one word is not a task a larger model answers better. Moving off this string
+ * one word is not a task a larger model answers better. Moving off this family
  * is a decision about money, so it should be a diff somebody reads.
  *
- * **A stable model has a retirement date, so this line expires.** It was
+ * **A stable model has a retirement date, so this default expires.** It was
  * `gemini-2.5-flash` until 2026-08-23, when the proxy began answering
  * `404 … no longer available to new users`. Nothing in the build catches that:
  * the name is a string until it reaches the model, so a retired one compiles,
@@ -41,11 +56,10 @@ import { app } from '@/infra/firebase/client';
  *
  * What makes it recoverable is that the 404 names its own replacement — the
  * reply above said to use `gemini-3.6-flash` — and `classify` below logs the
- * cause before discarding it. So the fix instruction arrives in the console of
- * whoever hits it. Do not remove that log to tidy up.
+ * cause before discarding it. Remote Config makes that replacement a console
+ * value instead of a deploy, while this constant keeps first load and failed
+ * fetches working. Do not remove the log below to tidy up.
  */
-const MODEL = 'gemini-3.6-flash';
-
 /**
  * `getAI` runs once, lazily, rather than at module scope.
  *
@@ -54,20 +68,105 @@ const MODEL = 'gemini-3.6-flash';
  * before the reader had asked for anything. Failing at import time turns a
  * feature that should be quietly absent into an app that does not start.
  */
-let model: GenerativeModel | undefined;
+let configuredModelName = DEFAULT_GEMINI_MODEL;
+let model: { instance: GenerativeModel; name: string } | undefined;
 let unavailable = false;
+let remoteConfig: RemoteConfig | undefined;
+let remoteConfigUnavailable = false;
+let remoteConfigFetch: Promise<void> | undefined;
+
+function setConfiguredModelName(next: string): void {
+  const trimmed = next.trim();
+  if (!trimmed || trimmed === configuredModelName) return;
+  configuredModelName = trimmed;
+  model = undefined;
+  // A newer remote model name is the recovery path for a retired default.
+  unavailable = false;
+}
+
+function ensureRemoteConfig(): RemoteConfig | undefined {
+  if (remoteConfigUnavailable) return undefined;
+  if (remoteConfig) return remoteConfig;
+  try {
+    remoteConfig = getRemoteConfig(app);
+    remoteConfig.defaultConfig = { [GEMINI_MODEL_NAME_CONFIG_KEY]: DEFAULT_GEMINI_MODEL };
+    remoteConfig.settings.minimumFetchIntervalMillis = GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS;
+    remoteConfig.settings.fetchTimeoutMillis = GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS;
+  } catch (error) {
+    // Remote Config is an upgrade path, not a prerequisite. The bundled model
+    // default is still valid input to Firebase AI Logic when configuration
+    // cannot initialise in this browser or project.
+    console.error('Gemini model Remote Config initialisation failed', error);
+    remoteConfigUnavailable = true;
+  }
+  return remoteConfig;
+}
+
+function applyRemoteConfigModelName(config: RemoteConfig): void {
+  setConfiguredModelName(getValue(config, GEMINI_MODEL_NAME_CONFIG_KEY).asString());
+}
+
+/**
+ * One refresh at a time, and never one that cannot be abandoned.
+ *
+ * The memo exists so several drafts in a row share a single fetch. It was
+ * written when the only way out of this promise was for it to settle; the
+ * deadline in `draft` below changed that, and a caller that stops waiting for a
+ * refresh which never settles used to leave the memo installed for the life of
+ * the session — so every later draft paid the timeout again and no fresh
+ * attempt was ever made. The deadline drops it instead, and the identity check
+ * here is the other half: an abandoned attempt that finally settles must not
+ * clear the attempt that replaced it.
+ */
+function refreshConfiguredModelName(): Promise<void> {
+  const config = ensureRemoteConfig();
+  if (!config) return Promise.resolve();
+  if (remoteConfigFetch) return remoteConfigFetch;
+  const attempt: Promise<void> = (async () => {
+    try {
+      await ensureInitialized(config);
+    } catch (error) {
+      // A failed storage read should not block the bundled fallback below, and
+      // `getValue` still has the default config to answer from.
+      console.error('Gemini model Remote Config cache initialisation failed', error);
+    }
+
+    applyRemoteConfigModelName(config);
+
+    try {
+      await fetchAndActivate(config);
+      applyRemoteConfigModelName(config);
+    } catch (error) {
+      // The fallback is the point: Remote Config must not turn drafting into a
+      // feature that needs two network calls to succeed before the first model
+      // request can be made. Cached activated values have already been applied
+      // above, so a failed fetch does not force the bundled default back in.
+      console.error('Gemini model Remote Config fetch failed', error);
+    }
+  })().finally(() => {
+    if (remoteConfigFetch === attempt) remoteConfigFetch = undefined;
+  });
+  remoteConfigFetch = attempt;
+  return attempt;
+}
 
 function ensureModel(): GenerativeModel | undefined {
-  if (model || unavailable) return model;
+  if (unavailable) return undefined;
+  if (model?.name === configuredModelName) return model.instance;
   try {
-    model = getGenerativeModel(getAI(app, { backend: new GoogleAIBackend() }), { model: MODEL });
+    model = {
+      instance: getGenerativeModel(getAI(app, { backend: new GoogleAIBackend() }), {
+        model: configuredModelName,
+      }),
+      name: configuredModelName,
+    };
   } catch {
     // No AI Logic on this project, or the SDK refused to initialise. Recorded
     // rather than retried: it fails identically on every later attempt, and a
     // button that retries a permanent failure reads as a broken button.
     unavailable = true;
   }
-  return model;
+  return model?.instance;
 }
 
 /**
@@ -143,17 +242,48 @@ export const geminiEntryDrafting: EntryDraftingPort = {
   available: () => ensureModel() !== undefined,
 
   async draft(prompt) {
+    /*
+      Bounded, and then ignored either way.
+
+      The comment on `refreshConfiguredModelName` says Remote Config must not
+      turn drafting into a feature that needs two network calls to succeed
+      first. `ensureInitialized` defeated that on its own: it is an unbounded
+      IndexedDB read, and the fetch timeout beside it does not cover it — so a
+      storage layer that never answers took the model request with it, before
+      the request existed. The bundled default is valid input to AI Logic, which
+      is the whole reason it is a default, so a deadline here costs nothing but
+      a stale model name.
+    */
+    const refreshing = refreshConfiguredModelName();
+    if ((await within(refreshing, GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS)) === TIMED_OUT) {
+      // Dropped here, because nothing else will: the memo is cleared when its
+      // own work settles, and the work this gave up on may never settle at all.
+      // Left installed it would make every later draft in the session wait out
+      // the same deadline for the same answer it already gave up on, and a model
+      // name published after this point could never be read.
+      if (remoteConfigFetch === refreshing) remoteConfigFetch = undefined;
+      console.error('Gemini model Remote Config did not settle; using', configuredModelName);
+    }
     const generative = ensureModel();
     if (!generative) throw new EntryDraftingError('unavailable');
 
     let text: string;
     try {
-      const result = await generative.generateContent(prompt);
+      const result = await within(generative.generateContent(prompt), GEMINI_DRAFT_TIMEOUT_MS);
+      // Thrown rather than returned, so the one exit below carries every
+      // failure. `failed` because a deadline is the one thing here that a
+      // second attempt might genuinely get past — see `deadline.ts` for what
+      // the SDK's own 180-second timeout does not cover.
+      if (result === TIMED_OUT) throw new EntryDraftingError('failed');
       // Inside the `try` on purpose: `text()` throws for a response that was
       // filtered, so the safety refusal arrives here rather than at the call
       // above, and `classify` is the only place that decides what it means.
       text = result.response.text();
     } catch (error) {
+      // Ours, and already the reason it is going to be reported as. Running it
+      // through `classify` would log it as an SDK failure and re-derive the
+      // answer it was constructed with.
+      if (error instanceof EntryDraftingError) throw error;
       const failure = classify(error);
       // A permanent failure has to reach `available()`, or the comment on
       // `ensureModel` above is a lie: it says a button that retries a permanent
@@ -162,7 +292,13 @@ export const geminiEntryDrafting: EntryDraftingPort = {
       // a project whose API is off both fail *here* instead, on the first call
       // — and the button stayed, offering to try again forever. That is how
       // `gemini-2.5-flash`'s retirement presented.
-      if (failure.reason === 'unavailable') unavailable = true;
+      if (failure.reason === 'unavailable') {
+        // A model can be constructed for one that the service has retired. Do
+        // not retain it after that permanent response: `available()` must stop
+        // offering a control that can only repeat the same failure.
+        model = undefined;
+        unavailable = true;
+      }
       throw failure;
     }
 

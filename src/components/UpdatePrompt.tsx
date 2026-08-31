@@ -19,7 +19,7 @@ import { useAppUpdate } from '@/lib/appUpdateContext';
  */
 export function UpdatePrompt() {
   const { t } = useI18n();
-  const { updateReady, activate } = useAppUpdate();
+  const { updateReady, activate, activateFailed } = useAppUpdate();
   const [dismissed, setDismissed] = useState(false);
 
   if (!updateReady || dismissed) return null;
@@ -35,6 +35,13 @@ export function UpdatePrompt() {
     >
       <p className="text-sm font-semibold text-ink">{t('update.available')}</p>
       <p className="prose-cjk mt-1 text-xs text-muted">{t('update.hint')}</p>
+      {/*
+        The one path a failed `activate()` has to reach the reader. It does not
+        replace the page, so without this the banner stays exactly as it was
+        before the click — offering the same button, with nothing to say it was
+        already tried and failed.
+      */}
+      {activateFailed && <p className="prose-cjk mt-1 text-xs text-danger">{t('update.failed')}</p>}
       <div className="mt-3 flex items-center justify-end gap-2">
         <button
           type="button"

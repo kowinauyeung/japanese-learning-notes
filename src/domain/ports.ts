@@ -5,11 +5,12 @@
  *
  * 1. Nothing here may reference a vendor type. `src/infra/firebase` is the only
  *    place allowed to import `firebase/*`, enforced by ESLint.
- * 2. **Request/response only — no `subscribe()`.** `onSnapshot` is currently
- *    used zero times, and that is worth keeping deliberately: REST and SQL have
- *    no realtime equivalent, so a subscription on a port turns "write another
- *    adapter" into "rewrite the data flow". If realtime is ever wanted, add it
- *    as an explicit separate capability rather than folding it in here.
+ * 2. **Request/response only — no `subscribe()`.** Firestore may use listeners
+ *    internally to observe its own write metadata, but no port exposes a live
+ *    subscription. REST and SQL have no realtime equivalent, so a subscription
+ *    on a port turns "write another adapter" into "rewrite the data flow". If
+ *    realtime is ever wanted, add it as an explicit separate capability rather
+ *    than folding it in here.
  * 3. Cursors are opaque strings. A `DocumentSnapshot` on a signature would leak
  *    Firestore's pagination model into every caller.
  * 4. No use-case or service layer on top. React hooks are the application
@@ -39,6 +40,8 @@ export interface EntryRepository {
   create(draft: EntryDraft): Promise<string>;
   update(id: string, draft: EntryDraft): Promise<void>;
   remove(id: string): Promise<void>;
+  /** Waits until locally accepted writes have either reached durable storage or failed. */
+  settlePendingWrites(): Promise<void>;
 }
 
 export interface WordSetRepository {
@@ -47,6 +50,8 @@ export interface WordSetRepository {
   create(draft: WordSetDraft): Promise<string>;
   update(id: string, draft: WordSetDraft): Promise<void>;
   remove(id: string): Promise<void>;
+  /** Waits until locally accepted writes have either reached durable storage or failed. */
+  settlePendingWrites(): Promise<void>;
 }
 
 /**
@@ -87,12 +92,27 @@ export interface ProgressRepository {
    * caller has no reason to know about.
    */
   removeAll(): Promise<void>;
+  /** Waits until locally accepted writes have either reached durable storage or failed. */
+  settlePendingWrites(): Promise<void>;
 }
 
 export interface UserRepository {
   get(uid: string): Promise<UserProfile | null>;
   save(uid: string, draft: UserProfileDraft): Promise<void>;
   remove(uid: string): Promise<void>;
+  /**
+   * Record that this account is gone, before anything is removed.
+   *
+   * Deleting the Auth user does not invalidate the ID tokens already minted for
+   * it, and Firestore rules have no revocation check — so a second tab signed
+   * in as the same uid keeps writing for up to an hour after the account and
+   * its data are gone, and what it writes lands under a uid nothing will ever
+   * issue a token for again. This is the one thing rules can see that the token
+   * cannot carry.
+   *
+   * Must be safe to call twice: deletion is retried and is not atomic.
+   */
+  markDeleted(uid: string): Promise<void>;
 }
 
 /**

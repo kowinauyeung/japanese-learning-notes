@@ -1,6 +1,8 @@
+import { chipClass, DateControl, SelectControl } from '@/components/controls';
 import { JLPT_LEVELS, POS, WORD_ORIGINS } from '@/domain/entry';
 import type { PracticeMode } from '@/domain/practice';
 import { useI18n } from '@/i18n/context';
+import type { MessageKey } from '@/i18n/messages';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { activeQuickRange, QUICK_RANGES, quickRangeStart } from '@/lib/practice';
 import type { PracticeFilters } from '@/lib/practice';
@@ -19,28 +21,14 @@ export interface SetChip {
   count: number;
 }
 
+const MODES = [
+  { mode: 'flashcard', label: 'nav.flashcards' },
+  { mode: 'dictation', label: 'nav.dictation' },
+] satisfies ReadonlyArray<{ mode: PracticeMode; label: MessageKey }>;
+
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 }
-
-/**
- * A chip is a control and has to keep a control's shape.
- *
- * `max-w-full` with `truncate` rather than letting it wrap: a word set named by
- * 400 characters otherwise turned one chip into a six-line paragraph with a
- * rounded border, which reads as broken layout rather than as something
- * pressable, and pushed every chip after it off the fold.
- *
- * Not `max-w-[N]`: a name of ordinary length must still show in full, and the
- * only width worth capping against is whatever the row has left.
- */
-function chipClass(active: boolean) {
-  return `max-w-full truncate rounded-pill px-3 py-1 text-xs font-medium transition ${
-    active ? 'bg-accent text-on-accent' : 'bg-bg-alt text-muted hover:text-ink'
-  }`;
-}
-
-const selectClass = 'rounded-panel border-line bg-bg text-ink min-h-9 border px-2 text-xs w-full';
 
 /**
  * The screen both practice modes open on.
@@ -55,28 +43,50 @@ const selectClass = 'rounded-panel border-line bg-bg text-ink min-h-9 border px-
 export function PracticeSetup({
   mode,
   filters,
-  allTags,
+  recentTags,
   allSets,
   now,
   matchCount,
   weakCount,
   weakState,
   onChange,
+  onModeChange,
   onStart,
   onCancel,
 }: {
   mode: PracticeMode;
   filters: PracticeFilters;
-  allTags: string[];
+  /**
+   * A recency-biased sample, not every tag in the notebook — see
+   * `src/lib/tags.ts`. Unlike Browse there is no search box here to fall back
+   * on, but that is deliberate: scoping a practice session to a specific tag
+   * is a narrower ask than finding one word, and a word set already exists
+   * for "the exact group I want to practice" — see `wordSets.title` above.
+   */
+  recentTags: string[];
   /** Hidden entirely when empty, per the design — see the note above. */
   allSets: SetChip[];
   /** What 「直近1ヶ月」 is measured from. An argument so it can be frozen. */
   now: Date;
   matchCount: number;
   weakCount: number;
-  /** 苦手のみ can only be honoured once the progress map has arrived. */
-  weakState: 'ready' | 'loading' | 'error';
+  /**
+   * 苦手のみ can only be honoured once the progress map has arrived.
+   *
+   * The failed case carries the message rather than a bare `'error'` tag:
+   * `progressError` is a `LoadFailure` that can be a denial, unreachable, or
+   * generic, and only the caller has translated it — collapsing it to a tag
+   * here would put the same hard-coded sentence on screen regardless of which
+   * one it was (#24).
+   */
+  weakState: 'ready' | 'loading' | { error: string };
   onChange: (next: PracticeFilters) => void;
+  /**
+   * Switching drill keeps the filters, which is the whole reason this is a
+   * callback rather than a link: the route remounts on `mode`, so the caller
+   * carries the current filters into the new URL.
+   */
+  onModeChange: (mode: PracticeMode) => void;
   onStart: () => void;
   onCancel: () => void;
 }) {
@@ -86,7 +96,7 @@ export function PracticeSetup({
     onChange({ ...filters, [key]: value });
 
   const active = activeQuickRange(filters, now);
-  const selectedHiddenTags = filters.tags.filter((tag) => !allTags.includes(tag));
+  const selectedHiddenTags = filters.tags.filter((tag) => !recentTags.includes(tag));
 
   // A quick range clears any end the learner had set: 「直近1ヶ月」 means
   // "since that day", and leaving an old end in place would silently produce a
@@ -100,11 +110,40 @@ export function PracticeSetup({
 
   return (
     <section className="mx-auto max-w-2xl space-y-5 rounded-card bg-card p-6 shadow-panel">
-      <header>
-        <h1 className="font-display text-2xl font-bold">
-          {t(mode === 'flashcard' ? 'practice.flashcard' : 'practice.dictation')}
-        </h1>
-        <p className="mt-1 text-sm text-muted">
+      <header className="space-y-3">
+        {/* The screen is 「練習」 and the drill is a choice inside it, so the
+            heading names the screen: the mode is already announced by the
+            selected tab below, and printing it twice was what a title plus a
+            switch would do. */}
+        <h1 className="font-display text-2xl font-bold">{t('nav.practice')}</h1>
+        {/*
+          The two drills, as one choice rather than two destinations.
+          They differ only in what a card asks for, and everything below this
+          row — the sets, the tags, the level, the dates — is the same question
+          in both. The phone's navigation has one 練習 tab for that reason, so
+          this is also the only way to reach the other drill there.
+        */}
+        <div
+          role="tablist"
+          aria-label={t('nav.practice')}
+          className="flex gap-1 rounded-pill bg-bg-alt p-1"
+        >
+          {MODES.map((option) => (
+            <button
+              key={option.mode}
+              type="button"
+              role="tab"
+              aria-selected={mode === option.mode}
+              onClick={() => onModeChange(option.mode)}
+              className={`min-h-11 flex-1 rounded-pill px-3 text-sm font-semibold transition ${
+                mode === option.mode ? 'bg-card text-ink shadow-panel' : 'text-muted'
+              }`}
+            >
+              {t(option.label)}
+            </button>
+          ))}
+        </div>
+        <p className="text-sm text-muted">
           {t(
             mode === 'flashcard'
               ? 'practice.flashcardDescription'
@@ -133,7 +172,7 @@ export function PracticeSetup({
         </div>
       )}
 
-      {(selectedHiddenTags.length > 0 || allTags.length > 0) && (
+      {(selectedHiddenTags.length > 0 || recentTags.length > 0) && (
         <div className="space-y-1.5">
           <p className="text-[11px] text-muted">{t('practice.tags')}</p>
           {selectedHiddenTags.length > 0 && (
@@ -153,7 +192,7 @@ export function PracticeSetup({
             </div>
           )}
           <div className="flex flex-wrap gap-1.5">
-            {allTags.map((tag) => (
+            {recentTags.map((tag) => (
               <button
                 key={tag}
                 type="button"
@@ -188,10 +227,9 @@ export function PracticeSetup({
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.partOfSpeech')}</span>
-          <select
+          <SelectControl
             value={filters.pos}
             onChange={(event) => update('pos', event.target.value)}
-            className={selectClass}
           >
             <option value="">{t('vocabulary.all')}</option>
             {POS.map((part) => (
@@ -199,15 +237,14 @@ export function PracticeSetup({
                 {entryLabel(part)}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </label>
 
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.origin')}</span>
-          <select
+          <SelectControl
             value={filters.origin}
             onChange={(event) => update('origin', event.target.value)}
-            className={selectClass}
           >
             <option value="">{t('vocabulary.all')}</option>
             {WORD_ORIGINS.map((origin) => (
@@ -215,7 +252,7 @@ export function PracticeSetup({
                 {entryLabel(origin)}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </label>
       </div>
 
@@ -245,20 +282,16 @@ export function PracticeSetup({
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="space-y-1">
             <span className="text-[11px] text-muted">{t('vocabulary.startDate')}</span>
-            <input
-              type="date"
+            <DateControl
               value={filters.from}
               onChange={(event) => update('from', event.target.value)}
-              className={selectClass}
             />
           </label>
           <label className="space-y-1">
             <span className="text-[11px] text-muted">{t('vocabulary.endDate')}</span>
-            <input
-              type="date"
+            <DateControl
               value={filters.to}
               onChange={(event) => update('to', event.target.value)}
-              className={selectClass}
             />
           </label>
         </div>
@@ -272,7 +305,7 @@ export function PracticeSetup({
               ? t('vocabulary.resultCount', { count: weakCount })
               : weakState === 'loading'
                 ? t('vocabulary.loading')
-                : t('practice.weakLoadingError')}
+                : weakState.error}
           </span>
         </span>
         <input

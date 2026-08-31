@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { EntryCard } from '@/components/browse/EntryCard';
 import { FilterPanel } from '@/components/browse/FilterPanel';
@@ -39,15 +39,57 @@ export function Component() {
 
   const active = activeChips(filters, (stars) => t('vocabulary.frequencyAtLeastChip', { stars }));
 
+  /**
+   * Collapsed to start, on a phone. What is *doing* the narrowing stays on
+   * screen either way — the removable chips below sit outside this — so a
+   * folded panel hides the controls, never the state of the list.
+   */
+  const [open, setOpen] = useState(false);
+
   if (loading)
     return <p className="py-16 text-center text-sm text-muted">{t('vocabulary.loading')}</p>;
   if (errorMessage) return <p className="py-16 text-center text-sm text-danger">{errorMessage}</p>;
 
   return (
     <div className="space-y-4">
-      <VocabularySearch value={filters.q} onChange={(q) => update({ ...filters, q })} />
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <VocabularySearch value={filters.q} onChange={(q) => update({ ...filters, q })} />
+        </div>
+        {/*
+          Phones only, and it is the panel's own height that decides it: the
+          filters are around 480px tall on a 390px screen — tags, levels, four
+          dropdowns, two dates and a sort — so opening this page put the search
+          box, the filters and nothing else on screen. The first word of a
+          notebook the reader came to read was two scrolls down.
 
-      <FilterPanel filters={filters} allTags={visibleTags} onChange={update} />
+          Not a media query in JavaScript: `open` is what a phone follows and
+          the panel is `nav:block` regardless, so above the breakpoint it is
+          always shown and this button is not there to be pressed. That also
+          means rotating a phone into a tablet width reveals the panel rather
+          than hiding a control that was doing something.
+        */}
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((shown) => !shown)}
+          className={`min-h-12 shrink-0 rounded-pill px-4 text-xs font-medium nav:hidden ${
+            isDefault(filters) ? 'bg-bg-alt text-muted' : 'bg-accent-soft text-accent'
+          }`}
+        >
+          {t('vocabulary.filter')}
+          {open ? ' ▲' : ' ▼'}
+        </button>
+      </div>
+
+      <div className={open ? 'block' : 'hidden nav:block'}>
+        <FilterPanel
+          filters={filters}
+          tags={visibleTags}
+          tagsLabel={t('vocabulary.recentTags')}
+          onChange={update}
+        />
+      </div>
 
       {!isDefault(filters) && (
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">

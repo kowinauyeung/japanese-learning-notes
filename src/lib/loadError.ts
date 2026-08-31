@@ -68,11 +68,17 @@ const DENIED_CODES = new Set(['permission-denied', 'unauthenticated']);
  * for. It used to open with 「オフラインのため」, which is a claim about the
  * reader's device that this module cannot support — see `UNREACHABLE_CODES`.
  * It used to close with 「接続が戻ると表示されます」, which nothing in the
- * application delivers: there is not one `onSnapshot` in `src/infra`, every
- * provider loads once from an effect keyed on the repository, and no error
- * screen offers a retry. The words arrive when the reader reloads, and until
- * then a sentence saying they will appear on their own is asking someone to
- * wait for something that is not coming.
+ * application delivered at the time: there was not one `onSnapshot` in
+ * `src/infra` — the only Firestore listener today is an internal
+ * write-metadata probe — every provider loaded once from an effect keyed on
+ * the repository, and no error screen offered a retry.
+ *
+ * `useRetryOnReconnect` (#84) has since made that closer to true — a provider
+ * whose read failed this way does re-read once the browser reports a
+ * connection again — but the sentence still does not say so. `useOnline`'s own
+ * caveat is that a reported connection is a hint to retry, not proof the retry
+ * will succeed, and there is no bound on how long it takes; promising "it will
+ * appear" would still be a claim this module cannot support on every attempt.
  */
 export const UNREACHABLE_MESSAGE =
   '接続できないため読み込めませんでした。保存済みの単語はそのまま読めます。';

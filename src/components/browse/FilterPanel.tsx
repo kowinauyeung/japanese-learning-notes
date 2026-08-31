@@ -1,3 +1,4 @@
+import { chipClass, DateControl, SelectControl } from '@/components/controls';
 import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
@@ -7,21 +8,22 @@ function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 }
 
-function chipClass(active: boolean) {
-  return `rounded-pill px-3 py-1 text-xs font-medium transition ${
-    active ? 'bg-accent text-on-accent' : 'bg-bg-alt text-muted hover:text-ink'
-  }`;
-}
-
-const selectClass = 'rounded-panel border-line bg-bg text-ink min-h-9 border px-2 text-xs w-full';
-
 export function FilterPanel({
   filters,
-  allTags,
+  tags,
+  tagsLabel,
   onChange,
 }: {
   filters: Filters;
-  allTags: string[];
+  /**
+   * Shared with `PickerToolbar`, whose caller (`WordSetDetail`) passes every
+   * tag in the notebook rather than a recency-limited sample — so this
+   * component makes no claim either way about what the list contains. Say so
+   * with `tagsLabel`, not by naming this prop after one caller's choice.
+   */
+  tags: string[];
+  /** Shown above the chips when given; omitted, they render unlabeled. */
+  tagsLabel?: string;
   onChange: (next: Filters) => void;
 }) {
   const { t } = useI18n();
@@ -36,18 +38,22 @@ export function FilterPanel({
 
   return (
     <div className="space-y-4 rounded-card bg-card p-4 shadow-panel">
-      {allTags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {allTags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => set('tags', toggle(filters.tags, tag))}
-              className={chipClass(filters.tags.includes(tag))}
-            >
-              #{tag}
-            </button>
-          ))}
+      {tags.length > 0 && (
+        <div className="space-y-1.5">
+          {tagsLabel && <span className="text-[11px] text-muted">{tagsLabel}</span>}
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                aria-pressed={filters.tags.includes(tag)}
+                onClick={() => set('tags', toggle(filters.tags, tag))}
+                className={chipClass(filters.tags.includes(tag))}
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -56,6 +62,7 @@ export function FilterPanel({
           <button
             key={level}
             type="button"
+            aria-pressed={filters.jlpt.includes(level)}
             onClick={() => set('jlpt', toggle(filters.jlpt, level))}
             className={chipClass(filters.jlpt.includes(level))}
           >
@@ -67,26 +74,21 @@ export function FilterPanel({
       <div className="grid gap-2 sm:grid-cols-3">
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.partOfSpeech')}</span>
-          <select
-            value={filters.pos}
-            onChange={(event) => set('pos', event.target.value)}
-            className={selectClass}
-          >
+          <SelectControl value={filters.pos} onChange={(event) => set('pos', event.target.value)}>
             <option value="">{t('vocabulary.all')}</option>
             {POS.map((part) => (
               <option key={part} value={part}>
                 {entryLabel(part)}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </label>
 
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.origin')}</span>
-          <select
+          <SelectControl
             value={filters.origin}
             onChange={(event) => set('origin', event.target.value)}
-            className={selectClass}
           >
             <option value="">{t('vocabulary.all')}</option>
             {WORD_ORIGINS.map((origin) => (
@@ -94,15 +96,14 @@ export function FilterPanel({
                 {entryLabel(origin)}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </label>
 
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.style')}</span>
-          <select
+          <SelectControl
             value={filters.style}
             onChange={(event) => set('style', event.target.value)}
-            className={selectClass}
           >
             <option value="">{t('vocabulary.all')}</option>
             {STYLES.map((style) => (
@@ -110,15 +111,14 @@ export function FilterPanel({
                 {entryLabel(style)}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </label>
 
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.frequencyAtLeast')}</span>
-          <select
+          <SelectControl
             value={filters.minFreq}
             onChange={(event) => set('minFreq', Number(event.target.value))}
-            className={selectClass}
           >
             <option value={0}>{t('vocabulary.all')}</option>
             {[1, 2, 3, 4, 5].map((value) => (
@@ -127,43 +127,32 @@ export function FilterPanel({
                 {'☆'.repeat(5 - value)}
               </option>
             ))}
-          </select>
+          </SelectControl>
         </label>
 
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.startDate')}</span>
-          <input
-            type="date"
-            value={filters.from}
-            onChange={(event) => set('from', event.target.value)}
-            className={selectClass}
-          />
+          <DateControl value={filters.from} onChange={(event) => set('from', event.target.value)} />
         </label>
 
         <label className="space-y-1">
           <span className="text-[11px] text-muted">{t('vocabulary.endDate')}</span>
-          <input
-            type="date"
-            value={filters.to}
-            onChange={(event) => set('to', event.target.value)}
-            className={selectClass}
-          />
+          <DateControl value={filters.to} onChange={(event) => set('to', event.target.value)} />
         </label>
       </div>
 
       <label className="block space-y-1">
         <span className="text-[11px] text-muted">{t('vocabulary.sort')}</span>
-        <select
+        <SelectControl
           value={filters.sort}
           onChange={(event) => set('sort', event.target.value as SortKey)}
-          className={selectClass}
         >
           {sorts.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </SelectControl>
       </label>
     </div>
   );

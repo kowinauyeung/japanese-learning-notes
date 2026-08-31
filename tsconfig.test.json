@@ -27,6 +27,10 @@
     "exactOptionalPropertyTypes": true,
     "verbatimModuleSyntax": true,
 
+    // Tests read the build's decisions back out of the root config files, and
+    // those import each other by explicit `.ts` path — see the note in
+    // tsconfig.node.json for why. `noEmit` above is the option's precondition.
+    "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
     "isolatedModules": true,
     "moduleDetection": "force",

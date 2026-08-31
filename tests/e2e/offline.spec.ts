@@ -162,7 +162,147 @@ test.describe('with the network off', () => {
     // installed on.
     await page.goto('/practice/dictation');
 
-    await expect(page.getByRole('heading', { name: '書き取り練習', level: 1 })).toBeVisible();
+    // The selected tab and not the heading: both drills are one screen called
+    // 「練習」 now, so its `<h1>` says the same thing on either route and would
+    // pass this test for a fallback that landed on the wrong one.
+    await expect(page.getByRole('tab', { name: '書き取り練習', selected: true })).toBeVisible();
+  });
+
+  test('draws the headword in its own face, which is the thing the reader came for', async ({
+    page,
+    context,
+  }) => {
+    await seed(page, { signedIn: true, entries: WORDS });
+    await page.goto('/');
+    await waitForPrecache(page);
+
+    // **The HTTP cache is emptied first, and Cache Storage is not.**
+    //
+    // `firebase.json` serves `/assets/**` as `immutable` for a year, so the
+    // font files the online visit fetched are sitting in the browser's own
+    // cache — which `setOffline` does not empty. Without this the offline
+    // reload could be answered from there and the test would report a font the
+    // worker never precached. `Network.clearBrowserCache` is Chromium-only, and
+    // this project is the one place that is fine: the spec already runs in a
+    // Chromium-only project, because Playwright's WebKit has no service worker.
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Network.clearBrowserCache');
+    await cdp.detach();
+
+    await context.setOffline(true);
+    await page.goto('/');
+
+    // The claim `pwa-config.ts` cannot make about itself. Its font files are
+    // split in two — the common chunks precached, the long tail left to a
+    // runtime rule — and reading that configuration back says nothing about
+    // whether a chunk the dashboard actually needs is in the half that survives
+    // the network being off. 兆候 needs Zen Maru Gothic 700 chunks 77 and 94;
+    // both are precached, and a bound moved past either of them would leave the
+    // reader's vocabulary drawn in whatever face the device happened to pick.
+    //
+    // `document.fonts` rather than a screenshot, because a fallback face is
+    // perfectly legible: the page looks fine, and only the letterforms are
+    // wrong. `status` is the only place the browser says which file it got.
+    //
+    // **Asserted per code point, not per family.** Every face of this family
+    // reports the same `family` and `weight`, and the brand mark in the header
+    // is drawn in Zen Maru Gothic 700 too — so a test that asked only whether
+    // *a* 700 face had loaded would stay green with 兆 and 候 both missing from
+    // the precache, which is the one thing it is here to notice.
+    // `document.fonts.ready`, not `status === 'loaded'`. `status` reports
+    // whether the font loading process is *currently* active, so it reads
+    // `loaded` before any face has begun — including on the tick this reload
+    // arrives, ahead of the layout that asks for Zen Maru Gothic at all. The
+    // wait then returns immediately and the single read below reports no faces
+    // on a build that is correct.
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    const read = () =>
+      page.evaluate(() => {
+        const inRange = (range: string, cp: number) =>
+          range.split(',').some((part) => {
+            const [start, end] = part.trim().replace(/^u\+/i, '').split('-');
+            const low = parseInt(start ?? '', 16);
+            return cp >= low && cp <= (end === undefined ? low : parseInt(end, 16));
+          });
+        const loaded = [...document.fonts].filter(
+          (face) =>
+            face.family.replace(/["']/g, '') === 'Zen Maru Gothic' &&
+            face.weight === '700' &&
+            face.status === 'loaded',
+        );
+        return {
+          faces: loaded.length,
+          // 兆 and 候 — the headword the dashboard is showing.
+          cho: loaded.some((face) => inRange(face.unicodeRange, 0x5146)),
+          ko: loaded.some((face) => inRange(face.unicodeRange, 0x5019)),
+        };
+      });
+
+    // What breaks when this goes red: the dashboard is showing 兆候, and a
+    // headword whose characters are in no loaded face is drawn in whatever the
+    // device falls back to — legible, and in the wrong letterforms, which is
+    // the one thing a reader copying strokes off the screen must not be given.
+    //
+    // Polled as one predicate rather than gated on the count first. Every face
+    // of this family reports the same family and weight, and
+    // `src/fonts.css:2209` is a 700 face covering only kana and punctuation —
+    // it carries the header's brand mark, so it loads early and reliably while
+    // chunks 77 and 94 are still arriving. Waiting for `faces > 0` therefore
+    // waits for that face and nothing else, which is exactly the condition the
+    // note above says this test must not settle for.
+    //
+    // Polling does not soften the claim: a chunk genuinely absent from the
+    // precache fails on the last attempt as surely as on the first. The whole
+    // record is polled rather than a boolean so a timeout prints which of the
+    // two characters is missing, and whether any face loaded at all.
+    await expect
+      .poll(read, {
+        message: 'no Zen Maru Gothic 700 face covering 兆 (U+5146) and 候 (U+5019) loaded offline',
+      })
+      .toMatchObject({ cho: true, ko: true });
+  });
+
+  test('keeps every font chunk a file, so the runtime half cannot ride into the precache', async ({
+    page,
+  }) => {
+    await seed(page, { signedIn: true, entries: WORDS });
+    await page.goto('/');
+
+    // A build fact, checked here because a build is the only thing that can see
+    // it: Vite inlines an asset under 4 KiB as a `data:` URI, and twelve of the
+    // rare Zen Maru Gothic chunks are under it. Inlined, they are emitted into
+    // neither font directory — they go into the stylesheet, and the stylesheet
+    // is precached, so the split quietly hands twelve of the runtime half to
+    // every reader. Nothing else notices: the count of woff2 in `dist` comes
+    // out 351 against 363 rules with no error anywhere.
+    //
+    // Read through the page rather than off disk, so what is asserted is what a
+    // browser was actually served.
+    const inlined = await page.evaluate(async () => {
+      const hrefs = [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')].map(
+        (link) => link.href,
+      );
+      const sheets = await Promise.all(
+        hrefs.map(async (href) => {
+          const response = await fetch(href);
+          // `fetch` resolves for a 404 as readily as for a 200, and an error
+          // page contains no `data:font` — so without this the assertion below
+          // would be satisfied by a stylesheet that was never served.
+          return { ok: response.ok, css: await response.text() };
+        }),
+      );
+      return {
+        sheets: sheets.length,
+        failed: sheets.filter((sheet) => !sheet.ok).length,
+        hits: sheets.filter((sheet) => sheet.css.includes('data:font')).length,
+      };
+    });
+
+    // Without these two the check below passes by finding no stylesheet at all,
+    // or by reading error pages instead of the build's CSS.
+    expect(inlined.sheets).toBeGreaterThan(0);
+    expect(inlined.failed, 'a stylesheet did not load, so its contents prove nothing').toBe(0);
+    expect(inlined.hits, 'a font is inlined into a stylesheet the worker precaches').toBe(0);
   });
 
   test('still serves its own manifest, which an installed window reads on launch', async ({

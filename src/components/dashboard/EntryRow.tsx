@@ -1,8 +1,11 @@
 import { Ruby } from '@/components/Ruby';
 import { VocabLink } from '@/components/VocabLink';
 import type { Entry } from '@/domain/entry';
+import { entrySummary } from '@/lib/contentLang';
 
 export function EntryRow({ entry }: { entry: Entry }) {
+  const summary = entrySummary(entry);
+
   return (
     <VocabLink
       entryId={entry.id}
@@ -25,8 +28,8 @@ export function EntryRow({ entry }: { entry: Entry }) {
         reading={entry.reading}
         className="has-ruby max-w-1/2 min-w-0 truncate font-display text-base font-bold"
       />
-      <span className="prose-cjk min-w-0 flex-1 truncate text-sm text-muted">
-        {entry.senses[0]?.description || entry.definition}
+      <span className="prose-cjk min-w-0 flex-1 truncate text-sm text-muted" lang={summary.lang}>
+        {summary.text}
       </span>
       <span className="shrink-0 text-xs text-muted tabular-nums">{entry.learnedOn}</span>
     </VocabLink>

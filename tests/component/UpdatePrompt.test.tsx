@@ -1,9 +1,10 @@
-import { act, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
 import type { AppUpdatePort } from '@/domain/ports';
+import { messages } from '@/i18n/messages';
 import { AppUpdateProvider } from '@/lib/appUpdate';
-import { renderWithI18n as render } from '../helpers/renderWithI18n';
+import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
 /**
  * The port is implemented here rather than substituted for. `AppUpdatePort` is
@@ -32,6 +33,60 @@ function testPort() {
   };
 }
 
+/**
+ * A worker whose `activate()` rejects a fixed number of times before
+ * succeeding — 0 for "always succeeds", `Infinity` for "always fails".
+ */
+function unreliablePort(failuresBeforeSuccess: number) {
+  const listeners = new Set<() => void>();
+  let attempts = 0;
+  const port: AppUpdatePort = {
+    onWaiting(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    activate() {
+      attempts += 1;
+      return attempts <= failuresBeforeSuccess
+        ? Promise.reject(new Error('activation failed'))
+        : Promise.resolve();
+    },
+  };
+  return { port, announceWaitingBuild: () => act(() => listeners.forEach((fn) => fn())) };
+}
+
+/**
+ * A worker whose `activate()` never settles on its own — the caller settles
+ * each call in turn, in whatever order the test needs.
+ */
+function deferredPort() {
+  const listeners = new Set<() => void>();
+  const pending: { resolve: () => void; reject: (error: Error) => void }[] = [];
+  const port: AppUpdatePort = {
+    onWaiting(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    activate() {
+      return new Promise<void>((resolve, reject) => {
+        pending.push({ resolve, reject });
+      });
+    },
+  };
+  return { port, pending, announceWaitingBuild: () => act(() => listeners.forEach((fn) => fn())) };
+}
+
+/**
+ * `noUncheckedIndexedAccess` makes `pending[i]` possibly `undefined`. A silent
+ * `?.` would let the test pass vacuously if a click somehow failed to reach
+ * the port, so this throws instead of hiding that.
+ */
+function nth<T>(items: readonly T[], index: number): T {
+  const item = items[index];
+  if (!item) throw new Error(`expected an item at index ${index}, got ${items.length} total`);
+  return item;
+}
+
 const mount = (port: AppUpdatePort) =>
   render(
     <AppUpdateProvider port={port}>
@@ -40,6 +95,9 @@ const mount = (port: AppUpdatePort) =>
   );
 
 const updateButton = () => screen.getByRole('button', { name: '今すぐ更新' });
+// From the catalogue rather than spelled out, so a reworded translation moves
+// this test with it instead of failing it over copy nobody here changed.
+const FAILED = messages.ja['update.failed'];
 
 describe('UpdatePrompt', () => {
   it('says nothing until a build is actually waiting, so nobody is offered the build they are already on', () => {
@@ -110,5 +168,75 @@ describe('UpdatePrompt', () => {
     // if someone reaches for `alert` — cuts into the dictation answer being
     // typed, which is the one moment this can arrive.
     expect(screen.getByRole('status')).toHaveTextContent('新しいバージョンがあります');
+  });
+
+  /**
+   * `activate()` never replaces the page on this path — the rejection is the
+   * only thing that happened — so a reader who clicked and got nothing back
+   * needs the banner itself to say so, or the click reads as having done
+   * nothing at all.
+   */
+  it('tells the reader activation failed instead of leaving the button looking inert', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const worker = unreliablePort(Infinity);
+    mount(worker.port);
+    worker.announceWaitingBuild();
+
+    act(() => updateButton().click());
+
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+  });
+
+  /**
+   * The failure is cleared at the start of the next attempt, not only on
+   * success, so a reader who retries and this time gets through is not left
+   * looking at an error banner above a page that is about to reload anyway.
+   */
+  it('clears the failure message on the next attempt', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const worker = unreliablePort(1);
+    mount(worker.port);
+    worker.announceWaitingBuild();
+
+    act(() => updateButton().click());
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+
+    act(() => updateButton().click());
+
+    await waitFor(() => expect(screen.queryByText(FAILED)).not.toBeInTheDocument());
+  });
+
+  /**
+   * The button is not disabled between clicks, so a reader who clicks twice
+   * starts a second attempt before the first has settled — and a `Promise`
+   * carries no guarantee it settles in the order it was created. A late
+   * rejection from the first click must not overwrite the outcome of the
+   * second, already-successful one.
+   */
+  it('ignores a stale rejection from an attempt a later one has already superseded', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const worker = deferredPort();
+    mount(worker.port);
+    worker.announceWaitingBuild();
+
+    act(() => updateButton().click());
+    act(() => updateButton().click());
+
+    await act(async () => {
+      nth(worker.pending, 1).resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      nth(worker.pending, 0).reject(new Error('stale, superseded activation'));
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText(FAILED)).not.toBeInTheDocument();
+  });
+
+  // Restores unconditionally, so a failed assertion above can't leak the
+  // `console.error` mock into whichever test runs next.
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 });

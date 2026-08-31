@@ -10,6 +10,12 @@ export interface AppUpdateValue {
   updateReady: boolean;
   /** Hand over to it. The page is replaced, so nothing follows this. */
   activate: () => void;
+  /**
+   * The most recent `activate()` call rejected instead of replacing the page.
+   * Cleared at the start of the next attempt, so a retry that succeeds does
+   * not leave a stale failure on screen.
+   */
+  activateFailed: boolean;
 }
 
 export const AppUpdateContext = createContext<AppUpdateValue | null>(null);

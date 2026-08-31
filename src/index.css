@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './fonts.css';
 
 /*
  * Palette derived from the 語彙庭 logo, which carries two distinct greens:
@@ -82,10 +83,21 @@
   --color-danger: var(--c-danger);
   --color-danger-soft: var(--c-danger-soft);
 
-  /* Inter for UI, Zen Maru Gothic for headwords, Noto Sans TC for CJK prose. */
+  /*
+   * Inter for the interface, Zen Maru Gothic for headwords, Noto Sans JP for
+   * Japanese prose. All three are self-hosted — see font-config.ts.
+   *
+   * `--font-cjk` was `Noto Sans TC` until #81, and that was not a near miss.
+   * It is what draws the definitions and example sentences, so this app about
+   * Japanese was rendering Japanese in Traditional Chinese character forms:
+   * four-stroke 艹 in 草 and 花, the mirrored upper-right box in 骨, the 卩 foot
+   * on 令. `Noto Sans JP` is the same family at the same weights, so nothing
+   * about the metrics or the colour of a paragraph moves; only the forms are
+   * now the ones the reader is trying to learn.
+   */
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-display: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif;
-  --font-cjk: 'Noto Sans TC', 'Hiragino Sans', sans-serif;
+  --font-cjk: 'Noto Sans JP', 'Hiragino Sans', sans-serif;
 
   /* The handoff collapses the nav to a hamburger below 700px, which sits
      between Tailwind's sm and md defaults, so it gets its own breakpoint. */
@@ -233,11 +245,108 @@ body {
   }
 }
 
-/* Japanese and Cantonese prose needs the extra leading for furigana and wrapping. */
+/*
+ * `input[type="date"]` is a widget, not a text box, and it will not be trusted
+ * with the size of the box around it.
+ *
+ * It was given `display: flex` here to centre its value, on the reasoning that
+ * Chrome's own UA stylesheet already makes it an `inline-flex`. On iOS Safari
+ * that made the control size itself to its widget content instead of to the
+ * 100% width it was given, and the field grew wider than the card holding it
+ * — reported from a phone, on a build where every test in this repository was
+ * green, including the one that measures these four controls to the same width
+ * and the ones that check the page does not scroll sideways. Neither desktop
+ * engine reproduces it: Playwright's WebKit draws the segmented desktop field,
+ * where iOS draws a formatted date and a wheel.
+ *
+ * So the box is drawn by a wrapper now — see `DateControl` in
+ * `src/components/controls.tsx` — and what is left here applies to the input
+ * inside it. `max-width` because a `width` a widget may decline is not a
+ * constraint, and this one it cannot exceed.
+ */
+input[type='date'] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/*
+ * Safari centres the printed date in whatever width is left over. Every other
+ * control starts its value at the left padding edge, and a row where one value
+ * floats in the middle of its box reads as a different kind of field. It is
+ * also what decides which end of an over-wide field the wrapper clips: the
+ * date stays readable and the empty space goes.
+ */
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+
+/*
+ * The CJK face, and the two ways to ask for it.
+ *
+ * `.cjk-face` is the face alone. `.prose-cjk` is the face plus the leading that
+ * Japanese and Cantonese prose needs for furigana and wrapping — which a single
+ * clamped line under a headword, a sense heading, or a source line does not,
+ * and which changes the height of the row it is applied to.
+ *
+ * **A language tag does nothing without one of these.** The `:lang()` rules
+ * below redefine `--font-cjk`, and an element that never reads that variable
+ * inherits `--font-sans` instead — `Inter`, which has no CJK at all, so the
+ * text falls through to whatever the platform happens to have. That is how a
+ * missed-word list ended up drawn in a different face from the headword beside
+ * it while carrying a perfectly correct `lang="ja"`.
+ *
+ * Written as one declaration for both, so the face cannot drift between them.
+ */
+.cjk-face,
 .prose-cjk {
   font-family: var(--font-cjk);
+}
+
+.prose-cjk {
   line-height: 1.85;
   overflow-wrap: anywhere;
+}
+
+/*
+ * A note is not written in one language, so one face cannot draw all of it.
+ *
+ * `src/domain/entry.ts` says so explicitly: `definitionSub` is where "the
+ * migrated notes put their Cantonese rendering", and `translation` on a sense,
+ * an example, a context or a usage note is "the learner's translation
+ * language" — while the headword, the readings, the example sentences and the
+ * Japanese explanations beside them are Japanese. Unicode gives the two the
+ * same code points and leaves the shape to the font, so whichever face wins
+ * draws *both* languages in its own regional forms, and one of them is then
+ * wrong: 花 with the four-stroke 艹 in a Japanese sentence, or with the
+ * three-stroke one in a Chinese gloss.
+ *
+ * So the components mark up which is which — `lang="ja"` on the Japanese, the
+ * reader's `translationLanguage` on the rest — and the face follows the markup
+ * rather than the interface locale. Written as a `--font-cjk` override rather
+ * than a `font-family` one so it inherits: a marked element re-points the
+ * variable for its whole subtree, and nesting resolves without any rule having
+ * to name a descendant.
+ */
+:lang(ja) {
+  --font-cjk: 'Noto Sans JP', 'Hiragino Sans', sans-serif;
+}
+
+:lang(zh-Hant),
+:lang(yue-Hant) {
+  /*
+   * Not self-hosted. Traditional Chinese here is a gloss beside the Japanese
+   * rather than the subject of the app, and the platform faces below are on
+   * every device a reader of it uses — which is 3 MB of `Noto Sans TC` this
+   * app does not have to ship or precache to get the forms right.
+   */
+  --font-cjk: 'PingFang TC', 'Microsoft JhengHei', 'Noto Sans TC', sans-serif;
+}
+
+:lang(ko) {
+  /* Neither self-hosted family covers Hangul, so naming the platform faces is
+     the difference between a chosen fallback and whatever the browser picks. */
+  --font-cjk: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
 }
 
 ruby {

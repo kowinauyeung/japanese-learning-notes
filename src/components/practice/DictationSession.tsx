@@ -4,6 +4,7 @@ import { SpeechStatusNote } from '@/components/SpeakButton';
 import type { Entry } from '@/domain/entry';
 import { INPUT_LIMITS } from '@/domain/limits';
 import { useI18n } from '@/i18n/context';
+import { entrySummary } from '@/lib/contentLang';
 import { isCorrectAnswer } from '@/lib/dictation';
 import { canSpeak, spokenForm, useJapaneseSpeech } from '@/lib/speech';
 import { SessionHeader } from './SessionHeader';
@@ -30,6 +31,7 @@ export function DictationSession({
 }) {
   const { t } = useI18n();
   const [typed, setTyped] = useState('');
+  const summary = entrySummary(entry);
   /** Null until 答え合わせ; the answer afterwards. */
   const [result, setResult] = useState<boolean | null>(null);
 
@@ -141,7 +143,11 @@ export function DictationSession({
             // browser takes for that.
             lang="ja"
             autoComplete="off"
-            className="min-h-12 w-full rounded-panel border border-line bg-bg px-3 text-lg text-ink"
+            // `cjk-face` for the same reason as the `lang` above, one layer
+            // on: the learner types Japanese into this field, and without it
+            // their answer is drawn by the platform while the word they are
+            // being asked to write sits beside it in the app's own face.
+            className="cjk-face min-h-12 w-full rounded-panel border border-line bg-bg px-3 text-lg text-ink"
           />
         </label>
 
@@ -157,7 +163,9 @@ export function DictationSession({
               reading={entry.reading}
               className="has-ruby block font-display text-2xl font-bold [overflow-wrap:anywhere]"
             />
-            <p className="prose-cjk text-sm">{entry.senses[0]?.description || entry.definition}</p>
+            <p className="prose-cjk text-sm" lang={summary.lang}>
+              {summary.text}
+            </p>
           </div>
         )}
       </div>

@@ -79,6 +79,73 @@ export const WORDS = [
 ] satisfies SeedEntry[];
 
 /**
+ * One word with every optional part of a note filled in.
+ *
+ * **Deliberately not in `WORDS`**, for the same reason `OVERSIZE_WORDS` is not:
+ * every committed screenshot is taken against that array.
+ *
+ * `WORDS` records nothing but a definition, so a summary of a note and the whole
+ * note render identically against it — which is how the dialog spent its life
+ * showing one sense and one example with no test able to see the difference.
+ * This is the shape that tells them apart: two senses, two examples, the
+ * sentence the word was met in, the usage notes and a related word.
+ */
+export const DETAILED_WORD = {
+  id: 'w-choukou',
+  headword: '兆候',
+  reading: 'ちょうこう',
+  pitchAccent: 0,
+  definition: '何かが起こる前ぶれ。',
+  definitionSub: '徵兆',
+  citationForm: '兆候',
+  source: 'NHK News',
+  pos: ['名詞'],
+  jlpt: 'N1',
+  origin: '漢語',
+  style: '書き言葉',
+  politeness: '普通',
+  freq: 4,
+  posInfo: { title: '名詞情報', rows: [{ label: 'する動詞化', value: 'しない' }] },
+  context: {
+    original: '景気回復の兆候が見えてきた。',
+    ja: '景気がよくなりはじめた様子が見える。',
+    translation: '經濟復甦的跡象開始浮現。',
+  },
+  senses: [
+    {
+      label: '前触れ',
+      description: '何かが起こる前に現れるしるし。',
+      example: '地震の兆候をとらえる。',
+      exampleGloss: '捕捉地震的前兆',
+      translation: '徵兆',
+      usage: 'ニュースや報告書で',
+    },
+    {
+      label: '症状',
+      description: '病気のはじまりを示すしるし。',
+      example: '回復の兆候が見られる。',
+      exampleGloss: '',
+      translation: '跡象',
+      usage: '',
+    },
+  ],
+  examples: [
+    { ja: '不況の兆候が現れる。', translation: '出現不景氣的徵兆。' },
+    { ja: '春の兆候を感じる。', translation: '感受到春天的氣息。' },
+  ],
+  usage: {
+    when: '悪いことの前触れに使うことが多い。',
+    translation: 'sign, indication',
+    caution: '「症状」とは違い、病気そのものを指さない。',
+  },
+  related: [{ headword: '前兆', note: 'ほぼ同義。より文語的。' }],
+  tags: ['ニュース'],
+  learnedOn: '2026-06-22',
+  createdAt: '2026-06-22T01:00:00.000Z',
+  updatedAt: '2026-06-22T01:00:00.000Z',
+} satisfies SeedEntry;
+
+/**
  * A note whose fields are long enough to break the layout, in the two ways that
  * actually did.
  *
@@ -236,8 +303,15 @@ export function makeSessions(count: number): SeedSession[] {
     mode: index % 2 === 0 ? 'flashcard' : 'dictation',
     filterLabel: `記録 ${index + 1}`,
     total: 3,
-    correct: index % 3,
-    missed: [],
+    // Three cards, of which `index % 3` went right — so the run agrees with the
+    // score printed above it. An empty list beside `total: 3` would claim a
+    // drill that dealt no cards, which is the one thing `words` cannot mean.
+    words: Array.from({ length: 3 }, (_, card) => ({
+      entryId: `w-${index}-${card}`,
+      headword: `記録${index + 1}の${card + 1}`,
+      reading: '',
+      correct: card < index % 3,
+    })),
     startedAt: new Date(Date.UTC(2026, 5, 1, index)).toISOString(),
     finishedAt: new Date(Date.UTC(2026, 5, 1, index, 5)).toISOString(),
   })) satisfies SeedSession[];

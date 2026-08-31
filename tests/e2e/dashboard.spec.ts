@@ -36,11 +36,109 @@ test.describe('dashboard', () => {
       0,
     );
 
-    const cell = await today.boundingBox();
-    const box = await scroller.boundingBox();
-    expect(cell).not.toBeNull();
-    expect(box).not.toBeNull();
-    expect(cell!.x).toBeGreaterThanOrEqual(box!.x);
-    expect(cell!.x + cell!.width).toBeLessThanOrEqual(box!.x + box!.width);
+    // Polled, for the same reason the manual-scroll test below polls: the
+    // overflow asserted above appears when the row is laid out, and the pin is
+    // written by an effect after that — so a single pair of reads can land in
+    // between and measure the unpinned position. This is the assertion that
+    // owns the claim, which is why it is the one hardened.
+    await expect
+      .poll(
+        async () => {
+          const [cell, box] = await Promise.all([today.boundingBox(), scroller.boundingBox()]);
+          if (!cell || !box) return false;
+          return cell.x >= box.x && cell.x + cell.width <= box.x + box.width;
+        },
+        { message: 'the first paint must scroll today into the heatmap viewport' },
+      )
+      .toBe(true);
+  });
+
+  test('re-pins the heatmap to today when a wide viewport becomes narrow', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await seedSignedIn(page);
+    await page.goto('/');
+
+    const today = page.getByRole('button', { name: /2026年6月24日/ });
+    await expect(today).toBeVisible();
+
+    const scroller = page.locator('section div.overflow-x-auto').first();
+    // Start from the desktop state that hides the bug from users: the whole
+    // year fits, so the heatmap has no reason to pin itself yet.
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollWidth - node.clientWidth))
+      .toBeLessThanOrEqual(0);
+
+    await page.setViewportSize({ width: 375, height: 667 });
+
+    // Prove the viewport change creates the user-visible risk: today can now
+    // sit off-screen to the right unless the heatmap pins itself.
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollWidth - node.clientWidth), {
+        message: 'the resize must make the year overflow, or nothing is being tested',
+      })
+      .toBeGreaterThan(0);
+
+    // The user-facing outcome is today being visible without manually dragging
+    // the horizontal scroller after rotating or narrowing the viewport.
+    await expect
+      .poll(async () => {
+        const [cell, box] = await Promise.all([today.boundingBox(), scroller.boundingBox()]);
+        if (!cell || !box) return false;
+        return cell.x >= box.x && cell.x + cell.width <= box.x + box.width;
+      })
+      .toBe(true);
+  });
+
+  test('keeps a manually scrolled heatmap on older weeks during later resize', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await seedSignedIn(page);
+    await page.goto('/');
+
+    const today = page.getByRole('button', { name: /2026年6月24日/ });
+    await expect(today).toBeVisible();
+
+    const scroller = page.locator('section div.overflow-x-auto').first();
+    // The preservation check only matters in the phone-width layout where a
+    // reader can scroll away from today into older weeks.
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollWidth - node.clientWidth))
+      .toBeGreaterThan(0);
+
+    // First prove the normal mobile load still opens on today; otherwise the
+    // manual scroll below would not represent a reader leaving the latest week.
+    //
+    // Polled rather than read once: the overflow above appears when the row is
+    // laid out, and the pin is written by an effect after that — so a single
+    // read can land in between and see the 0 this is here to rule out.
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollLeft), {
+        message: 'the narrow viewport must initially pin to the newest week',
+      })
+      .toBeGreaterThan(0);
+
+    await scroller.evaluate((node) => {
+      node.scrollLeft = 0;
+    });
+    // This models a reader deliberately inspecting old history, which must not
+    // be undone by incidental layout work after the first automatic pin.
+    await expect.poll(async () => scroller.evaluate((node) => node.scrollLeft)).toBe(0);
+
+    const clientWidth = await scroller.evaluate((node) => node.clientWidth);
+    await scroller.evaluate((node) => {
+      node.style.maxWidth = `${Math.max(1, node.clientWidth - 24)}px`;
+    });
+    // Trigger the kind of reflow ResizeObserver sees so the test covers the
+    // same path that would otherwise yank the reader back to today.
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.clientWidth))
+      .toBeLessThan(clientWidth);
+
+    // The user-visible guarantee is that older weeks stay put after the reader
+    // scrolls there; a resize must not turn history into today again.
+    await expect
+      .poll(async () => scroller.evaluate((node) => node.scrollLeft), {
+        message: "a later reflow must not undo the reader's manual scroll",
+      })
+      .toBe(0);
   });
 });

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { OVERSIZE_SET, OVERSIZE_WORDS, seed, seedSignedIn, WORDS } from './fixtures';
 
 /**
@@ -310,14 +311,34 @@ test.describe('long values must not widen the page', () => {
     headword carried the whole page with it. A per-screen loop is what stops the
     next one being found in a screenshot instead.
   */
-  for (const { name, path } of [
+  for (const { name, path, prepare } of [
     { name: 'the dashboard', path: '/' },
     { name: 'the vocabulary grid', path: '/vocabulary' },
     { name: 'the word set list', path: '/wordsets' },
     { name: 'the word set detail page', path: '/wordsets/set-oversize' },
+    {
+      // The 6,115-pixel case was the picker and member panels, and both are
+      // behind 編集 now — reached without it this row measures the card grid
+      // and the panels it exists for are never laid out at all.
+      name: 'the word set editor',
+      path: '/wordsets/set-oversize',
+      prepare: async (page: import('@playwright/test').Page) => {
+        await page.getByRole('button', { name: '編集', exact: true }).click();
+        // The measurement below is the test; this is what makes it measure
+        // anything. `overflow()` reads `documentElement.scrollWidth` the moment
+        // it is called, so a click that has not yet laid the panels out is
+        // measured as the card grid — a green result reported for a screen the
+        // long headword never reached.
+        await expect(page.locator('[data-drop-list="members"]')).toBeVisible();
+      },
+    },
     { name: 'the flashcard setup', path: '/practice/flashcards' },
     { name: 'the dictation setup', path: '/practice/dictation' },
-  ]) {
+  ] as {
+    name: string;
+    path: string;
+    prepare?: (page: import('@playwright/test').Page) => Promise<void>;
+  }[]) {
     for (const width of [375, 1280]) {
       test(`${name} does not scroll sideways at ${width}`, async ({ page }) => {
         await page.setViewportSize({ width, height: 800 });
@@ -328,6 +349,7 @@ test.describe('long values must not widen the page', () => {
         });
         await page.goto(path);
         await expect(page.locator('main')).toBeVisible();
+        await prepare?.(page);
 
         expect(await overflow(page)).toBeLessThanOrEqual(1);
       });
@@ -454,4 +476,106 @@ test.describe('a ruby wrapper may never be laid out as a -webkit-box', () => {
       expect(displays).not.toContain('-webkit-box');
     });
   }
+});
+
+/**
+ * Every control on a screen is the same box, measured rather than shot.
+ *
+ * The controls were declared with `min-h-*`, and a native widget treats that
+ * as a floor it may exceed — or, in WebKit, as nothing at all. Measured on the
+ * reverted code, on the practice setup at 390px with a coarse pointer: the two
+ * dropdowns came back **25px** tall and the two date fields beside them 36px,
+ * against a `min-h-9` that asked for 36 from all four. So the row stepped, and
+ * the halves of it that stepped were the halves the reader touches.
+ *
+ * **The Chromium copy of this test cannot see that.** On the same reverted
+ * code Chromium reports 36, 36, 36, 36 — every control at the floor, the row
+ * aligned, the bug invisible. It fails here only on the height being 36 rather
+ * than the 44 a touch target has to be. As with the `line-clamp` case above,
+ * the second engine is the mechanism and not redundancy.
+ *
+ * `isMobile` and `hasTouch` are what make the measurement the phone's one: the
+ * coarse-pointer rule in `index.css` raises control text to 16px to stop iOS
+ * zooming the page, which is what grows each widget past its declared floor by
+ * its own different amount. Without them this measures a laptop.
+ *
+ * A measurement and not a baseline, for the reason the WebKit project exists:
+ * a screenshot here would compare against — and `--update-snapshots` would
+ * overwrite — the Chromium PNG beside it. `boundingBox()` is browser
+ * independent, so the same claim can be made in both engines.
+ */
+test.describe('one control shape', () => {
+  test.use({ isMobile: true, hasTouch: true });
+  const CONTROL_HEIGHT = 44;
+
+  /**
+   * The date fields are measured through their wrapper, because that is what
+   * draws the box: `DateControl` puts the border, the height and the padding
+   * on a `<span>` and the bare input inside it, so that no native widget's
+   * idea of its own size can decide the width of the card. `getByLabel` still
+   * finds the input, which is the control; its parent is the control's box.
+   */
+  const box = (page: Page, label: string, wrapped = false) => {
+    const control = page.getByLabel(label);
+    return (wrapped ? control.locator('..') : control).boundingBox();
+  };
+
+  test('a dropdown and a date field are the same box', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedSignedIn(page);
+    await page.goto('/practice/flashcards');
+    await expect(page.getByLabel('品詞')).toBeVisible();
+
+    const boxes = await Promise.all([
+      box(page, '品詞'),
+      box(page, '語種'),
+      box(page, '開始日', true),
+      box(page, '終了日', true),
+    ]);
+
+    // The row a thumb reads down: four controls asking to be the same size and
+    // arriving at different ones is a column of boxes that steps, and a step
+    // is what the reader sees before they see anything wrong with the app.
+    expect(boxes.map((each) => each?.height)).toEqual([
+      CONTROL_HEIGHT,
+      CONTROL_HEIGHT,
+      CONTROL_HEIGHT,
+      CONTROL_HEIGHT,
+    ]);
+    // Stacked in one column at this width, so a widget refusing to shrink to
+    // its track shows up as a width that is not the width of the others.
+    expect(new Set(boxes.map((each) => each?.width)).size).toBe(1);
+
+    /*
+     * And none of them wider than the card. This is the assertion the reported
+     * bug wanted: a date field given `display: flex` sized itself to its widget
+     * content on iOS and grew past the panel, on a build where the width check
+     * above was green — desktop WebKit draws a segmented field where iOS draws
+     * a formatted date, so neither engine here can produce that width. It is
+     * kept because the claim is right even where this suite cannot break it,
+     * and `DateControl` is what makes it structural rather than hopeful.
+     */
+    const panel = await page.locator('main section').first().boundingBox();
+    for (const each of boxes) {
+      expect(each!.x + each!.width).toBeLessThanOrEqual(panel!.x + panel!.width);
+    }
+  });
+
+  /**
+   * The chips are controls too, and they were the smallest thing on the screen
+   * to press: measured on the reverted code, 24px tall in both engines against
+   * the 44 every dropdown and date field beside them is now sized to. They
+   * stay 24 under a mouse — `chipClass` raises them only on a coarse pointer,
+   * which is why this describe declares one.
+   */
+  test('a chip is as pressable as the controls beside it', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedSignedIn(page);
+    await page.goto('/practice/flashcards');
+
+    const chip = page.getByRole('button', { name: 'N1' });
+    await expect(chip).toBeVisible();
+
+    expect((await chip.boundingBox())?.height).toBe(CONTROL_HEIGHT);
+  });
 });

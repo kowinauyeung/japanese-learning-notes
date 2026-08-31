@@ -1,5 +1,6 @@
 import type { Entry } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
+import { JAPANESE } from '@/lib/contentLang';
 import type { ListDrag } from '@/lib/listDrag';
 import { CANDIDATE_LIMIT } from '@/lib/wordSetMembers';
 import { DragHandle } from './DragHandle';
@@ -92,8 +93,14 @@ export function MemberPicker({
               onMoveBy={null}
             />
             <span className="min-w-0 flex-1 truncate text-sm">
-              <span className="font-display font-bold">{entry.headword}</span>
-              {entry.reading && <span className="text-muted">（{entry.reading}）</span>}
+              <span className="font-display font-bold" lang={JAPANESE}>
+                {entry.headword}
+              </span>
+              {entry.reading && (
+                <span className="cjk-face text-muted" lang={JAPANESE}>
+                  （{entry.reading}）
+                </span>
+              )}
             </span>
             <button
               type="button"
