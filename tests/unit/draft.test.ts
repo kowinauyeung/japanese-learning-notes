@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { EntryDraft, Pos } from '@/domain/entry';
+import type { EntryDraft } from '@/domain/entry';
 import { POS } from '@/domain/entry';
 import { ENTRY_LIMITS } from '@/domain/limits';
 import {
@@ -389,10 +389,9 @@ describe('togglePos', () => {
   });
 
   it('removes one without disturbing the order of the rest', () => {
-    const three = POS.slice(0, 3) as Pos[];
-    const [, second] = three;
+    const [first, second, third] = POS;
 
-    expect(togglePos(three, second as Pos)).toEqual([three[0], three[2]]);
+    expect(togglePos([first, second, third], second)).toEqual([first, third]);
   });
 
   it('adds one that was not there and drops one that was', () => {
