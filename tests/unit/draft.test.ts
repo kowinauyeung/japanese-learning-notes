@@ -381,11 +381,13 @@ describe('wordSetError', () => {
  */
 describe('togglePos', () => {
   it('returns the same order however the chips were pressed, which is what the display and the stored draft both take as given', () => {
-    const forwards = togglePos(togglePos([], '名詞'), '動詞');
-    const backwards = togglePos(togglePos([], '動詞'), '名詞');
+    // Taken from `POS` rather than named, because which two parts of speech
+    // these are is not the claim — that they come back in the order `POS`
+    // lists them, whichever was pressed first, is.
+    const [first, second] = POS;
 
-    expect(forwards).toEqual(backwards);
-    expect(forwards).toEqual(POS.filter((part) => part === '名詞' || part === '動詞'));
+    expect(togglePos(togglePos([], second), first)).toEqual([first, second]);
+    expect(togglePos(togglePos([], first), second)).toEqual([first, second]);
   });
 
   it('removes one without disturbing the order of the rest', () => {
@@ -395,7 +397,9 @@ describe('togglePos', () => {
   });
 
   it('adds one that was not there and drops one that was', () => {
-    expect(togglePos([], '名詞')).toEqual(['名詞']);
-    expect(togglePos(['名詞'], '名詞')).toEqual([]);
+    const [first] = POS;
+
+    expect(togglePos([], first)).toEqual([first]);
+    expect(togglePos([first], first)).toEqual([]);
   });
 });

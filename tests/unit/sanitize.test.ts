@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { POS } from '@/domain/entry';
 import { toDraft } from '@/lib/draft';
 import {
   isValidIsoDate,
@@ -467,6 +468,35 @@ describe('sanitizeProgressMap', () => {
  * be recovered. So the reader takes both, and the old shape reads back as a
  * snapshot with nothing in it, which is what it is.
  */
+/**
+ * 品詞 read back from a document nobody is editing.
+ *
+ * `togglePos` puts the form's own list in `POS` order, but a reader who never
+ * touches a 品詞 chip never rewrites the field — so every note stored before
+ * that, and every note imported from an assistant that listed them its own way,
+ * would keep the order it arrived in. `EntryHeadline` and the manifest row in
+ * `EntryBody` map `pos` as stored, so that order is what is drawn.
+ */
+describe('sanitizeEntry — 品詞 as a set', () => {
+  it('reads a stored order back in the order the app renders, so a note nobody edits stops disagreeing with one that was', () => {
+    const [first, second] = POS;
+
+    expect(sanitizeEntry('e1', { pos: [second, first] }).pos).toEqual([first, second]);
+  });
+
+  it('drops a repeat rather than drawing the same part of speech twice', () => {
+    const [first] = POS;
+
+    expect(sanitizeEntry('e1', { pos: [first, first] }).pos).toEqual([first]);
+  });
+
+  it('still refuses a value that is not a part of speech at all', () => {
+    const [first] = POS;
+
+    expect(sanitizeEntry('e1', { pos: [first, 'ヌルポ', 42, null] }).pos).toEqual([first]);
+  });
+});
+
 describe('sanitizeSession — the missed list, in both shapes it is stored in', () => {
   const stored = (missed: unknown) => ({
     mode: 'flashcard',
