@@ -17,6 +17,7 @@ interface Action {
 
 interface AvailableElement {
   index: number;
+  marker: string;
   type: string;
 }
 
@@ -122,41 +123,48 @@ function randomFor(seedValue: number): () => number {
   };
 }
 
-async function available(locator: Locator): Promise<AvailableElement[]> {
-  return locator.evaluateAll((elements) =>
-    elements.flatMap((element, index) => {
-      const html = element as HTMLElement;
-      const style = getComputedStyle(html);
-      const rect = html.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const centerY = rect.top + rect.height / 2;
-      const top = document.elementFromPoint(centerX, centerY);
-      if (
-        !html.checkVisibility() ||
-        style.display === 'none' ||
-        style.visibility === 'hidden' ||
-        rect.width === 0 ||
-        rect.height === 0 ||
-        centerX < 0 ||
-        centerX > innerWidth ||
-        centerY < 0 ||
-        centerY > innerHeight ||
-        html.closest('[inert], [aria-hidden="true"]') ||
-        (top !== html && !html.contains(top)) ||
-        html.getAttribute('aria-readonly') === 'true' ||
-        (html instanceof HTMLInputElement && html.readOnly) ||
-        (html instanceof HTMLTextAreaElement && html.readOnly)
-      )
-        return [];
-      if ('disabled' in html && (html as HTMLButtonElement).disabled) return [];
+const MONKEY_CONTROL_ATTRIBUTE = 'data-monkey-control';
 
-      return [
-        {
-          index,
-          type: html.getAttribute('type') || html.tagName.toLowerCase(),
-        },
-      ];
-    }),
+async function available(locator: Locator): Promise<AvailableElement[]> {
+  return locator.evaluateAll(
+    (elements, markerAttribute) =>
+      elements.flatMap((element, index) => {
+        const html = element as HTMLElement;
+        const style = getComputedStyle(html);
+        const rect = html.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const top = document.elementFromPoint(centerX, centerY);
+        if (
+          !html.checkVisibility() ||
+          style.display === 'none' ||
+          style.visibility === 'hidden' ||
+          rect.width === 0 ||
+          rect.height === 0 ||
+          centerX < 0 ||
+          centerX > innerWidth ||
+          centerY < 0 ||
+          centerY > innerHeight ||
+          html.closest('[inert], [aria-hidden="true"]') ||
+          (top !== html && !html.contains(top)) ||
+          html.getAttribute('aria-readonly') === 'true' ||
+          (html instanceof HTMLInputElement && html.readOnly) ||
+          (html instanceof HTMLTextAreaElement && html.readOnly)
+        )
+          return [];
+        if ('disabled' in html && (html as HTMLButtonElement).disabled) return [];
+
+        const marker = `${performance.now()}-${index}-${Math.random()}`;
+        html.setAttribute(markerAttribute, marker);
+        return [
+          {
+            index,
+            marker,
+            type: html.getAttribute('type') || html.tagName.toLowerCase(),
+          },
+        ];
+      }),
+    MONKEY_CONTROL_ATTRIBUTE,
   );
 }
 
@@ -169,6 +177,7 @@ async function available(locator: Locator): Promise<AvailableElement[]> {
  * of magnitude more than reading a label off an attached element takes.
  */
 const LABEL_TIMEOUT_MS = 1_000;
+const ACTION_TIMEOUT_MS = 4_000;
 
 async function labelOf(locator: Locator): Promise<string> {
   return locator.evaluate(
@@ -289,32 +298,47 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
   if (category === 'field') {
     const chosen = availableFields[Math.floor(elementDraw * availableFields.length)];
     if (!chosen) return navigate();
-    const field = fields.nth(chosen.index);
+    const field = page.locator(`[${MONKEY_CONTROL_ATTRIBUTE}="${chosen.marker}"]`);
     return {
       description: `change ${chosen.type} index ${chosen.index}`,
       run: async () => {
-        const label = await labelOf(field);
-        await test.step(`resolved ${chosen.type} “${label}”`, async () => {
-          if (chosen.type === 'checkbox' || chosen.type === 'radio') return field.click();
-          if (chosen.type === 'date')
-            return field.fill(['', '2026-02-28', '2026-06-24'][Math.floor(valueDraw * 3)] ?? '', {
-              timeout: 4000,
+        const skipped = `skipped field index ${chosen.index}, no longer on screen`;
+        if (!(await field.isVisible().catch(() => false))) return skipped;
+        const label = await labelOf(field).catch(() => null);
+        if (label === null) return skipped;
+        try {
+          await test.step(`resolved ${chosen.type} “${label}”`, async () => {
+            if (chosen.type === 'checkbox' || chosen.type === 'radio')
+              return field.click({ timeout: ACTION_TIMEOUT_MS });
+            if (chosen.type === 'date')
+              return field.fill(['', '2026-02-28', '2026-06-24'][Math.floor(valueDraw * 3)] ?? '', {
+                timeout: ACTION_TIMEOUT_MS,
+              });
+            if (chosen.type === 'number')
+              return field.fill(['-1', '0', '2.7', '999999'][Math.floor(valueDraw * 4)] ?? '0', {
+                timeout: ACTION_TIMEOUT_MS,
+              });
+            if (chosen.type === 'range') {
+              const bounds = await field.evaluate(
+                (element) => {
+                  const input = element as HTMLInputElement;
+                  return { min: input.min || '0', max: input.max || '100' };
+                },
+                undefined,
+                { timeout: ACTION_TIMEOUT_MS },
+              );
+              return field.fill(valueDraw < 0.5 ? bounds.min : bounds.max, {
+                timeout: ACTION_TIMEOUT_MS,
+              });
+            }
+            return field.fill(TEXT_CORPUS[Math.floor(valueDraw * TEXT_CORPUS.length)] ?? '', {
+              timeout: ACTION_TIMEOUT_MS,
             });
-          if (chosen.type === 'number')
-            return field.fill(['-1', '0', '2.7', '999999'][Math.floor(valueDraw * 4)] ?? '0', {
-              timeout: 4000,
-            });
-          if (chosen.type === 'range') {
-            const bounds = await field.evaluate((element) => {
-              const input = element as HTMLInputElement;
-              return { min: input.min || '0', max: input.max || '100' };
-            });
-            return field.fill(valueDraw < 0.5 ? bounds.min : bounds.max);
-          }
-          return field.fill(TEXT_CORPUS[Math.floor(valueDraw * TEXT_CORPUS.length)] ?? '', {
-            timeout: 4000,
           });
-        });
+        } catch (error) {
+          if (!(await field.isVisible().catch(() => false))) return skipped;
+          throw error;
+        }
         return `change ${chosen.type} “${label}”`;
       },
     };
@@ -325,15 +349,27 @@ async function chooseAction(page: Page, random: () => number): Promise<Action> {
   if (category === 'select') {
     const chosen = availableSelects[Math.floor(elementDraw * availableSelects.length)];
     if (!chosen) return navigate();
-    const select = selects.nth(chosen.index);
+    const select = page.locator(`[${MONKEY_CONTROL_ATTRIBUTE}="${chosen.marker}"]`);
     return {
       description: `choose option in select index ${chosen.index}`,
       run: async () => {
-        const label = await labelOf(select);
-        await test.step(`resolved select “${label}”`, async () => {
-          const count = await select.locator('option').count();
-          if (count > 0) await select.selectOption({ index: Math.floor(valueDraw * count) });
-        });
+        const skipped = `skipped select index ${chosen.index}, no longer on screen`;
+        if (!(await select.isVisible().catch(() => false))) return skipped;
+        const label = await labelOf(select).catch(() => null);
+        if (label === null) return skipped;
+        try {
+          await test.step(`resolved select “${label}”`, async () => {
+            const count = await select.locator('option').count();
+            if (count > 0)
+              await select.selectOption(
+                { index: Math.floor(valueDraw * count) },
+                { timeout: ACTION_TIMEOUT_MS },
+              );
+          });
+        } catch (error) {
+          if (!(await select.isVisible().catch(() => false))) return skipped;
+          throw error;
+        }
         return `choose option in “${label}”`;
       },
     };
@@ -446,6 +482,73 @@ async function attachHistory(testInfo: TestInfo, seedValue: string, history: str
   await testInfo.attach('monkey-actions', {
     body: [`seed=${seedValue}`, `steps=${history.length}`, '', ...history].join('\n'),
     contentType: 'text/plain',
+  });
+}
+
+const STALE_CONTROLS = [
+  { categoryDraw: 0.5, element: 'input', expected: 'skipped field index 0, no longer on screen' },
+  { categoryDraw: 0.6, element: 'select', expected: 'skipped select index 0, no longer on screen' },
+];
+
+for (const { categoryDraw, element, expected } of STALE_CONTROLS) {
+  test(`skips a stale ${element} before resolving its label`, async ({ page }) => {
+    await page.setContent('<main></main>');
+    await page.evaluate((tagName) => {
+      const control = document.createElement(tagName);
+      control.setAttribute('aria-label', 'Monkey control');
+      if (control instanceof HTMLSelectElement) control.add(new Option('Option'));
+      document.body.append(control);
+    }, element);
+
+    const draws = [categoryDraw, 0, 0];
+    const action = await chooseAction(page, () => draws.shift() ?? 0);
+    await page.locator(element).evaluate((control) => control.remove());
+
+    await expect(action.run()).resolves.toBe(expected);
+  });
+}
+
+const STALE_TARGET_CONTROLS = [
+  {
+    categoryDraw: 0.5,
+    element: 'input',
+    expected: 'skipped field index 0, no longer on screen',
+    survivingValue: 'untouched',
+  },
+  {
+    categoryDraw: 0.6,
+    element: 'select',
+    expected: 'skipped select index 0, no longer on screen',
+    survivingValue: 'one',
+  },
+];
+
+for (const { categoryDraw, element, expected, survivingValue } of STALE_TARGET_CONTROLS) {
+  test(`skips a stale ${element} without retargeting its sibling`, async ({ page }) => {
+    await page.setContent('<main></main>');
+    await page.evaluate((tagName) => {
+      const makeControl = (id: string, value: string) => {
+        const control = document.createElement(tagName);
+        control.id = id;
+        control.setAttribute('aria-label', 'Monkey control');
+        if (control instanceof HTMLSelectElement) {
+          control.add(new Option('One', 'one'));
+          control.add(new Option('Two', 'two'));
+        }
+        control.setAttribute('value', value);
+        return control;
+      };
+      const target = makeControl('target', 'target');
+      const sibling = makeControl('surviving', 'untouched');
+      document.body.append(target, sibling);
+    }, element);
+
+    const draws = [categoryDraw, 0, 0.9];
+    const action = await chooseAction(page, () => draws.shift() ?? 0);
+    await page.locator('#target').evaluate((control) => control.remove());
+
+    await expect(action.run()).resolves.toBe(expected);
+    await expect(page.locator('#surviving')).toHaveValue(survivingValue);
   });
 }
 
