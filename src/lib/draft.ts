@@ -1,6 +1,7 @@
 import type { IsoDate } from '@/domain/common';
 import { TAG_PATTERN } from '@/domain/common';
-import type { Entry, EntryDraft } from '@/domain/entry';
+import type { Entry, EntryDraft, Pos } from '@/domain/entry';
+import { POS } from '@/domain/entry';
 import { ENTRY_LIMITS } from '@/domain/limits';
 import { isValidIsoDate } from './dates';
 import { accentKana, accentProblem } from './mora';
@@ -264,4 +265,22 @@ export function invalidTags(tags: string[]): string[] {
  */
 export function validTags(tags: string[]): string[] {
   return tags.filter((tag) => TAG_PATTERN.test(tag));
+}
+
+/**
+ * Adds or removes one part of speech, and returns the set in `POS` order.
+ *
+ * 品詞 is a set, and `POS` is the order it renders in — but appending put the
+ * draft in click order and nothing downstream sorted it. `EntryHeadline` and
+ * the manifest row in `EntryBody` both map `entry.pos` as stored, and
+ * `sanitizeEntry` filters it without reordering, so the same two parts of
+ * speech read 名詞／動詞 or 動詞／名詞 depending on which chip was pressed
+ * first — and that order was written to Firestore and came back that way.
+ *
+ * Kept apart from the filter panels' `toggle`, which works on `string[]`;
+ * this has to stay a `Pos[]` for the draft.
+ */
+export function togglePos(list: Pos[], value: Pos): Pos[] {
+  const next = list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+  return POS.filter((part) => next.includes(part));
 }

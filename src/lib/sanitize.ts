@@ -41,6 +41,25 @@ export { isValidIsoDate };
 const str = (value: unknown): string =>
   typeof value === 'string' ? value : typeof value === 'number' ? String(value) : '';
 
+/**
+ * 品詞 as a set, in the order it renders in.
+ *
+ * `POS.filter` rather than a filter over the stored list, so this normalises as
+ * well as validates. Nothing downstream sorts `pos` — `EntryHeadline` and the
+ * manifest row in `EntryBody` map it as stored — so a document written in the
+ * order its chips were pressed, or imported from an assistant that listed them
+ * its own way, is drawn in that order forever. Reading it through the canonical
+ * order settles it for every note already in the notebook, which toggling a
+ * chip cannot: a reader who never touches 品詞 never rewrites it.
+ *
+ * De-duplication comes with it, and is wanted for the same reason: a set that
+ * lists 名詞 twice is not one.
+ */
+const posList = (value: unknown): (typeof POS)[number][] => {
+  const stored = strings(value);
+  return POS.filter((part) => stored.includes(part));
+};
+
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
   typeof value === 'string' && (allowed as readonly string[]).includes(value)
     ? (value as T)
@@ -197,9 +216,7 @@ export function sanitizeDraft(value: unknown, fallback: EntryDraft = emptyDraft(
     headword: str(raw.headword).trim() || fallback.headword,
     reading: str(raw.reading) || fallback.reading,
     pitchAccent: pitchAccent(raw.pitchAccent),
-    pos: strings(raw.pos).filter((p): p is (typeof POS)[number] =>
-      (POS as readonly string[]).includes(p),
-    ),
+    pos: posList(raw.pos),
     jlpt: oneOf(raw.jlpt, JLPT_LEVELS, fallback.jlpt),
     origin: oneOfOptional(raw.origin, WORD_ORIGINS),
     style: oneOfOptional(raw.style, STYLES),
