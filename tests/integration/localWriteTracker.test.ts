@@ -128,15 +128,29 @@ describe('waitForLocalWrite', () => {
     const error = new Error('rules rejected the write');
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const tracker = new LocalWriteTracker(shortFallbackMs);
+    // Refused by hand rather than by a second timer, which is what this used to
+    // do: it rejected `shortFallbackMs + 5` after the write, leaving five
+    // milliseconds between the fallback resolving `saved` and the refusal
+    // arriving. Under load the refusal won that race, `saved` rejected, and the
+    // run went red on the assertion above — a failure about the machine rather
+    // than about the tracker. The ordering this test is *about* — local
+    // persistence first, refusal second — is now stated rather than timed.
+    let refuse!: (cause: Error) => void;
     const saved = tracker.write(
       ref,
-      () => new Promise((_resolve, reject) => setTimeout(() => reject(error), shortFallbackMs + 5)),
+      () =>
+        new Promise((_resolve, reject) => {
+          refuse = reject;
+        }),
     );
 
     await sleep(shortFallbackMs + 1);
     await expect(saved).resolves.toBeUndefined();
 
-    await sleep(5);
+    refuse(error);
+    // One hop, so the tracker's rejection handler has run before `settle` asks.
+    await Promise.resolve();
+
     await expect(tracker.settle(() => Promise.resolve())).rejects.toBe(error);
     expect(consoleError).toHaveBeenCalledWith(
       'Firestore write rejected after local persistence',
