@@ -238,19 +238,28 @@ test.describe('with the network off', () => {
         };
       });
 
-    // Polled rather than read once, because `ready` settles for the layout it
-    // was asked about and a face can still arrive behind it. A precached chunk
-    // that never loads fails these three on the last attempt just as it does on
-    // the first; only a slow one is given the chance the network cannot.
+    // What breaks when this goes red: the dashboard is showing 兆候, and a
+    // headword whose characters are in no loaded face is drawn in whatever the
+    // device falls back to — legible, and in the wrong letterforms, which is
+    // the one thing a reader copying strokes off the screen must not be given.
+    //
+    // Polled as one predicate rather than gated on the count first. Every face
+    // of this family reports the same family and weight, and
+    // `src/fonts.css:2209` is a 700 face covering only kana and punctuation —
+    // it carries the header's brand mark, so it loads early and reliably while
+    // chunks 77 and 94 are still arriving. Waiting for `faces > 0` therefore
+    // waits for that face and nothing else, which is exactly the condition the
+    // note above says this test must not settle for.
+    //
+    // Polling does not soften the claim: a chunk genuinely absent from the
+    // precache fails on the last attempt as surely as on the first. The whole
+    // record is polled rather than a boolean so a timeout prints which of the
+    // two characters is missing, and whether any face loaded at all.
     await expect
-      .poll(async () => (await read()).faces, {
-        message: 'no Zen Maru Gothic 700 face loaded offline at all',
+      .poll(read, {
+        message: 'no Zen Maru Gothic 700 face covering 兆 (U+5146) and 候 (U+5019) loaded offline',
       })
-      .toBeGreaterThan(0);
-
-    const covers = await read();
-    expect(covers.cho, '兆 (U+5146) is in no loaded face').toBe(true);
-    expect(covers.ko, '候 (U+5019) is in no loaded face').toBe(true);
+      .toMatchObject({ cho: true, ko: true });
   });
 
   test('keeps every font chunk a file, so the runtime half cannot ride into the precache', async ({
