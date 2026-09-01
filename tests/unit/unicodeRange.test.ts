@@ -15,6 +15,13 @@ describe('unicodeRangeIncludes', () => {
     expect(unicodeRangeIncludes('u+4E00-9FFF', 0x5146)).toBe(true);
   });
 
+  it('expands wildcards into their inclusive range, so a loaded CSS face is not rejected', () => {
+    expect(unicodeRangeIncludes('U+4??', 0x400)).toBe(true);
+    expect(unicodeRangeIncludes('U+4??', 0x4ff)).toBe(true);
+    expect(unicodeRangeIncludes('U+4??', 0x3ff)).toBe(false);
+    expect(unicodeRangeIncludes('U+4??', 0x500)).toBe(false);
+  });
+
   it('matches a singleton range, so a loaded face is not mistaken for a fallback', () => {
     expect(unicodeRangeIncludes('U+3005', 0x3005)).toBe(true);
     expect(unicodeRangeIncludes('U+3005', 0x3006)).toBe(false);

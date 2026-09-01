@@ -2,8 +2,8 @@
 export function unicodeRangeIncludes(range: string, codePoint: number): boolean {
   return range.split(',').some((part) => {
     const [start, end] = part.trim().replace(/^u\+/i, '').split('-');
-    const low = Number.parseInt(start ?? '', 16);
-    const high = end === undefined ? low : Number.parseInt(end, 16);
+    const low = Number.parseInt((start ?? '').replace(/\?/g, '0'), 16);
+    const high = Number.parseInt((end ?? start ?? '').replace(/\?/g, 'F'), 16);
     return codePoint >= low && codePoint <= high;
   });
 }
