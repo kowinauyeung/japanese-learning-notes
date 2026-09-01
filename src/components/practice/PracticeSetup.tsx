@@ -113,7 +113,7 @@ export function PracticeSetup({
       <header className="space-y-3">
         {/* The screen is 「練習」 and the drill is a choice inside it, so the
             heading names the screen: the mode is already announced by the
-            selected tab below, and printing it twice was what a title plus a
+            pressed button below, and printing it twice was what a title plus a
             switch would do. */}
         <h1 className="font-display text-2xl font-bold">{t('nav.practice')}</h1>
         {/*
@@ -124,7 +124,7 @@ export function PracticeSetup({
           this is also the only way to reach the other drill there.
         */}
         <div
-          role="tablist"
+          role="group"
           aria-label={t('nav.practice')}
           className="flex gap-1 rounded-pill bg-bg-alt p-1"
         >
@@ -132,8 +132,7 @@ export function PracticeSetup({
             <button
               key={option.mode}
               type="button"
-              role="tab"
-              aria-selected={mode === option.mode}
+              aria-pressed={mode === option.mode}
               onClick={() => onModeChange(option.mode)}
               className={`min-h-11 flex-1 rounded-pill px-3 text-sm font-semibold transition ${
                 mode === option.mode ? 'bg-card text-ink shadow-panel' : 'text-muted'

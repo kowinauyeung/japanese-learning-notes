@@ -93,17 +93,17 @@ test.describe('the bottom navigation', () => {
     const chosen = await page.getByLabel('開始日').inputValue();
     expect(chosen).not.toBe('');
 
-    await page.getByRole('tab', { name: '書き取り練習' }).click();
+    await page.getByRole('button', { name: '書き取り練習' }).click();
 
     // The route, not the query string: how the filters travel is this
     // screen's business, and asserting the `?` would fail on the mechanism
     // before reaching the assertions below that a learner would notice.
     await expect(page).toHaveURL(/\/practice\/dictation/);
-    // A switch that navigates but leaves the flashcard tab selected tells the
+    // A switch that navigates but leaves the flashcard button pressed tells the
     // learner they are still drilling the thing they just moved away from —
     // and tells a screen reader so in as many words.
-    await expect(page.getByRole('tab', { name: '書き取り練習' })).toHaveAttribute(
-      'aria-selected',
+    await expect(page.getByRole('button', { name: '書き取り練習' })).toHaveAttribute(
+      'aria-pressed',
       'true',
     );
     await expect(page.getByLabel('開始日')).toHaveValue(chosen);

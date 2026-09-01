@@ -162,10 +162,10 @@ test.describe('with the network off', () => {
     // installed on.
     await page.goto('/practice/dictation');
 
-    // The selected tab and not the heading: both drills are one screen called
+    // The pressed button and not the heading: both drills are one screen called
     // 「練習」 now, so its `<h1>` says the same thing on either route and would
     // pass this test for a fallback that landed on the wrong one.
-    await expect(page.getByRole('tab', { name: '書き取り練習', selected: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '書き取り練習', pressed: true })).toBeVisible();
   });
 
   test('draws the headword in its own face, which is the thing the reader came for', async ({
