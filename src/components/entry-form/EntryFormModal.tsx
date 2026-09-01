@@ -146,6 +146,17 @@ export function EntryFormModal({
    */
   const [drafting, setDrafting] = useState(false);
   /**
+   * Whether the browser is still deciding whether it may read the clipboard.
+   *
+   * This is intentionally separate from drafting: beginning a paste must not
+   * clear the handoff that sent the reader to this tab. It does, however, make
+   * the footer and tabs unsafe, because either action can save or unmount the
+   * form before the clipboard reply arrives.
+   */
+  const [pasting, setPasting] = useState(false);
+  /** The paste request that owns the lock above, if this modal run has one. */
+  const pasteFor = useRef<symbol | null>(null);
+  /**
    * Which request the lock above belongs to.
    *
    * A request outlives the panel that made it and can outlive the whole dialog:
@@ -205,6 +216,16 @@ export function EntryFormModal({
     busyFor.current = null;
     setDrafting(false);
   };
+  const trackPasting = (busy: boolean, request: symbol) => {
+    if (busy) {
+      pasteFor.current = request;
+      setPasting(true);
+      return;
+    }
+    if (pasteFor.current !== request) return;
+    pasteFor.current = null;
+    setPasting(false);
+  };
   /**
    * The current `json`, readable from a callback that outlived the render it
    * was created in.
@@ -240,6 +261,7 @@ export function EntryFormModal({
     setAiError(null);
     setHandedOff(false);
     setDrafting(false);
+    setPasting(false);
     // Reset here as well as guarded in `saveDraft`: a save from the previous run
     // skips its own `setSaving(false)`, so without this the new dialog opens
     // with its footer already locked by a write it knows nothing about.
@@ -247,6 +269,7 @@ export function EntryFormModal({
     // The outstanding request, if there is one, is now nobody's: it may still
     // settle, and what it must not do on the way past is unlock this session.
     busyFor.current = null;
+    pasteFor.current = null;
     setErrors([]);
   }, [open, entry, translationLanguage]);
 
@@ -441,7 +464,7 @@ export function EntryFormModal({
               // to import, and a bare handler would hand it the MouseEvent —
               // which `jsonToDraft` would dutifully try to parse.
               onClick={() => void importJson(json.raw)}
-              disabled={!json.raw.trim() || drafting}
+              disabled={!json.raw.trim() || drafting || pasting}
               className="min-h-10 rounded-pill bg-bg-alt px-5 text-sm font-semibold text-ink disabled:opacity-50"
             >
               {t('form.import')}
@@ -457,7 +480,7 @@ export function EntryFormModal({
           <button
             type="button"
             onClick={() => void saveDraft(draft)}
-            disabled={saving || drafting}
+            disabled={saving || drafting || pasting}
             className="min-h-10 rounded-pill bg-accent px-5 text-sm font-semibold text-on-accent disabled:opacity-60"
           >
             {saving ? t('form.saving') : t('form.save')}
@@ -475,7 +498,7 @@ export function EntryFormModal({
               // unmounts the panel that made it and the reply is then dropped —
               // silently, and after the allowance has already been spent. The
               // close button stays live, which is the way out if it hangs.
-              disabled={drafting}
+              disabled={drafting || pasting}
               onClick={() => {
                 setTab(item.id);
                 // Chosen, not arrived at: the handoff notice explains why the
@@ -569,6 +592,7 @@ export function EntryFormModal({
           aiError={aiError}
           handedOff={handedOff}
           onBusyChange={trackDrafting}
+          onPasteBusyChange={trackPasting}
           onFailure={(reason) => {
             setAiError(reason);
             setHandedOff(false);
