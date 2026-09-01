@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { unicodeRangeIncludes } from '@/lib/unicodeRange';
 import { seed, WORDS } from './fixtures';
 
 /**
@@ -217,26 +218,25 @@ test.describe('with the network off', () => {
     // on a build that is correct.
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
     const read = () =>
-      page.evaluate(() => {
-        const inRange = (range: string, cp: number) =>
-          range.split(',').some((part) => {
-            const [start, end] = part.trim().replace(/^u\+/i, '').split('-');
-            const low = parseInt(start ?? '', 16);
-            return cp >= low && cp <= (end === undefined ? low : parseInt(end, 16));
-          });
-        const loaded = [...document.fonts].filter(
-          (face) =>
-            face.family.replace(/["']/g, '') === 'Zen Maru Gothic' &&
-            face.weight === '700' &&
-            face.status === 'loaded',
-        );
-        return {
-          faces: loaded.length,
+      page
+        .evaluate(() => {
+          const loaded = [...document.fonts].filter(
+            (face) =>
+              face.family.replace(/["']/g, '') === 'Zen Maru Gothic' &&
+              face.weight === '700' &&
+              face.status === 'loaded',
+          );
+          return {
+            faces: loaded.length,
+            ranges: loaded.map((face) => face.unicodeRange),
+          };
+        })
+        .then(({ faces, ranges }) => ({
+          faces,
           // 兆 and 候 — the headword the dashboard is showing.
-          cho: loaded.some((face) => inRange(face.unicodeRange, 0x5146)),
-          ko: loaded.some((face) => inRange(face.unicodeRange, 0x5019)),
-        };
-      });
+          cho: ranges.some((range) => unicodeRangeIncludes(range, 0x5146)),
+          ko: ranges.some((range) => unicodeRangeIncludes(range, 0x5019)),
+        }));
 
     // What breaks when this goes red: the dashboard is showing 兆候, and a
     // headword whose characters are in no loaded face is drawn in whatever the
