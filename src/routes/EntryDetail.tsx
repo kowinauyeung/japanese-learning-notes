@@ -65,6 +65,7 @@ export function Component() {
       <header className="rounded-card bg-card p-5 shadow-panel sm:p-6">
         <EntryHeadline
           entry={entry}
+          pageHeading
           actions={
             <>
               <SpeakButton status={speechStatus} onSpeak={() => speak(spokenForm(entry))} />
