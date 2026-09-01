@@ -107,6 +107,19 @@ test.describe('browsing', () => {
     expect((await pitch.boundingBox())?.width ?? Infinity).toBeLessThan(400);
   });
 
+  test('makes the detail word the lone level-one heading, so heading navigation identifies the entry', async ({
+    page,
+  }) => {
+    await page.goto('/vocabulary/w-choukou');
+
+    // This route, rather than EntryHeadline in isolation, owns the page-level
+    // semantics. Without pageHeading here, a heading shortcut skips the word
+    // the reader opened to study.
+    const heading = page.getByRole('heading', { level: 1 });
+    await expect(heading).toHaveCount(1);
+    await expect(heading).toContainText('兆候');
+  });
+
   test('opens a word in a dialog without leaving the list', async ({ page }) => {
     await page.goto('/vocabulary');
     await page.getByRole('link', { name: /兆候/ }).click();
