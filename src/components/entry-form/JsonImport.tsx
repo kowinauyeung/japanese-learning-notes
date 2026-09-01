@@ -55,6 +55,7 @@ export function JsonImport({
   handedOff,
   onFailure,
   onBusyChange,
+  onPasteBusyChange,
 }: {
   value: JsonImportState;
   /**
@@ -98,6 +99,8 @@ export function JsonImport({
   onFailure: (reason: EntryDraftingFailure) => void;
   /** See `SimpleForm`: lets the modal lock its footer for the same window. */
   onBusyChange: (busy: boolean, request: DraftRequest) => void;
+  /** Lets the modal lock controls that would discard a pending clipboard read. */
+  onPasteBusyChange?: (busy: boolean) => void;
 }) {
   // Purely local: nothing outside this component acts on it.
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -235,6 +238,7 @@ export function JsonImport({
   const pasteJson = () => {
     setPasteFailed(false);
     setPasting(true);
+    onPasteBusyChange?.(true);
     let read: Promise<string> | undefined;
     try {
       read = navigator.clipboard?.readText();
@@ -244,11 +248,13 @@ export function JsonImport({
       // direction.
       setPasteFailed(true);
       setPasting(false);
+      onPasteBusyChange?.(false);
       return;
     }
     if (read === undefined) {
       setPasteFailed(true);
       setPasting(false);
+      onPasteBusyChange?.(false);
       return;
     }
     read
@@ -268,7 +274,9 @@ export function JsonImport({
         if (alive.current) setPasteFailed(true);
       })
       .finally(() => {
-        if (alive.current) setPasting(false);
+        if (!alive.current) return;
+        setPasting(false);
+        onPasteBusyChange?.(false);
       });
   };
 
