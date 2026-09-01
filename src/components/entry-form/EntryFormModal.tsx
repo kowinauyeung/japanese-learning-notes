@@ -154,6 +154,8 @@ export function EntryFormModal({
    * form before the clipboard reply arrives.
    */
   const [pasting, setPasting] = useState(false);
+  /** The paste request that owns the lock above, if this modal run has one. */
+  const pasteFor = useRef<symbol | null>(null);
   /**
    * Which request the lock above belongs to.
    *
@@ -214,6 +216,16 @@ export function EntryFormModal({
     busyFor.current = null;
     setDrafting(false);
   };
+  const trackPasting = (busy: boolean, request: symbol) => {
+    if (busy) {
+      pasteFor.current = request;
+      setPasting(true);
+      return;
+    }
+    if (pasteFor.current !== request) return;
+    pasteFor.current = null;
+    setPasting(false);
+  };
   /**
    * The current `json`, readable from a callback that outlived the render it
    * was created in.
@@ -257,6 +269,7 @@ export function EntryFormModal({
     // The outstanding request, if there is one, is now nobody's: it may still
     // settle, and what it must not do on the way past is unlock this session.
     busyFor.current = null;
+    pasteFor.current = null;
     setErrors([]);
   }, [open, entry, translationLanguage]);
 
@@ -579,7 +592,7 @@ export function EntryFormModal({
           aiError={aiError}
           handedOff={handedOff}
           onBusyChange={trackDrafting}
-          onPasteBusyChange={setPasting}
+          onPasteBusyChange={trackPasting}
           onFailure={(reason) => {
             setAiError(reason);
             setHandedOff(false);
