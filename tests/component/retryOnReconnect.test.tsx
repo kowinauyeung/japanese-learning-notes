@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
+import { useCallback, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useRetryOnReconnect } from '@/lib/retryOnReconnect';
 
