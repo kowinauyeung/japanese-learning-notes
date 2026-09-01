@@ -27,6 +27,8 @@ describe('EntryHeadline — page heading semantics', () => {
       </MemoryRouter>,
     );
 
+    // The modal title already names this dialog. A second heading here adds a
+    // redundant stop when a reader navigates the dialog by headings.
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();
   });
 });
