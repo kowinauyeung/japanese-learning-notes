@@ -1,11 +1,10 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EntryFormModal } from '@/components/entry-form/EntryFormModal';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import { messages } from '@/i18n/messages';
 import { EntriesProvider } from '@/lib/entries';
-import { render } from '@testing-library/react';
 
 const ja = (key: keyof (typeof messages)['ja']) => messages.ja[key];
 
@@ -53,9 +52,11 @@ describe('EntryFormModal — clipboard paste while a handoff is visible', () => 
     fireEvent.click(screen.getByRole('button', { name: ja('import.paste') }));
 
     // A browser permission prompt can hold readText open. Acting on the footer
-    // then either drops the paste or saves the draft it was about to replace.
+    // or leaving this tab then either drops the paste or saves the draft it was
+    // about to replace.
     expect(screen.getByRole('button', { name: ja('form.import') })).toBeDisabled();
     expect(screen.getByRole('button', { name: ja('form.save') })).toBeDisabled();
+    expect(screen.getByRole('button', { name: ja('form.full') })).toBeDisabled();
     expect(screen.getByText(ja('import.aiHandoff'))).toBeVisible();
 
     release('{"headword":"兆候"}');
