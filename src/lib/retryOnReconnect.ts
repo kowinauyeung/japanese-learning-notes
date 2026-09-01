@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useOnline } from '@/lib/useOnline';
 
 /**
- * Retries once when the browser regains a connection, and only on the
- * transition into it — not on every render while already online and failed,
- * which would retry nothing new and just repeat the same rejection.
+ * Retries once after the browser regains a connection and a read has failed —
+ * not on every render while already online and failed, which would retry
+ * nothing new and just repeat the same rejection.
  *
  * Scoped to callers that have already decided the failure is worth retrying:
  * `useOnline`'s own caveat is that `true` is a hint to retry, not proof it will
@@ -28,24 +28,42 @@ import { useOnline } from '@/lib/useOnline';
  * (the stale result is discarded), but it is still a second read charged for
  * no reason, which is exactly the overlap #84 asked this hook to avoid.
  */
-export function useRetryOnReconnect(failed: boolean, retry: () => void | Promise<void>): void {
+export function useRetryOnReconnect(
+  failed: boolean,
+  loadSucceeded: boolean,
+  retry: () => void | Promise<void>,
+): void {
   const online = useOnline();
-  const wasOffline = useRef(!online);
-  const retrying = useRef(false);
+  const reconnectPending = useRef(!online);
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
-    if (online && wasOffline.current && failed && !retrying.current) {
-      retrying.current = true;
-      // `retry` is always a provider's `refresh`, which already catches its
-      // own failure into the caller's error state and never rejects — the
-      // `catch` here guards the hook's public contract, typed to accept a
-      // rejecting `Promise<void>`, not a rejection this codebase produces.
-      void Promise.resolve(retry())
-        .catch(() => undefined)
-        .finally(() => {
-          retrying.current = false;
-        });
+    if (!online) {
+      reconnectPending.current = true;
+      return;
     }
-    wasOffline.current = !online;
-  }, [online, failed, retry]);
+
+    if (!reconnectPending.current || retrying) return;
+
+    // A read that began offline can reject after the online event. Keep that
+    // reconnect available until that read either succeeds or publishes a
+    // failure that can use it.
+    if (loadSucceeded) {
+      reconnectPending.current = false;
+      return;
+    }
+    if (!failed) return;
+
+    reconnectPending.current = false;
+    setRetrying(true);
+    // `retry` is always a provider's `refresh`, which already catches its
+    // own failure into the caller's error state and never rejects — the
+    // `catch` here guards the hook's public contract, typed to accept a
+    // rejecting `Promise<void>`, not a rejection this codebase produces.
+    void Promise.resolve(retry())
+      .catch(() => undefined)
+      .finally(() => {
+        setRetrying(false);
+      });
+  }, [online, failed, loadSucceeded, retry, retrying]);
 }
