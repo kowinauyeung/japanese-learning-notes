@@ -70,7 +70,7 @@ jobs:
       # The Firestore emulator is a Java process, and firebase-tools refuses
       # anything below 21. Pinned rather than left to the runner image default,
       # which has moved before and would take the rules tests with it.
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
