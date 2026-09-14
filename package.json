@@ -43,9 +43,9 @@
     "@fontsource/inter": "^5.3.0",
     "@fontsource/noto-sans-jp": "^5.3.0",
     "@fontsource/zen-maru-gothic": "^5.3.0",
-    "firebase": "^12.18.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "firebase": "^12.19.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
@@ -57,8 +57,8 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.4.1",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.7",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "~3.2.4",
     "commit-and-tag-version": "^13.1.2",
