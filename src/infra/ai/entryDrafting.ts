@@ -154,8 +154,12 @@ function ensureModel(): GenerativeModel | undefined {
   if (unavailable) return undefined;
   if (model?.name === configuredModelName) return model.instance;
   try {
+    // Limited-use tokens are required: Firebase AI Logic enforces App Check replay
+    // protection, which rejects the SDK's default reusable session token with a 401.
+    // Each draft costs one extra token exchange.
+    const ai = getAI(app, { backend: new GoogleAIBackend(), useLimitedUseAppCheckTokens: true });
     model = {
-      instance: getGenerativeModel(getAI(app, { backend: new GoogleAIBackend() }), {
+      instance: getGenerativeModel(ai, {
         model: configuredModelName,
       }),
       name: configuredModelName,
@@ -226,6 +230,14 @@ function classify(error: unknown): EntryDraftingError {
   }
   const text = error instanceof Error ? error.message : String(error);
   if (/\b429\b|quota|rate.?limit|exhausted/i.test(text)) return new EntryDraftingError('quota');
+  // Before the 403 pattern below, which it would otherwise match. A
+  // limited-use token is minted per request, so App Check failing to mint one
+  // surfaces here, wrapped by `@firebase/ai` as `Error fetching from …:
+  // AppCheck: 403 error. Attempts allowed again after 1d:0m:0s
+  // (appCheck/initial-throttle).` That is reCAPTCHA refusing this browser,
+  // which a reload clears; read as a retired model it would switch drafting
+  // off for the session.
+  if (/\(appCheck\/[\w-]+\)/.test(text)) return new EntryDraftingError('failed');
   // 404 belongs with the permanent failures, not with the network ones, even
   // though the SDK reports it as `fetch-error`. It is what a retired model
   // name returns, and no amount of retrying brings one back — the reader

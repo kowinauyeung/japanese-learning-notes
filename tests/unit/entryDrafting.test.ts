@@ -7,6 +7,7 @@ import {
 } from '@/infra/ai/modelConfig';
 
 const generateContent = vi.hoisted(() => vi.fn());
+const getAI = vi.hoisted(() => vi.fn((_app: unknown, _options?: unknown) => ({})));
 const getGenerativeModel = vi.hoisted(() => vi.fn(() => ({ generateContent })));
 const remoteConfig = vi.hoisted<{
   defaultConfig: Record<string, string | number | boolean>;
@@ -26,7 +27,7 @@ vi.mock('firebase/ai', () => ({
     code = '';
   },
   GoogleAIBackend: class GoogleAIBackend {},
-  getAI: vi.fn(() => ({})),
+  getAI,
   getGenerativeModel,
 }));
 vi.mock('firebase/remote-config', () => ({
@@ -155,6 +156,47 @@ describe('geminiEntryDrafting', () => {
     } finally {
       error.mockRestore();
     }
+  });
+
+  it('keeps drafting offered when App Check cannot mint a token, instead of reading its 403 as a retired model', async () => {
+    // The shape `@firebase/ai` gives a failed limited-use exchange: the App
+    // Check error, wrapped in its own fetch prefix.
+    generateContent.mockRejectedValueOnce(
+      new Error(
+        'Error fetching from https://firebasevertexai.googleapis.com: AppCheck: 403 error. ' +
+          'Attempts allowed again after 1d:0m:0s (appCheck/initial-throttle).',
+      ),
+    );
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
+
+      await expect(geminiEntryDrafting.draft('prompt')).rejects.toEqual(
+        expect.objectContaining({ reason: 'failed' }),
+      );
+      expect(geminiEntryDrafting.available()).toBe(true);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('asks for limited-use App Check tokens, without which replay protection refuses every draft with a 401', async () => {
+    generateContent.mockResolvedValueOnce({ response: { text: () => 'draft' } });
+    const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
+
+    await expect(geminiEntryDrafting.draft('prompt')).resolves.toBe('draft');
+
+    // Reads like configuration and is the whole fix. Both projects enforce
+    // replay protection on Firebase AI Logic, which accepts only a token minted
+    // for one request; the SDK's default is the reusable session token, and the
+    // proxy answers that with `401 Firebase App Check token is invalid.` A
+    // unit test cannot reach the proxy, so the option it is handed is the
+    // observable boundary.
+    expect(getAI).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ useLimitedUseAppCheckTokens: true }),
+    );
   });
 });
 
