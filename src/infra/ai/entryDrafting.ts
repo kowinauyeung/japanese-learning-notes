@@ -154,8 +154,18 @@ function ensureModel(): GenerativeModel | undefined {
   if (unavailable) return undefined;
   if (model?.name === configuredModelName) return model.instance;
   try {
+    /*
+      Limited-use tokens, because both projects enforce App Check replay
+      protection on Firebase AI Logic, and under it the proxy refuses the
+      ordinary session token outright: every draft came back
+      `401 Firebase App Check token is invalid.`, on every device, while
+      Firestore — enforced without replay protection — accepted the same
+      token. The SDK defaults this to `false`. Each request now mints a token
+      that is consumed once, which costs a token exchange per draft.
+    */
+    const ai = getAI(app, { backend: new GoogleAIBackend(), useLimitedUseAppCheckTokens: true });
     model = {
-      instance: getGenerativeModel(getAI(app, { backend: new GoogleAIBackend() }), {
+      instance: getGenerativeModel(ai, {
         model: configuredModelName,
       }),
       name: configuredModelName,
