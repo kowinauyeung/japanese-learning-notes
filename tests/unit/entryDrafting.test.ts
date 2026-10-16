@@ -158,6 +158,29 @@ describe('geminiEntryDrafting', () => {
     }
   });
 
+  it('keeps drafting offered when App Check cannot mint a token, instead of reading its 403 as a retired model', async () => {
+    // The shape `@firebase/ai` gives a failed limited-use exchange: the App
+    // Check error, wrapped in its own fetch prefix.
+    generateContent.mockRejectedValueOnce(
+      new Error(
+        'Error fetching from https://firebasevertexai.googleapis.com: AppCheck: 403 error. ' +
+          'Attempts allowed again after 1d:0m:0s (appCheck/initial-throttle).',
+      ),
+    );
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
+
+      await expect(geminiEntryDrafting.draft('prompt')).rejects.toEqual(
+        expect.objectContaining({ reason: 'failed' }),
+      );
+      expect(geminiEntryDrafting.available()).toBe(true);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it('asks for limited-use App Check tokens, without which replay protection refuses every draft with a 401', async () => {
     generateContent.mockResolvedValueOnce({ response: { text: () => 'draft' } });
     const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
