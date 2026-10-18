@@ -17,6 +17,7 @@ import { TIMED_OUT, within } from '@/infra/ai/deadline';
 import {
   DEFAULT_GEMINI_MODEL,
   GEMINI_DRAFT_TIMEOUT_MS,
+  GEMINI_DRAFTING_ENABLED_CONFIG_KEY,
   GEMINI_MODEL_NAME_CONFIG_KEY,
   GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS,
   GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS,
@@ -71,6 +72,29 @@ import { app } from '@/infra/firebase/client';
 let configuredModelName = DEFAULT_GEMINI_MODEL;
 let model: { instance: GenerativeModel; name: string } | undefined;
 let unavailable = false;
+/**
+ * The console's kill switch, kept apart from `unavailable` on purpose: that one
+ * records a failure that will never clear, and this one clears the moment the
+ * operator publishes `true` again.
+ *
+ * It fails open. Until a refresh has read it — and whenever Remote Config
+ * cannot be reached — drafting stays offered, for the same reason the model
+ * name falls back to its bundled default: configuration is an upgrade path,
+ * not a prerequisite. So a switched-off session still shows the control once;
+ * pressing it reads the switch, sends nothing, and the control goes.
+ *
+ * **It goes for one fetch interval, not for good.** Only `draft` refreshes
+ * Remote Config — `available` runs during render and must schedule nothing — so
+ * a control withdrawn until the switch reads `true` would wait on a refresh that
+ * only the withdrawn control can start, and a session open when the operator
+ * turns drafting back on would never see it again. Within the interval a
+ * refetch would answer from the SDK's cache anyway, so offering the control
+ * sooner could only fail the same way. Lapsing does not re-render anything: the
+ * control comes back on the caller's next render, which `EntryFormModal`
+ * explains.
+ */
+let remotelyDisabled = false;
+let withdrawnUntil = 0;
 let remoteConfig: RemoteConfig | undefined;
 let remoteConfigUnavailable = false;
 let remoteConfigFetch: Promise<void> | undefined;
@@ -89,7 +113,10 @@ function ensureRemoteConfig(): RemoteConfig | undefined {
   if (remoteConfig) return remoteConfig;
   try {
     remoteConfig = getRemoteConfig(app);
-    remoteConfig.defaultConfig = { [GEMINI_MODEL_NAME_CONFIG_KEY]: DEFAULT_GEMINI_MODEL };
+    remoteConfig.defaultConfig = {
+      [GEMINI_MODEL_NAME_CONFIG_KEY]: DEFAULT_GEMINI_MODEL,
+      [GEMINI_DRAFTING_ENABLED_CONFIG_KEY]: true,
+    };
     remoteConfig.settings.minimumFetchIntervalMillis = GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS;
     remoteConfig.settings.fetchTimeoutMillis = GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS;
   } catch (error) {
@@ -102,8 +129,9 @@ function ensureRemoteConfig(): RemoteConfig | undefined {
   return remoteConfig;
 }
 
-function applyRemoteConfigModelName(config: RemoteConfig): void {
+function applyRemoteConfig(config: RemoteConfig): void {
   setConfiguredModelName(getValue(config, GEMINI_MODEL_NAME_CONFIG_KEY).asString());
+  remotelyDisabled = !getValue(config, GEMINI_DRAFTING_ENABLED_CONFIG_KEY).asBoolean();
 }
 
 /**
@@ -131,11 +159,11 @@ function refreshConfiguredModelName(): Promise<void> {
       console.error('Gemini model Remote Config cache initialisation failed', error);
     }
 
-    applyRemoteConfigModelName(config);
+    applyRemoteConfig(config);
 
     try {
       await fetchAndActivate(config);
-      applyRemoteConfigModelName(config);
+      applyRemoteConfig(config);
     } catch (error) {
       // The fallback is the point: Remote Config must not turn drafting into a
       // feature that needs two network calls to succeed before the first model
@@ -251,7 +279,7 @@ function classify(error: unknown): EntryDraftingError {
 }
 
 export const geminiEntryDrafting: EntryDraftingPort = {
-  available: () => ensureModel() !== undefined,
+  available: () => Date.now() >= withdrawnUntil && ensureModel() !== undefined,
 
   async draft(prompt) {
     /*
@@ -275,6 +303,11 @@ export const geminiEntryDrafting: EntryDraftingPort = {
       // name published after this point could never be read.
       if (remoteConfigFetch === refreshing) remoteConfigFetch = undefined;
       console.error('Gemini model Remote Config did not settle; using', configuredModelName);
+    }
+    // After the refresh and before the model: a switched-off draft sends nothing.
+    if (remotelyDisabled) {
+      withdrawnUntil = Date.now() + GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS;
+      throw new EntryDraftingError('unavailable');
     }
     const generative = ensureModel();
     if (!generative) throw new EntryDraftingError('unavailable');

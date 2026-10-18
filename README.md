@@ -398,9 +398,31 @@ mechanism now that signups are open, and there was less of one before than it
 looked. Deleting the Auth user stops the account signing in again, but the token
 already in hand keeps writing for up to an hour, and the person can sign up again
 straight away — a deleted account that returns gets a **new** uid, so nothing
-about the ban follows them. What takes effect immediately is deleting the data
-and, if the abuse is the AI, turning drafting off. A ban that actually holds has
+about the ban follows them. What takes effect immediately is deleting the data.
+If the abuse is the AI, turning drafting off stops it for everyone within about
+five minutes — see below for why not sooner. A ban that actually holds has
 to be keyed on something the person keeps, and that has not been designed.
+
+**Turning AI drafting off.** Publish the Remote Config parameter
+`ai_drafting_enabled` as `false` on the project; publish `true`, or delete it, to
+turn drafting back on. It needs no deploy, and **it is not immediate**:
+
+- A client reads Remote Config only when a reader presses a drafting button, and
+  refetches at most every five minutes. A session that fetched `true` within the
+  last five minutes keeps sending drafts to the model until that window ends.
+- It fails open. A client that cannot reach Remote Config keeps the last value it
+  activated, or `true` if it never activated one, and keeps drafting.
+- Once a client has read `false`, a press sends nothing and the button is
+  withdrawn for five minutes. After that it is offered again, so a session open
+  across the change sees drafting come back. While the switch is still `false`,
+  each reappearance costs one press that sends nothing.
+
+So budget up to five minutes from publishing to the last draft that reaches the
+model, longer for a client that is offline from Remote Config, and do not treat
+it as a guarantee for a single request. The copy-the-prompt path keeps working
+throughout. It is for everyone at once — a spent project quota, a change in the
+provider's terms, or a model answering wrongly — and is not a per-user control.
+The model itself is `model_name` on the same screen.
 
 **Clearing a deletion tombstone.** Deleting an account writes
 `deletedAccounts/{uid}`, and Firestore rules refuse every create and update from

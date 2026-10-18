@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_GEMINI_MODEL,
+  GEMINI_DRAFTING_ENABLED_CONFIG_KEY,
   GEMINI_MODEL_NAME_CONFIG_KEY,
   GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS,
   GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS,
@@ -18,9 +19,16 @@ const remoteConfig = vi.hoisted<{
 }));
 const cachedModel = vi.hoisted(() => ({ name: 'gemini-4.0-flash' }));
 const remoteModel = vi.hoisted(() => ({ name: 'gemini-4.0-flash' }));
+const remoteSwitch = vi.hoisted(() => ({ enabled: true }));
 const ensureInitialized = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 const fetchAndActivate = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
-const getValue = vi.hoisted(() => vi.fn(() => ({ asString: () => remoteModel.name })));
+const remoteValue = vi.hoisted(
+  () => (modelName: () => string) => (_config: unknown, key: string) => ({
+    asString: () => modelName(),
+    asBoolean: () => (key === GEMINI_DRAFTING_ENABLED_CONFIG_KEY ? remoteSwitch.enabled : false),
+  }),
+);
+const getValue = vi.hoisted(() => vi.fn(remoteValue(() => remoteModel.name)));
 
 vi.mock('firebase/ai', () => ({
   AIError: class AIError extends Error {
@@ -59,9 +67,10 @@ beforeEach(() => {
   remoteConfig.settings = { fetchTimeoutMillis: 60_000, minimumFetchIntervalMillis: 43_200_000 };
   cachedModel.name = 'gemini-4.0-flash';
   remoteModel.name = 'gemini-4.0-flash';
+  remoteSwitch.enabled = true;
   ensureInitialized.mockResolvedValue(undefined);
   fetchAndActivate.mockResolvedValue(true);
-  getValue.mockReturnValue({ asString: () => remoteModel.name });
+  getValue.mockImplementation(remoteValue(() => remoteModel.name));
   vi.stubEnv('VITE_FIREBASE_API_KEY', 'test');
   vi.stubEnv('VITE_FIREBASE_AUTH_DOMAIN', 'test');
   vi.stubEnv('VITE_FIREBASE_PROJECT_ID', 'test');
@@ -103,8 +112,11 @@ describe('geminiEntryDrafting', () => {
     expect(fetchAndActivate).toHaveBeenCalledWith(remoteConfig);
     // If this default drifts, first-load readers can hit a retired bundled
     // model before the console value has ever reached their browser.
+    // The switch defaults on: a first load that never reaches the console must
+    // not read a missing value as "off".
     expect(remoteConfig.defaultConfig).toEqual({
       [GEMINI_MODEL_NAME_CONFIG_KEY]: DEFAULT_GEMINI_MODEL,
+      [GEMINI_DRAFTING_ENABLED_CONFIG_KEY]: true,
     });
     // If these settings drift, an emergency model-name change can take too long
     // to reach readers, or a slow Remote Config call can block drafting.
@@ -123,7 +135,7 @@ describe('geminiEntryDrafting', () => {
   it('uses the cached Remote Config model when a fresh fetch fails', async () => {
     cachedModel.name = 'gemini-4.1-flash';
     fetchAndActivate.mockRejectedValueOnce(new Error('remote config unavailable'));
-    getValue.mockReturnValue({ asString: () => cachedModel.name });
+    getValue.mockImplementation(remoteValue(() => cachedModel.name));
     generateContent.mockResolvedValueOnce({ response: { text: () => 'draft' } });
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -178,6 +190,47 @@ describe('geminiEntryDrafting', () => {
       expect(geminiEntryDrafting.available()).toBe(true);
     } finally {
       error.mockRestore();
+    }
+  });
+
+  it('sends nothing to the model once the console switches drafting off, and stops offering it', async () => {
+    remoteSwitch.enabled = false;
+    const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
+
+    await expect(geminiEntryDrafting.draft('prompt')).rejects.toEqual(
+      expect.objectContaining({ reason: 'unavailable' }),
+    );
+    // The switch exists for a spent quota or a provider's terms changing, and
+    // either way the point is that the word and its sentence never leave.
+    expect(generateContent).not.toHaveBeenCalled();
+    expect(geminiEntryDrafting.available()).toBe(false);
+  });
+
+  it('offers drafting again in the same session after the switch is turned back on, though only a draft can read it', async () => {
+    /*
+      `available()` gates the control and `draft()` is the only refresh, so a
+      control withdrawn until the switch read `true` again could never be
+      pressed to read it. The withdrawal has to lapse on its own — after one
+      fetch interval, since a refetch inside it answers from cache.
+    */
+    vi.useFakeTimers();
+    try {
+      remoteSwitch.enabled = false;
+      generateContent.mockResolvedValue({ response: { text: () => 'draft' } });
+      const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
+
+      await expect(geminiEntryDrafting.draft('prompt')).rejects.toEqual(
+        expect.objectContaining({ reason: 'unavailable' }),
+      );
+      remoteSwitch.enabled = true;
+      await vi.advanceTimersByTimeAsync(GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS - 1);
+      expect(geminiEntryDrafting.available()).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(geminiEntryDrafting.available()).toBe(true);
+      await expect(geminiEntryDrafting.draft('prompt')).resolves.toBe('draft');
+    } finally {
+      vi.useRealTimers();
     }
   });
 

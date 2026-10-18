@@ -16,7 +16,10 @@ import { type DraftRequest, useEntryDrafting } from './useEntryDrafting';
  * and a single "something went wrong" would invite a retry on the three that
  * cannot succeed. `unavailable` in particular is permanent for this reader —
  * the API is not offered in every country — so its message points at the manual
- * prompt below rather than at the button they just pressed.
+ * prompt below rather than at the button they just pressed. The one exception
+ * is the operator's Remote Config switch: that withdraws the button for five
+ * minutes rather than for good (see `entryDrafting.ts`), and the message is
+ * still right in the meantime.
  */
 const FAILURE_MESSAGE: Record<EntryDraftingFailure, MessageKey> = {
   unavailable: 'import.aiUnavailable',
