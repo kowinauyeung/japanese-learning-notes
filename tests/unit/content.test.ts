@@ -23,8 +23,8 @@ const PINNED_DOCS = {
     hash: '62c72d1cdef71d8b154ca3b8d5a258f5be866e729936697c7d01dbe53a6cc231',
   },
   privacy: {
-    updated: '2026-08-25',
-    hash: '6e05b0dba0d2801454808c26ffea2d0e83c579a21c357071ba7f74cc60608af2',
+    updated: '2026-10-18',
+    hash: '610701ccc62a090aabebcbc62c9ce4826cf944cebe48e14405f89b997206b16b',
   },
   terms: {
     updated: '2026-08-14',
@@ -156,6 +156,27 @@ describe('what the public pages must not disclose', () => {
       .some((line) => line.includes('Google Forms'));
 
     expect(disclosed).toBe(isGoogleForm);
+  });
+
+  /**
+   * The same shape again, for the processor that shipped without it.
+   *
+   * AI drafting went out in `1.0.0` with a condition attached — the policy
+   * names the model provider before the first reader sees the feature — and
+   * nothing enforced it, so the condition was simply not met: the word and the
+   * sentence a reader met it in went to the Gemini API, on a tier whose terms
+   * let Google use them, under a policy that named Firebase, reCAPTCHA and
+   * Google Forms and stopped. Reading the adapter makes the next backend swap
+   * fail here instead of leaving the policy describing the previous one.
+   */
+  it('names the Gemini API when, and only when, drafting calls it', () => {
+    const adapter = readFileSync('src/infra/ai/entryDrafting.ts', 'utf8');
+    const implemented = adapter.includes('GoogleAIBackend');
+    const disclosed = privacy.sections
+      .flatMap((section) => section.body)
+      .some((line) => line.includes('Gemini API'));
+
+    expect(disclosed).toBe(implemented);
   });
 });
 
