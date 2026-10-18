@@ -398,8 +398,9 @@ mechanism now that signups are open, and there was less of one before than it
 looked. Deleting the Auth user stops the account signing in again, but the token
 already in hand keeps writing for up to an hour, and the person can sign up again
 straight away — a deleted account that returns gets a **new** uid, so nothing
-about the ban follows them. What takes effect immediately is deleting the data
-and, if the abuse is the AI, turning drafting off. A ban that actually holds has
+about the ban follows them. What takes effect immediately is deleting the data.
+If the abuse is the AI, turning drafting off stops it for everyone within about
+five minutes — see below for why not sooner. A ban that actually holds has
 to be keyed on something the person keeps, and that has not been designed.
 
 **Turning AI drafting off.** Publish the Remote Config parameter
