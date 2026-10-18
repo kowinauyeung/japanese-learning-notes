@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_GEMINI_MODEL,
+  GEMINI_DRAFTING_ENABLED_CONFIG_KEY,
   GEMINI_MODEL_NAME_CONFIG_KEY,
   GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS,
   GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS,
@@ -18,9 +19,16 @@ const remoteConfig = vi.hoisted<{
 }));
 const cachedModel = vi.hoisted(() => ({ name: 'gemini-4.0-flash' }));
 const remoteModel = vi.hoisted(() => ({ name: 'gemini-4.0-flash' }));
+const remoteSwitch = vi.hoisted(() => ({ enabled: true }));
 const ensureInitialized = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 const fetchAndActivate = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
-const getValue = vi.hoisted(() => vi.fn(() => ({ asString: () => remoteModel.name })));
+const remoteValue = vi.hoisted(
+  () => (modelName: () => string) => (_config: unknown, key: string) => ({
+    asString: () => modelName(),
+    asBoolean: () => (key === GEMINI_DRAFTING_ENABLED_CONFIG_KEY ? remoteSwitch.enabled : false),
+  }),
+);
+const getValue = vi.hoisted(() => vi.fn(remoteValue(() => remoteModel.name)));
 
 vi.mock('firebase/ai', () => ({
   AIError: class AIError extends Error {
@@ -59,9 +67,10 @@ beforeEach(() => {
   remoteConfig.settings = { fetchTimeoutMillis: 60_000, minimumFetchIntervalMillis: 43_200_000 };
   cachedModel.name = 'gemini-4.0-flash';
   remoteModel.name = 'gemini-4.0-flash';
+  remoteSwitch.enabled = true;
   ensureInitialized.mockResolvedValue(undefined);
   fetchAndActivate.mockResolvedValue(true);
-  getValue.mockReturnValue({ asString: () => remoteModel.name });
+  getValue.mockImplementation(remoteValue(() => remoteModel.name));
   vi.stubEnv('VITE_FIREBASE_API_KEY', 'test');
   vi.stubEnv('VITE_FIREBASE_AUTH_DOMAIN', 'test');
   vi.stubEnv('VITE_FIREBASE_PROJECT_ID', 'test');
@@ -103,8 +112,11 @@ describe('geminiEntryDrafting', () => {
     expect(fetchAndActivate).toHaveBeenCalledWith(remoteConfig);
     // If this default drifts, first-load readers can hit a retired bundled
     // model before the console value has ever reached their browser.
+    // The switch defaults on: a first load that never reaches the console must
+    // not read a missing value as "off".
     expect(remoteConfig.defaultConfig).toEqual({
       [GEMINI_MODEL_NAME_CONFIG_KEY]: DEFAULT_GEMINI_MODEL,
+      [GEMINI_DRAFTING_ENABLED_CONFIG_KEY]: true,
     });
     // If these settings drift, an emergency model-name change can take too long
     // to reach readers, or a slow Remote Config call can block drafting.
@@ -123,7 +135,7 @@ describe('geminiEntryDrafting', () => {
   it('uses the cached Remote Config model when a fresh fetch fails', async () => {
     cachedModel.name = 'gemini-4.1-flash';
     fetchAndActivate.mockRejectedValueOnce(new Error('remote config unavailable'));
-    getValue.mockReturnValue({ asString: () => cachedModel.name });
+    getValue.mockImplementation(remoteValue(() => cachedModel.name));
     generateContent.mockResolvedValueOnce({ response: { text: () => 'draft' } });
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -179,6 +191,33 @@ describe('geminiEntryDrafting', () => {
     } finally {
       error.mockRestore();
     }
+  });
+
+  it('sends nothing to the model once the console switches drafting off, and stops offering it', async () => {
+    remoteSwitch.enabled = false;
+    const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
+
+    await expect(geminiEntryDrafting.draft('prompt')).rejects.toEqual(
+      expect.objectContaining({ reason: 'unavailable' }),
+    );
+    // The switch exists for a spent quota or a provider's terms changing, and
+    // either way the point is that the word and its sentence never leave.
+    expect(generateContent).not.toHaveBeenCalled();
+    expect(geminiEntryDrafting.available()).toBe(false);
+  });
+
+  it('drafts again once the switch is turned back on, which a permanent failure never would', async () => {
+    remoteSwitch.enabled = false;
+    generateContent.mockResolvedValue({ response: { text: () => 'draft' } });
+    const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
+
+    await expect(geminiEntryDrafting.draft('prompt')).rejects.toEqual(
+      expect.objectContaining({ reason: 'unavailable' }),
+    );
+    remoteSwitch.enabled = true;
+
+    await expect(geminiEntryDrafting.draft('prompt')).resolves.toBe('draft');
+    expect(geminiEntryDrafting.available()).toBe(true);
   });
 
   it('asks for limited-use App Check tokens, without which replay protection refuses every draft with a 401', async () => {

@@ -402,6 +402,16 @@ about the ban follows them. What takes effect immediately is deleting the data
 and, if the abuse is the AI, turning drafting off. A ban that actually holds has
 to be keyed on something the person keeps, and that has not been designed.
 
+**Turning AI drafting off.** Publish the Remote Config parameter
+`ai_drafting_enabled` as `false` on the project; publish `true`, or delete it, to
+turn drafting back on. It needs no deploy. Clients refetch at most every five
+minutes, and only when a reader presses a drafting button: an open session still
+shows the button once, and pressing it reads the switch, sends nothing to the
+model, and removes the button. The copy-the-prompt path keeps working throughout.
+It is for everyone at once — for a spent project quota, a change in the
+provider's terms, or a model answering wrongly — not a per-user control. The
+model itself is `model_name` on the same screen.
+
 **Clearing a deletion tombstone.** Deleting an account writes
 `deletedAccounts/{uid}`, and Firestore rules refuse every create and update from
 that uid afterwards — which is what stops a second tab, still holding a valid ID
