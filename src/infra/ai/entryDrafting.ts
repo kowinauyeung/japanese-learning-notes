@@ -89,7 +89,9 @@ let unavailable = false;
  * only the withdrawn control can start, and a session open when the operator
  * turns drafting back on would never see it again. Within the interval a
  * refetch would answer from the SDK's cache anyway, so offering the control
- * sooner could only fail the same way.
+ * sooner could only fail the same way. Lapsing does not re-render anything: the
+ * control comes back on the caller's next render, which `EntryFormModal`
+ * explains.
  */
 let remotelyDisabled = false;
 let withdrawnUntil = 0;

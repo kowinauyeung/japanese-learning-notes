@@ -65,6 +65,12 @@ export function EntryFormModal({
     and a mark left on the tab would then advertise a control that is not behind
     it. A permanent failure flips this mid-session, which is exactly when the two
     have to move together.
+
+    The operator's drafting switch flips it back, five minutes later, and
+    nothing here is told when. The control returns on the next render — a
+    keystroke, a tab change, reopening the dialog — not on its own in an idle
+    one. That is deliberate: a timer would need the port to say when, for a
+    reader who already has the manual prompt in front of them.
   */
   const canDraft = entryDraftingPort.available();
   const tabs: { id: Tab; label: string }[] = [
