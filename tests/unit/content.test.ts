@@ -23,8 +23,8 @@ const PINNED_DOCS = {
     hash: '62c72d1cdef71d8b154ca3b8d5a258f5be866e729936697c7d01dbe53a6cc231',
   },
   privacy: {
-    updated: '2026-08-25',
-    hash: '6e05b0dba0d2801454808c26ffea2d0e83c579a21c357071ba7f74cc60608af2',
+    updated: '2026-10-18',
+    hash: 'c1d149af2dbd4264fa8b22bde4a61a2bd99303f29211bde0be0131e27f5050c0',
   },
   terms: {
     updated: '2026-08-14',
@@ -156,6 +156,35 @@ describe('what the public pages must not disclose', () => {
       .some((line) => line.includes('Google Forms'));
 
     expect(disclosed).toBe(isGoogleForm);
+  });
+
+  /**
+   * The same shape again, for the processor that shipped without it.
+   *
+   * AI drafting went out in `1.0.0` with a condition attached — the policy
+   * names the model provider before the first reader sees the feature — and
+   * nothing enforced it, so the condition was simply not met: the word and the
+   * sentence a reader met it in went to the Gemini API, on a tier whose terms
+   * let Google use them, under a policy that named Firebase, reCAPTCHA and
+   * Google Forms and stopped. Reading the adapter makes the next backend swap
+   * fail here instead of leaving the policy describing the previous one.
+   *
+   * Both sides are narrower than a bare `includes`. The adapter names
+   * `GoogleAIBackend` in its comments as well as its code, so only the
+   * constructor call passed to `getAI` counts as using it. And the policy
+   * mentions the Gemini API again in its list of processors, so only the
+   * paragraph saying what is sent there counts as disclosing it — deleting
+   * that paragraph and keeping the list must still go red.
+   */
+  it('names the Gemini API when, and only when, drafting calls it', () => {
+    const adapter = readFileSync('src/infra/ai/entryDrafting.ts', 'utf8');
+    const implemented = /backend:\s*new GoogleAIBackend\(/.test(adapter);
+    const disclosed = privacy.sections
+      .filter((section) => section.heading === '保管場所と関係事業者')
+      .flatMap((section) => section.body)
+      .some((line) => line.includes('Gemini API') && line.includes('送信されます'));
+
+    expect(disclosed).toBe(implemented);
   });
 });
 

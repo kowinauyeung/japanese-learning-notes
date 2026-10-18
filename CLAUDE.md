@@ -228,16 +228,17 @@ their preference, not the repository's.
 | Command                   | What it runs                                           |
 | ------------------------- | ------------------------------------------------------ |
 | `yarn test:unit`          | Unit + component. No JDK, no browser. Run this first.  |
-| `yarn test:emulator`      | Rules + adapter. Needs JDK 21.                         |
+| `yarn test:emulator`      | Rules + adapter. Needs JDK 21 or newer.                |
 | `yarn test`               | Both of the above.                                     |
 | `yarn test:e2e`           | Playwright. Builds and serves automatically.           |
 | `yarn test:visual:update` | Regenerates screenshot baselines in Docker. Ask first. |
 | `yarn typecheck`          | Two passes: the app, then `tsconfig.test.json`.        |
 | `yarn coverage`           | Reported, never enforced.                              |
 
-On macOS the Firestore emulator needs JDK 21 ahead of any newer JDK on `PATH`:
+The Firestore emulator needs JDK 21 or newer — the suite passes on 25 — and on
+macOS an older JDK first on `PATH` stops it starting:
 
 ```sh
-export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+export JAVA_HOME="$(/usr/libexec/java_home -v 21+)"
 export PATH="$JAVA_HOME/bin:$PATH"
 ```

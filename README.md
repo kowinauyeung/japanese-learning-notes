@@ -145,7 +145,7 @@ new ones.
 | Command                   | Covers                                                                                                                     | Needs    |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `yarn test:unit`          | `tests/unit` — coercion, filters, dates, furigana, import, redirects; `tests/component` — rendered DOM                     | nothing  |
-| `yarn test:emulator`      | `tests/rules` — who may read and write what; `tests/integration` — the Firestore adapter's queries, cursors and timestamps | JDK 21   |
+| `yarn test:emulator`      | `tests/rules` — who may read and write what; `tests/integration` — the Firestore adapter's queries, cursors and timestamps | JDK 21+  |
 | `yarn test:e2e`           | `tests/e2e` — sign-in, browse, create, edit, delete; offline navigation; four screenshot baselines                         | Chromium |
 | `yarn test:visual:update` | Regenerates those baselines                                                                                                | Docker   |
 | `yarn coverage`           | Reported, never enforced                                                                                                   | nothing  |
@@ -169,7 +169,7 @@ Four things worth knowing before adding to it:
   which is the usual state on macOS:
 
   ```bash
-  export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+  export JAVA_HOME="$(/usr/libexec/java_home -v 21+)"
   export PATH="$JAVA_HOME/bin:$PATH"
   ```
 
