@@ -24,7 +24,7 @@ const PINNED_DOCS = {
   },
   privacy: {
     updated: '2026-10-18',
-    hash: '610701ccc62a090aabebcbc62c9ce4826cf944cebe48e14405f89b997206b16b',
+    hash: 'c1d149af2dbd4264fa8b22bde4a61a2bd99303f29211bde0be0131e27f5050c0',
   },
   terms: {
     updated: '2026-08-14',
@@ -168,13 +168,21 @@ describe('what the public pages must not disclose', () => {
    * let Google use them, under a policy that named Firebase, reCAPTCHA and
    * Google Forms and stopped. Reading the adapter makes the next backend swap
    * fail here instead of leaving the policy describing the previous one.
+   *
+   * Both sides are narrower than a bare `includes`. The adapter names
+   * `GoogleAIBackend` in its comments as well as its code, so only the
+   * constructor call passed to `getAI` counts as using it. And the policy
+   * mentions the Gemini API again in its list of processors, so only the
+   * paragraph saying what is sent there counts as disclosing it — deleting
+   * that paragraph and keeping the list must still go red.
    */
   it('names the Gemini API when, and only when, drafting calls it', () => {
     const adapter = readFileSync('src/infra/ai/entryDrafting.ts', 'utf8');
-    const implemented = adapter.includes('GoogleAIBackend');
+    const implemented = /backend:\s*new GoogleAIBackend\(/.test(adapter);
     const disclosed = privacy.sections
+      .filter((section) => section.heading === '保管場所と関係事業者')
       .flatMap((section) => section.body)
-      .some((line) => line.includes('Gemini API'));
+      .some((line) => line.includes('Gemini API') && line.includes('送信されます'));
 
     expect(disclosed).toBe(implemented);
   });
