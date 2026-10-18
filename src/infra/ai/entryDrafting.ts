@@ -82,8 +82,17 @@ let unavailable = false;
  * name falls back to its bundled default: configuration is an upgrade path,
  * not a prerequisite. So a switched-off session still shows the control once;
  * pressing it reads the switch, sends nothing, and the control goes.
+ *
+ * **It goes for one fetch interval, not for good.** Only `draft` refreshes
+ * Remote Config — `available` runs during render and must schedule nothing — so
+ * a control withdrawn until the switch reads `true` would wait on a refresh that
+ * only the withdrawn control can start, and a session open when the operator
+ * turns drafting back on would never see it again. Within the interval a
+ * refetch would answer from the SDK's cache anyway, so offering the control
+ * sooner could only fail the same way.
  */
 let remotelyDisabled = false;
+let withdrawnUntil = 0;
 let remoteConfig: RemoteConfig | undefined;
 let remoteConfigUnavailable = false;
 let remoteConfigFetch: Promise<void> | undefined;
@@ -268,7 +277,7 @@ function classify(error: unknown): EntryDraftingError {
 }
 
 export const geminiEntryDrafting: EntryDraftingPort = {
-  available: () => !remotelyDisabled && ensureModel() !== undefined,
+  available: () => Date.now() >= withdrawnUntil && ensureModel() !== undefined,
 
   async draft(prompt) {
     /*
@@ -294,7 +303,10 @@ export const geminiEntryDrafting: EntryDraftingPort = {
       console.error('Gemini model Remote Config did not settle; using', configuredModelName);
     }
     // After the refresh and before the model: a switched-off draft sends nothing.
-    if (remotelyDisabled) throw new EntryDraftingError('unavailable');
+    if (remotelyDisabled) {
+      withdrawnUntil = Date.now() + GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS;
+      throw new EntryDraftingError('unavailable');
+    }
     const generative = ensureModel();
     if (!generative) throw new EntryDraftingError('unavailable');
 

@@ -206,18 +206,32 @@ describe('geminiEntryDrafting', () => {
     expect(geminiEntryDrafting.available()).toBe(false);
   });
 
-  it('drafts again once the switch is turned back on, which a permanent failure never would', async () => {
-    remoteSwitch.enabled = false;
-    generateContent.mockResolvedValue({ response: { text: () => 'draft' } });
-    const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
+  it('offers drafting again in the same session after the switch is turned back on, though only a draft can read it', async () => {
+    /*
+      `available()` gates the control and `draft()` is the only refresh, so a
+      control withdrawn until the switch read `true` again could never be
+      pressed to read it. The withdrawal has to lapse on its own — after one
+      fetch interval, since a refetch inside it answers from cache.
+    */
+    vi.useFakeTimers();
+    try {
+      remoteSwitch.enabled = false;
+      generateContent.mockResolvedValue({ response: { text: () => 'draft' } });
+      const { geminiEntryDrafting } = await import('@/infra/ai/entryDrafting');
 
-    await expect(geminiEntryDrafting.draft('prompt')).rejects.toEqual(
-      expect.objectContaining({ reason: 'unavailable' }),
-    );
-    remoteSwitch.enabled = true;
+      await expect(geminiEntryDrafting.draft('prompt')).rejects.toEqual(
+        expect.objectContaining({ reason: 'unavailable' }),
+      );
+      remoteSwitch.enabled = true;
+      await vi.advanceTimersByTimeAsync(GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS - 1);
+      expect(geminiEntryDrafting.available()).toBe(false);
 
-    await expect(geminiEntryDrafting.draft('prompt')).resolves.toBe('draft');
-    expect(geminiEntryDrafting.available()).toBe(true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(geminiEntryDrafting.available()).toBe(true);
+      await expect(geminiEntryDrafting.draft('prompt')).resolves.toBe('draft');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('asks for limited-use App Check tokens, without which replay protection refuses every draft with a 401', async () => {
