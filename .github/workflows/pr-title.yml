@@ -43,7 +43,7 @@ jobs:
       # third-party action in the repository, and a moving tag on one is a
       # write someone else can make to what runs here. Dependabot updates the
       # SHA and the comment together — see .github/dependabot.yml.
-      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+      - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6.1.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
