@@ -35,6 +35,14 @@ export const EMPTY_FILTERS: Filters = {
   sort: 'new',
 };
 
+const SEARCH_FIELDS = ['headword', 'reading', 'source', 'citationForm'] as const;
+
+/** The fields responsible for a text match, also used to explain picker results. */
+export function matchingSearchFields(entry: Entry, query: string) {
+  const q = query.trim().toLowerCase();
+  return q ? SEARCH_FIELDS.filter((field) => entry[field].toLowerCase().includes(q)) : [];
+}
+
 /**
  * Everything the search box looks at, flattened once per entry.
  *
@@ -43,18 +51,7 @@ export const EMPTY_FILTERS: Filters = {
  * which a word-boundary full-text index would miss.
  */
 function haystack(entry: Entry): string {
-  return [
-    entry.headword,
-    entry.reading,
-    entry.citationForm,
-    ...entry.tags,
-    entry.definition,
-    entry.definitionSub,
-    entry.context.original,
-    ...entry.senses.flatMap((s) => [s.label, s.description, s.example, s.translation]),
-    ...entry.examples.flatMap((e) => [e.ja, e.translation]),
-    ...entry.related.map((r) => r.headword),
-  ]
+  return SEARCH_FIELDS.map((field) => entry[field])
     .join('\n')
     .toLowerCase();
 }

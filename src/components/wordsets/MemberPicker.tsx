@@ -1,6 +1,7 @@
 import type { Entry } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
 import { JAPANESE } from '@/lib/contentLang';
+import { matchingSearchFields } from '@/lib/filters';
 import type { ListDrag } from '@/lib/listDrag';
 import { CANDIDATE_LIMIT } from '@/lib/wordSetMembers';
 import { DragHandle } from './DragHandle';
@@ -14,6 +15,7 @@ import { DragHandle } from './DragHandle';
  */
 export function MemberPicker({
   shown,
+  query,
   total,
   list,
   drag,
@@ -22,6 +24,7 @@ export function MemberPicker({
   onAddAll,
 }: {
   shown: readonly Entry[];
+  query: string;
   /** Everything that matched, which is usually more than is rendered. */
   total: number;
   /** This list's name in the drag protocol; see `useListDrag`. */
@@ -92,15 +95,25 @@ export function MemberPicker({
               // the sort puts it. Adding is the keyboard path here.
               onMoveBy={null}
             />
-            <span className="min-w-0 flex-1 truncate text-sm">
-              <span className="font-display font-bold" lang={JAPANESE}>
-                {entry.headword}
-              </span>
-              {entry.reading && (
-                <span className="cjk-face text-muted" lang={JAPANESE}>
-                  （{entry.reading}）
+            <span className="min-w-0 flex-1 text-sm">
+              <span className="block truncate">
+                <span className="font-display font-bold" lang={JAPANESE}>
+                  {entry.headword}
                 </span>
-              )}
+                {entry.reading && (
+                  <span className="cjk-face text-muted" lang={JAPANESE}>
+                    （{entry.reading}）
+                  </span>
+                )}
+              </span>
+              {matchingSearchFields(entry, query).map((field) => (
+                <span key={field} className="mt-1 block text-xs break-words text-muted">
+                  <span className="mr-1 rounded bg-accent-soft px-1.5 py-0.5 font-medium text-accent">
+                    {t(`form.${field}`)}
+                  </span>
+                  {entry[field]}
+                </span>
+              ))}
             </span>
             <button
               type="button"

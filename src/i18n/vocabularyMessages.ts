@@ -1,6 +1,6 @@
 const en = {
   'vocabulary.loading': 'Loading…',
-  'vocabulary.searchPlaceholder': 'Search headwords, readings, tags, meanings and examples',
+  'vocabulary.searchPlaceholder': 'Search headwords, readings, sources and citation forms',
   'vocabulary.clearFilters': 'Clear all',
   'vocabulary.filter': 'Filters',
   'vocabulary.resultCount': '{count} words',
@@ -49,7 +49,7 @@ type VocabularyMessages = Record<VocabularyMessageKey, string>;
 
 const ja: VocabularyMessages = {
   'vocabulary.loading': '読み込み中…',
-  'vocabulary.searchPlaceholder': '見出し語・読み方・タグ・意味・例文で検索',
+  'vocabulary.searchPlaceholder': '見出し語・読み方・出典・登録形で検索',
   'vocabulary.clearFilters': 'すべて解除',
   'vocabulary.filter': '絞り込み',
   'vocabulary.resultCount': '{count} 語',
@@ -95,7 +95,7 @@ const ja: VocabularyMessages = {
 
 const zhHant: VocabularyMessages = {
   'vocabulary.loading': '載入中…',
-  'vocabulary.searchPlaceholder': '搜尋單字、讀音、標籤、意思及例句',
+  'vocabulary.searchPlaceholder': '搜尋見出詞、讀音、出處及登錄形',
   'vocabulary.clearFilters': '清除全部',
   'vocabulary.filter': '篩選',
   'vocabulary.resultCount': '{count} 個單字',
@@ -141,7 +141,7 @@ const zhHant: VocabularyMessages = {
 
 const ko: VocabularyMessages = {
   'vocabulary.loading': '불러오는 중…',
-  'vocabulary.searchPlaceholder': '표제어, 읽기, 태그, 뜻, 예문 검색',
+  'vocabulary.searchPlaceholder': '표제어, 읽기, 출처, 등록형 검색',
   'vocabulary.clearFilters': '모두 해제',
   'vocabulary.filter': '필터',
   'vocabulary.resultCount': '단어 {count}개',
@@ -187,7 +187,7 @@ const ko: VocabularyMessages = {
 
 const es: VocabularyMessages = {
   'vocabulary.loading': 'Cargando…',
-  'vocabulary.searchPlaceholder': 'Buscar palabras, lecturas, etiquetas, significados y ejemplos',
+  'vocabulary.searchPlaceholder': 'Buscar palabras, lecturas, fuentes y formas de registro',
   'vocabulary.clearFilters': 'Quitar filtros',
   'vocabulary.filter': 'Filtros',
   'vocabulary.resultCount': '{count} palabras',
