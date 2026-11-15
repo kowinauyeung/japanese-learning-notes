@@ -21,6 +21,14 @@ import { site } from './site';
  * and lost profits do not. Deliberately no monetary cap — the service is free,
  * so a cap at "the amount paid" is a total exclusion wearing a number.
  *
+ * The governing-law clause names Japanese law because the operator is in
+ * Japan, and it says outright that the reader's own mandatory protections
+ * survive it. Most readers live in Hong Kong or Taiwan, and a choice of law
+ * cannot take away a consumer's protections where they live (通則法11条). The
+ * jurisdiction is deliberately **not** exclusive: a clause binding a consumer
+ * abroad to a Japanese court is unenforceable against them (民訴法3条の7第5項),
+ * and that would be a void clause again.
+ *
  * Still not reviewed by a lawyer. This is the structure being defensible, not
  * the wording being final.
  */
@@ -29,7 +37,7 @@ const FORM = 'お問い合わせフォームを開く';
 export const terms: Doc = {
   title: '利用規約',
   lead: '本規約は、語彙庭の利用条件を定めるものです。ログインした時点で、本規約に同意したものとみなします。',
-  updated: '2026-08-14',
+  updated: '2026-11-15',
   sections: [
     {
       heading: 'サービスについて',
@@ -97,6 +105,14 @@ export const terms: Doc = {
       heading: '規約の変更',
       body: [
         '本規約を変更した場合は、このページの更新日を改めます。重要な変更については、アプリ内でもお知らせします。',
+      ],
+    },
+    {
+      heading: '準拠法・管轄',
+      body: [
+        '本規約は日本法に準拠し、日本法に従って解釈されます。',
+        '本サービスに関して紛争が生じた場合は、運営者の住所地を管轄する地方裁判所を第一審の管轄裁判所とします。',
+        'ただし、利用者が居住する国または地域の法令によって利用者に認められる強行的な保護、および当該国または地域の裁判所で手続をとる権利は、本条によって妨げられません。',
       ],
     },
     {
