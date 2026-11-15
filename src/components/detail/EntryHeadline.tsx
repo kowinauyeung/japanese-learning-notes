@@ -24,11 +24,14 @@ import { accentKana } from '@/lib/mora';
 export function EntryHeadline({
   entry,
   compact = false,
+  pageHeading = false,
   actions,
 }: {
   entry: Entry;
   /** Dialog scale: a smaller headword and tighter spacing. */
   compact?: boolean;
+  /** The detail page's headword is the document heading. */
+  pageHeading?: boolean;
   actions?: ReactNode;
 }) {
   const { t } = useI18n();
@@ -37,15 +40,25 @@ export function EntryHeadline({
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="max-w-full min-w-0">
-        <Ruby
-          headword={entry.headword}
-          reading={entry.reading}
-          className={
-            compact
-              ? 'has-ruby block font-display text-3xl font-bold [overflow-wrap:anywhere]'
-              : 'has-ruby block font-display text-[34px] font-bold [overflow-wrap:anywhere] sm:text-[40px]'
-          }
-        />
+        {pageHeading ? (
+          <h1 className="m-0">
+            <Ruby
+              headword={entry.headword}
+              reading={entry.reading}
+              className="has-ruby block font-display text-[34px] font-bold [overflow-wrap:anywhere] sm:text-[40px]"
+            />
+          </h1>
+        ) : (
+          <Ruby
+            headword={entry.headword}
+            reading={entry.reading}
+            className={
+              compact
+                ? 'has-ruby block font-display text-3xl font-bold [overflow-wrap:anywhere]'
+                : 'has-ruby block font-display text-[34px] font-bold [overflow-wrap:anywhere] sm:text-[40px]'
+            }
+          />
+        )}
         {entry.pitchAccent !== null && (
           <PitchAccent
             kana={accentKana(entry.headword, entry.reading)}

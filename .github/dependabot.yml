@@ -4,7 +4,7 @@ updates:
   # Grouped so a week's updates arrive as two pull requests rather than a
   # dozen. Major bumps stay separate: React, Firebase and Vite majors each
   # need reading release notes, which is not a review to rubber-stamp
-  # alongside a patch bump.
+  # alongside a patch bump. The one exception is the `vitest` group below.
   # Named explicitly rather than left to the repository default, so that a bump
   # keeps arriving on develop whatever the default is set to. It has already
   # moved once, from main to develop.
@@ -19,6 +19,13 @@ updates:
       prefix: chore
       include: scope
     groups:
+      # Listed first because a dependency joins the first group it matches.
+      # `@vitest/coverage-v8` declares an exact peer dependency on the same
+      # `vitest` version, so a bump of either alone breaks `yarn coverage`,
+      # and no CI job runs coverage to notice. Every update type, majors
+      # included, therefore arrives as one pull request.
+      vitest:
+        patterns: ['vitest', '@vitest/*']
       production-minor-patch:
         dependency-type: production
         update-types: [minor, patch]

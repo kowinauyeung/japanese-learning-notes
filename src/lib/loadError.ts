@@ -34,14 +34,22 @@ const DENIED_CODES = new Set(['permission-denied', 'unauthenticated']);
  * Two sentences, and the second one is why there is a third.
  *
  * `permission-denied` is not one situation. It is at least three, and only one
- * of them is cleared by signing in again:
+ * of them is cleared by signing in again.
  *
- *  1. **A token minted before the grant.** Re-authenticating fixes it, which is
- *     what the first instruction is for.
- *  2. **No claim on the account at all** — nobody has run `yarn allow`, or rules
- *     requiring the claim were deployed to a project where nobody carries it.
- *     Signing out and back in mints another token with no claim, so the reader
- *     follows the instruction, lands on the same screen, and is out of moves.
+ * **The list changed when signups opened and the shape of it did not.** Two of
+ * these used to be the allowlist — a token minted before the grant, and an
+ * account nobody had granted — and both are gone with `isAllowed()`. What
+ * replaced them is not fewer causes but different ones, so the message and its
+ * exit to サポート are unchanged: the reader still cannot tell which case they
+ * are in, and two of the three still dead-end without it.
+ *
+ *  1. **An expired or absent token.** Re-authenticating fixes it, which is what
+ *     the first instruction is for, and it is the only one of the three that
+ *     instruction resolves.
+ *  2. **A deletion tombstone.** `deletedAccounts/{uid}` makes rules refuse every
+ *     create and update from that uid, and signing out and back in mints another
+ *     token for the same dead uid — so the reader follows the instruction, lands
+ *     on the same screen, and is out of moves.
  *  3. **App Check rejecting the request.** `src/infra/firebase/client.ts`
  *     initialises it whenever a site key is present, and an unregistered domain
  *     or a dead reCAPTCHA key surfaces here as `permission-denied` like the

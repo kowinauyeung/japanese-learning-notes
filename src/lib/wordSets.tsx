@@ -48,6 +48,7 @@ const PAGE_SIZE = 200;
 export function WordSetsProvider({ uid, children }: { uid: string; children: ReactNode }) {
   const [sets, setSets] = useState<WordSet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [successfulLoadFor, setSuccessfulLoadFor] = useState<string | null>(null);
   const [error, setError] = useState<LoadFailure | null>(null);
 
   const repository = useMemo(() => wordSetRepositoryFor(uid), [uid]);
@@ -77,6 +78,7 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
    * `repository` changes because the account did. That is the effect below.
    */
   const refresh = useCallback(async () => {
+    setSuccessfulLoadFor(null);
     const mine = (walk.current += 1);
     try {
       const all: WordSet[] = [];
@@ -90,6 +92,7 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
       if (walk.current === mine) {
         setSets(all);
         setError(null);
+        setSuccessfulLoadFor(uid);
       }
     } catch (cause) {
       console.error(cause);
@@ -105,7 +108,11 @@ export function WordSetsProvider({ uid, children }: { uid: string; children: Rea
   }, [refresh]);
 
   /** See the same guard on `EntriesProvider` — denial is not cleared by reconnecting. */
-  useRetryOnReconnect(error !== null && isUnreachable(error.cause), refresh);
+  useRetryOnReconnect(
+    error !== null && isUnreachable(error.cause),
+    successfulLoadFor === uid,
+    refresh,
+  );
 
   const value = useMemo(
     () => ({ sets, loading, error, refresh, repository }),

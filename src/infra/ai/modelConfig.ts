@@ -1,5 +1,11 @@
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.6-flash';
 export const GEMINI_MODEL_NAME_CONFIG_KEY = 'model_name';
+/**
+ * Set to `false` in the console to stop drafting without a deploy — a spent
+ * project quota, a change in the provider's terms, or a model answering
+ * wrongly. Readers keep the copy-the-prompt path, which never calls the model.
+ */
+export const GEMINI_DRAFTING_ENABLED_CONFIG_KEY = 'ai_drafting_enabled';
 export const GEMINI_REMOTE_CONFIG_FETCH_INTERVAL_MS = 5 * 60 * 1000;
 export const GEMINI_REMOTE_CONFIG_FETCH_TIMEOUT_MS = 3_000;
 

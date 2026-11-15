@@ -16,7 +16,10 @@ import { type DraftRequest, useEntryDrafting } from './useEntryDrafting';
  * and a single "something went wrong" would invite a retry on the three that
  * cannot succeed. `unavailable` in particular is permanent for this reader —
  * the API is not offered in every country — so its message points at the manual
- * prompt below rather than at the button they just pressed.
+ * prompt below rather than at the button they just pressed. The one exception
+ * is the operator's Remote Config switch: that withdraws the button for five
+ * minutes rather than for good (see `entryDrafting.ts`), and the message is
+ * still right in the meantime.
  */
 const FAILURE_MESSAGE: Record<EntryDraftingFailure, MessageKey> = {
   unavailable: 'import.aiUnavailable',
@@ -55,6 +58,7 @@ export function JsonImport({
   handedOff,
   onFailure,
   onBusyChange,
+  onPasteBusyChange,
 }: {
   value: JsonImportState;
   /**
@@ -98,6 +102,8 @@ export function JsonImport({
   onFailure: (reason: EntryDraftingFailure) => void;
   /** See `SimpleForm`: lets the modal lock its footer for the same window. */
   onBusyChange: (busy: boolean, request: DraftRequest) => void;
+  /** Lets the modal lock controls that would discard a pending clipboard read. */
+  onPasteBusyChange?: (busy: boolean, request: symbol) => void;
 }) {
   // Purely local: nothing outside this component acts on it.
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -233,8 +239,10 @@ export function JsonImport({
     the point.
   */
   const pasteJson = () => {
+    const request = Symbol('clipboard-paste');
     setPasteFailed(false);
     setPasting(true);
+    onPasteBusyChange?.(true, request);
     let read: Promise<string> | undefined;
     try {
       read = navigator.clipboard?.readText();
@@ -244,11 +252,13 @@ export function JsonImport({
       // direction.
       setPasteFailed(true);
       setPasting(false);
+      onPasteBusyChange?.(false, request);
       return;
     }
     if (read === undefined) {
       setPasteFailed(true);
       setPasting(false);
+      onPasteBusyChange?.(false, request);
       return;
     }
     read
@@ -269,6 +279,10 @@ export function JsonImport({
       })
       .finally(() => {
         if (alive.current) setPasting(false);
+        // `onDrafted` can move to the full tab and unmount this panel. The
+        // modal still owns the footer lock, so it must hear that this specific
+        // request settled even after the local state is no longer writable.
+        onPasteBusyChange?.(false, request);
       });
   };
 

@@ -405,7 +405,7 @@ test.describe('word sets', () => {
       page.getByText('ここに単語をドラッグ、または「＋ 追加」で入れてください'),
     ).toBeVisible();
 
-    await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill('ちょうこう');
+    await page.getByPlaceholder('見出し語・読み方・出典・登録形で検索').fill('ちょうこう');
     await page.getByRole('button', { name: '＋ 追加' }).click();
 
     await expect(page.getByRole('heading', { level: 1, name: /1 語/ })).toBeVisible();
@@ -450,7 +450,7 @@ test.describe('word sets', () => {
     await page.getByLabel('新しい単語集の名前').fill('ニュースの語');
     await page.getByRole('button', { name: '作成' }).click();
     await enterEditMode(page);
-    await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill('ちょうこう');
+    await page.getByPlaceholder('見出し語・読み方・出典・登録形で検索').fill('ちょうこう');
     await page.getByRole('button', { name: '＋ 追加' }).click();
     await expect(page.getByRole('heading', { level: 1, name: /1 語/ })).toBeVisible();
 

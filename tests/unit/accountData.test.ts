@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 import type { Page, PageQuery } from '@/domain/ports';
 import {
   deleteEverything,
@@ -121,8 +121,8 @@ describe('deleteEverything', () => {
     const removed = await deleteEverything(p);
 
     expect(removed).toEqual({ entries: 140, wordSets: 30 });
-    expect((p.entries.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(140);
-    expect((p.wordSets.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(30);
+    expect((p.entries.remove as Mock).mock.calls).toHaveLength(140);
+    expect((p.wordSets.remove as Mock).mock.calls).toHaveLength(30);
   });
 
   /**
@@ -136,54 +136,54 @@ describe('deleteEverything', () => {
     const p = ports(1, 1, 40);
     await deleteEverything(p);
 
-    expect((p.progress.removeAll as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+    expect((p.progress.removeAll as Mock).mock.calls).toHaveLength(1);
   });
 
   it('deletes the account itself, not only its data', async () => {
     const p = ports(0, 0, 0);
     await deleteEverything(p);
 
-    expect((p.auth.deleteAccount as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+    expect((p.auth.deleteAccount as Mock).mock.calls).toHaveLength(1);
   });
 
   it('removes the persisted profile before deleting the Auth account', async () => {
     const order: string[] = [];
     const p = ports(0, 0, 0);
-    (p.userProfiles.remove as ReturnType<typeof vi.fn>).mockImplementation(() => {
+    (p.userProfiles.remove as Mock).mockImplementation(() => {
       order.push('profile');
       return Promise.resolve();
     });
-    (p.auth.deleteAccount as ReturnType<typeof vi.fn>).mockImplementation(() => {
+    (p.auth.deleteAccount as Mock).mockImplementation(() => {
       order.push('account');
       return Promise.resolve();
     });
 
     await deleteEverything(p);
 
-    expect((p.userProfiles.remove as ReturnType<typeof vi.fn>).mock.calls).toEqual([['u1']]);
+    expect((p.userProfiles.remove as Mock).mock.calls).toEqual([['u1']]);
     expect(order).toEqual(['profile', 'account']);
   });
 
   it('waits for locally accepted deletes to reach durable storage before removing the profile', async () => {
     const order: string[] = [];
     const p = ports(1, 1, 0);
-    (p.wordSets.settlePendingWrites as ReturnType<typeof vi.fn>).mockImplementation(() => {
+    (p.wordSets.settlePendingWrites as Mock).mockImplementation(() => {
       order.push('wordSet writes');
       return Promise.resolve();
     });
-    (p.entries.settlePendingWrites as ReturnType<typeof vi.fn>).mockImplementation(() => {
+    (p.entries.settlePendingWrites as Mock).mockImplementation(() => {
       order.push('entry writes');
       return Promise.resolve();
     });
-    (p.progress.settlePendingWrites as ReturnType<typeof vi.fn>).mockImplementation(() => {
+    (p.progress.settlePendingWrites as Mock).mockImplementation(() => {
       order.push('progress writes');
       return Promise.resolve();
     });
-    (p.userProfiles.remove as ReturnType<typeof vi.fn>).mockImplementation(() => {
+    (p.userProfiles.remove as Mock).mockImplementation(() => {
       order.push('profile');
       return Promise.resolve();
     });
-    (p.auth.deleteAccount as ReturnType<typeof vi.fn>).mockImplementation(() => {
+    (p.auth.deleteAccount as Mock).mockImplementation(() => {
       order.push('account');
       return Promise.resolve();
     });
@@ -202,12 +202,12 @@ describe('deleteEverything', () => {
   it('stops before removing the profile when the durable delete barrier fails', async () => {
     const p = ports(1, 1, 0);
     const failure = new Error('delete rejected by rules');
-    (p.entries.settlePendingWrites as ReturnType<typeof vi.fn>).mockRejectedValue(failure);
+    (p.entries.settlePendingWrites as Mock).mockRejectedValue(failure);
 
     await expect(deleteEverything(p)).rejects.toBe(failure);
 
-    expect((p.userProfiles.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
-    expect((p.auth.deleteAccount as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect((p.userProfiles.remove as Mock).mock.calls).toHaveLength(0);
+    expect((p.auth.deleteAccount as Mock).mock.calls).toHaveLength(0);
   });
 
   /**
@@ -231,10 +231,8 @@ describe('deleteEverything', () => {
       order.push(label);
       return Promise.resolve();
     };
-    (p.auth.reauthenticate as ReturnType<typeof vi.fn>).mockImplementation(record('reauth'));
-    (p.userProfiles.markDeleted as ReturnType<typeof vi.fn>).mockImplementation(
-      record('tombstone'),
-    );
+    (p.auth.reauthenticate as Mock).mockImplementation(record('reauth'));
+    (p.userProfiles.markDeleted as Mock).mockImplementation(record('tombstone'));
     // The reads, not only the deletes. A tombstone written after the first
     // `list()` still precedes the first `remove()`, so an assertion watching
     // deletes alone would hold while the window stayed open across the whole
@@ -249,8 +247,8 @@ describe('deleteEverything', () => {
     };
     observe(p.wordSets, 'list word sets');
     observe(p.entries, 'list entries');
-    (p.wordSets.remove as ReturnType<typeof vi.fn>).mockImplementation(record('delete word set'));
-    (p.entries.remove as ReturnType<typeof vi.fn>).mockImplementation(record('delete entry'));
+    (p.wordSets.remove as Mock).mockImplementation(record('delete word set'));
+    (p.entries.remove as Mock).mockImplementation(record('delete entry'));
 
     await deleteEverything(p);
 
@@ -262,7 +260,7 @@ describe('deleteEverything', () => {
       'list entries',
       'delete entry',
     ]);
-    expect((p.userProfiles.markDeleted as ReturnType<typeof vi.fn>).mock.calls).toEqual([['u1']]);
+    expect((p.userProfiles.markDeleted as Mock).mock.calls).toEqual([['u1']]);
   });
 
   /**
@@ -272,13 +270,11 @@ describe('deleteEverything', () => {
    */
   it('writes no tombstone when reauthentication fails, because nothing was deleted', async () => {
     const p = ports(1, 0, 0);
-    (p.auth.reauthenticate as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('popup closed'),
-    );
+    (p.auth.reauthenticate as Mock).mockRejectedValue(new Error('popup closed'));
 
     await expect(deleteEverything(p)).rejects.toBeInstanceOf(NothingDeleted);
 
-    expect((p.userProfiles.markDeleted as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect((p.userProfiles.markDeleted as Mock).mock.calls).toHaveLength(0);
   });
 
   /**
@@ -288,11 +284,11 @@ describe('deleteEverything', () => {
   it('deletes the account after the data, not before', async () => {
     const order: string[] = [];
     const p = ports(1, 0, 0);
-    (p.progress.removeAll as ReturnType<typeof vi.fn>).mockImplementation(() => {
+    (p.progress.removeAll as Mock).mockImplementation(() => {
       order.push('data');
       return Promise.resolve();
     });
-    (p.auth.deleteAccount as ReturnType<typeof vi.fn>).mockImplementation(() => {
+    (p.auth.deleteAccount as Mock).mockImplementation(() => {
       order.push('account');
       return Promise.resolve();
     });
@@ -318,17 +314,17 @@ describe('deleteEverything', () => {
     // A code `reauthenticateWithPopup` actually raises. It is the one the
     // adapter chose that call for: the user picked a different Google account,
     // and the caller is about to delete everything belonging to this one.
-    (p.auth.reauthenticate as ReturnType<typeof vi.fn>).mockRejectedValue(
+    (p.auth.reauthenticate as Mock).mockRejectedValue(
       Object.assign(new Error('different account'), { code: 'auth/user-mismatch' }),
     );
 
     await expect(deleteEverything(p)).rejects.toBeInstanceOf(NothingDeleted);
 
-    expect((p.entries.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
-    expect((p.wordSets.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
-    expect((p.progress.removeAll as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
-    expect((p.userProfiles.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
-    expect((p.auth.deleteAccount as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    expect((p.entries.remove as Mock).mock.calls).toHaveLength(0);
+    expect((p.wordSets.remove as Mock).mock.calls).toHaveLength(0);
+    expect((p.progress.removeAll as Mock).mock.calls).toHaveLength(0);
+    expect((p.userProfiles.remove as Mock).mock.calls).toHaveLength(0);
+    expect((p.auth.deleteAccount as Mock).mock.calls).toHaveLength(0);
   });
 
   /**
@@ -348,7 +344,7 @@ describe('deleteEverything', () => {
    */
   it('does not report a late refusal as nothing having been deleted', async () => {
     const p = ports(5, 5, 5);
-    (p.auth.deleteAccount as ReturnType<typeof vi.fn>).mockRejectedValue(
+    (p.auth.deleteAccount as Mock).mockRejectedValue(
       Object.assign(new Error('stale'), { code: 'auth/requires-recent-login' }),
     );
 
@@ -363,8 +359,8 @@ describe('deleteEverything', () => {
     expect(failure).toBeInstanceOf(Error);
     expect(failure).not.toBeInstanceOf(NothingDeleted);
     // ...because plenty was.
-    expect((p.entries.remove as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(5);
-    expect((p.progress.removeAll as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+    expect((p.entries.remove as Mock).mock.calls).toHaveLength(5);
+    expect((p.progress.removeAll as Mock).mock.calls).toHaveLength(1);
   });
 });
 

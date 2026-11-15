@@ -136,8 +136,10 @@ against — or written over — the Chromium file beside it.
   A screenshot diff is a bug report. Investigate it, fix the cause, and if the
   new rendering really is correct, ask the user to regenerate.
 - Regeneration is `yarn test:visual:update`, which runs in the same container
-  image CI uses. Never run `--update-snapshots` outside it: a macOS-authored
-  baseline fails on every CI run.
+  image and `linux/amd64` architecture CI uses. Both are pinned because font
+  rasterisation depends on the container and machine architecture. Never run
+  `--update-snapshots` outside it: a baseline authored by a different renderer
+  fails on CI.
 - Prefer `locator.toHaveScreenshot()` over a full-page shot. Do not add a new
   full-page baseline without asking.
 
@@ -226,16 +228,17 @@ their preference, not the repository's.
 | Command                   | What it runs                                           |
 | ------------------------- | ------------------------------------------------------ |
 | `yarn test:unit`          | Unit + component. No JDK, no browser. Run this first.  |
-| `yarn test:emulator`      | Rules + adapter. Needs JDK 21.                         |
+| `yarn test:emulator`      | Rules + adapter. Needs JDK 21 or newer.                |
 | `yarn test`               | Both of the above.                                     |
 | `yarn test:e2e`           | Playwright. Builds and serves automatically.           |
 | `yarn test:visual:update` | Regenerates screenshot baselines in Docker. Ask first. |
 | `yarn typecheck`          | Two passes: the app, then `tsconfig.test.json`.        |
 | `yarn coverage`           | Reported, never enforced.                              |
 
-On macOS the Firestore emulator needs JDK 21 ahead of any newer JDK on `PATH`:
+The Firestore emulator needs JDK 21 or newer — the suite passes on 25 — and on
+macOS an older JDK first on `PATH` stops it starting:
 
 ```sh
-export JAVA_HOME="$(/usr/libexec/java_home -v 21)"
+export JAVA_HOME="$(/usr/libexec/java_home -v 21+)"
 export PATH="$JAVA_HOME/bin:$PATH"
 ```

@@ -68,6 +68,14 @@ export function PlusIcon() {
   );
 }
 
+export function ChevronRightIcon() {
+  return (
+    <Icon className="h-4 w-4">
+      <path d="M9 6l6 6-6 6" />
+    </Icon>
+  );
+}
+
 /**
  * The drafting mark, and the only icon here that is not the bottom navigation's.
  *

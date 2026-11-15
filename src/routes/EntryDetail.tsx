@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EntryBody } from '@/components/detail/EntryBody';
 import { EntryHeadline } from '@/components/detail/EntryHeadline';
+import { useRelatedQuickAdd } from '@/components/detail/useRelatedQuickAdd';
 import { EntryFormModal } from '@/components/entry-form/EntryFormModal';
 import { SpeakButton, SpeechStatusNote } from '@/components/SpeakButton';
 import { useI18n } from '@/i18n/context';
@@ -21,6 +22,11 @@ export function Component() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const { status: speechStatus, speak } = useJapaneseSpeech();
+  // Above the early returns, because hooks are; it tolerates `undefined`.
+  const quickAdd = useRelatedQuickAdd(
+    entries.find((item) => item.id === id),
+    (relatedId) => void navigate(`/vocabulary/${relatedId}`),
+  );
 
   /**
    * Navigate only once both the delete and the refresh have succeeded. If the
@@ -65,6 +71,7 @@ export function Component() {
       <header className="rounded-card bg-card p-5 shadow-panel sm:p-6">
         <EntryHeadline
           entry={entry}
+          pageHeading
           actions={
             <>
               <SpeakButton status={speechStatus} onSpeak={() => speak(spokenForm(entry))} />
@@ -91,9 +98,12 @@ export function Component() {
         <SpeechStatusNote status={speechStatus} className="mt-3" />
       </header>
 
-      <EntryBody entry={entry} />
+      <EntryBody entry={entry} relatedActions={quickAdd.actions} />
 
       <EntryFormModal open={editing} entry={entry} onClose={() => setEditing(false)} />
+      {/* No `onSaved` navigation, unlike the bottom bar's add: the reader stays
+          on this note so several related words can be added in a row. */}
+      <EntryFormModal {...quickAdd.form} />
 
       <ConfirmDialog
         open={confirmingDelete}

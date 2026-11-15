@@ -53,6 +53,7 @@ const ProgressContext = createContext<ProgressValue | null>(null);
 export function ProgressProvider({ uid, children }: { uid: string; children: ReactNode }) {
   const [progress, setProgress] = useState<EntryProgress[]>([]);
   const [loading, setLoading] = useState(true);
+  const [successfulLoadFor, setSuccessfulLoadFor] = useState<string | null>(null);
   const [error, setError] = useState<LoadFailure | null>(null);
 
   const repository = useMemo(() => progressRepositoryFor(uid), [uid]);
@@ -62,6 +63,7 @@ export function ProgressProvider({ uid, children }: { uid: string; children: Rea
 
   /** Re-read progress. Deliberately does not raise `loading` — see the effect below. */
   const refresh = useCallback(async () => {
+    setSuccessfulLoadFor(null);
     const mine = (walk.current += 1);
     try {
       const rows = await repository.listAll();
@@ -69,6 +71,7 @@ export function ProgressProvider({ uid, children }: { uid: string; children: Rea
       if (walk.current === mine) {
         setProgress(rows);
         setError(null);
+        setSuccessfulLoadFor(uid);
       }
     } catch (cause) {
       console.error(cause);
@@ -84,7 +87,11 @@ export function ProgressProvider({ uid, children }: { uid: string; children: Rea
   }, [refresh]);
 
   /** Denial is not cleared by reconnecting — see `EntriesProvider`'s same guard. */
-  useRetryOnReconnect(error !== null && isUnreachable(error.cause), refresh);
+  useRetryOnReconnect(
+    error !== null && isUnreachable(error.cause),
+    successfulLoadFor === uid,
+    refresh,
+  );
 
   const record = useCallback(
     async (session: PracticeSessionDraft, rows: EntryProgress[]) => {

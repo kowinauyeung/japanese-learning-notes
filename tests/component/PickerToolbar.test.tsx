@@ -25,7 +25,7 @@ describe('PickerToolbar', () => {
     const onChange = vi.fn();
     render(<PickerToolbar filters={EMPTY_FILTERS} allTags={[]} onChange={onChange} />);
 
-    fireEvent.change(screen.getByPlaceholderText('見出し語・読み方・タグ・意味・例文で検索'), {
+    fireEvent.change(screen.getByPlaceholderText('見出し語・読み方・出典・登録形で検索'), {
       target: { value: '兆' },
     });
 

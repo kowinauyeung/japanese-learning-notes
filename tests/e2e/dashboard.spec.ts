@@ -40,7 +40,8 @@ test.describe('dashboard', () => {
     // overflow asserted above appears when the row is laid out, and the pin is
     // written by an effect after that — so a single pair of reads can land in
     // between and measure the unpinned position. This is the assertion that
-    // owns the claim, which is why it is the one hardened.
+    // owns the claim: without it, a reader opens the dashboard on older weeks
+    // and has to drag sideways to reach today's progress.
     await expect
       .poll(
         async () => {
