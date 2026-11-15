@@ -43,12 +43,19 @@ export function EntryFormModal({
   open,
   entry,
   translationLanguage,
+  prefill,
   onClose,
   onSaved,
 }: {
   open: boolean;
   /** Present when editing; absent when adding. */
   entry?: Entry;
+  /**
+   * Fields a new note starts with, when adding from somewhere that already
+   * knows them — a 関連語 row. Ignored when editing. Read only when the dialog
+   * opens, so the caller need not keep the object stable.
+   */
+  prefill?: Pick<EntryDraft, 'headword' | 'source'> | undefined;
   /** Saved default for the JSON tab; the text field remains editable. */
   translationLanguage?: TranslationLanguage | null | undefined;
   onClose: () => void;
@@ -258,9 +265,19 @@ export function EntryFormModal({
     session.current += 1;
   }, [open]);
 
+  /*
+    Held in a ref so the reset below runs when the dialog opens, not whenever a
+    caller passes a fresh object literal — a reset mid-session would wipe what
+    the reader has typed.
+  */
+  const prefillRef = useRef(prefill);
+  useEffect(() => {
+    prefillRef.current = prefill;
+  }, [prefill]);
+
   useEffect(() => {
     if (!open) return;
-    setDraft(entry ? toDraft(entry) : emptyDraft());
+    setDraft(entry ? toDraft(entry) : { ...emptyDraft(), ...prefillRef.current });
     setTab(entry ? 'full' : 'simple');
     setJson(emptyJsonImport(translationLanguage));
     setFromModel(false);

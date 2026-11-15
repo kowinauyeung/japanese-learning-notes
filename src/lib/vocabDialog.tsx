@@ -53,6 +53,14 @@ export function VocabDialogProvider({ children }: { children: ReactNode }) {
   const restore = useRef<string | null>(null);
 
   const open = useCallback((entryId: string) => {
+    // Already open — a word followed from inside the dialog. Swapped in place:
+    // recording the dialog's own address as the one to restore, and pushing a
+    // second entry, would leave the address bar on the first word after close.
+    if (restore.current !== null) {
+      setOpenId(entryId);
+      window.history.replaceState(window.history.state, '', `/vocabulary/${entryId}`);
+      return;
+    }
     restore.current = window.location.pathname + window.location.search;
     setOpenId(entryId);
     // A push, not a replace: replacing would spend the entry the page under it

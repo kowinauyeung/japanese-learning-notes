@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { EntryBody } from '@/components/detail/EntryBody';
 import { EntryHeadline } from '@/components/detail/EntryHeadline';
+import { useRelatedQuickAdd } from '@/components/detail/useRelatedQuickAdd';
 import { EntryFormModal } from '@/components/entry-form/EntryFormModal';
 import { Modal } from '@/components/Modal';
 import { SpeakButton, SpeechStatusNote } from '@/components/SpeakButton';
@@ -33,11 +34,15 @@ import { useVocabDialog } from '@/lib/vocabDialog';
  */
 export function VocabDialog() {
   const { t } = useI18n();
-  const { openId, close } = useVocabDialog();
+  const { openId, open, close } = useVocabDialog();
   const { entries } = useEntries();
   // Above the early return, because hooks are: this component is mounted for
   // the whole session and renders nothing until a word is asked for.
   const { status: speechStatus, speak } = useJapaneseSpeech();
+  const quickAdd = useRelatedQuickAdd(
+    entries.find((item) => item.id === openId),
+    open,
+  );
   /**
    * Which word the edit form is open for, rather than whether it is open.
    *
@@ -59,6 +64,8 @@ export function VocabDialog() {
   // component before committing either result, so no form is ever painted for
   // a dialog that has already closed.
   if (openId === null && editingId !== null) setEditingId(null);
+  // The add form has the same Back problem as the edit form above.
+  if (openId === null) quickAdd.clear();
   if (openId === null) return null;
   const entry = entries.find((item) => item.id === openId);
 
@@ -82,6 +89,9 @@ export function VocabDialog() {
   if (editingId === entry.id) {
     return <EntryFormModal open entry={entry} onClose={() => setEditingId(null)} />;
   }
+  // Swapped in the same way, and for the same reason. Closing it, saved or
+  // not, returns to this word with the row already reading 開く.
+  if (quickAdd.form.open) return <EntryFormModal {...quickAdd.form} />;
 
   return (
     <Modal
@@ -124,7 +134,7 @@ export function VocabDialog() {
         />
         <SpeechStatusNote status={speechStatus} />
 
-        <EntryBody entry={entry} surface="panel" />
+        <EntryBody entry={entry} surface="panel" relatedActions={quickAdd.actions} />
       </div>
     </Modal>
   );
