@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [1.2.0](https://github.com/kowinauyeung/japanese-learning-notes/compare/v1.1.0...v1.2.0) (2026-11-15)
+
+### Features
+
+* **ai:** add a Remote Config switch that turns drafting off ([#206](https://github.com/kowinauyeung/japanese-learning-notes/issues/206)) ([22a72a5](https://github.com/kowinauyeung/japanese-learning-notes/commit/22a72a53ea849811a662cd7e2c8a23aabda41164))
+* **rules:** open signups to any verified account ([#170](https://github.com/kowinauyeung/japanese-learning-notes/issues/170)) ([4935012](https://github.com/kowinauyeung/japanese-learning-notes/commit/49350127d2935c878843bebfb8f684f0c47e7b48)), references [#171](https://github.com/kowinauyeung/japanese-learning-notes/issues/171)
+* **search:** search vocabulary fields and show word set matches ([#232](https://github.com/kowinauyeung/japanese-learning-notes/issues/232)) ([004f57a](https://github.com/kowinauyeung/japanese-learning-notes/commit/004f57a3beb6aff530cd20c432a22ff8570ab34f))
+* **vocabulary:** add a related word as its own note from the note that lists it ([#233](https://github.com/kowinauyeung/japanese-learning-notes/issues/233)) ([fd8dbcb](https://github.com/kowinauyeung/japanese-learning-notes/commit/fd8dbcb13b46f3d789f5ab554d63e575d6ddffec))
+
+### Bug Fixes
+
+* **ai:** request limited-use App Check tokens for drafting ([#200](https://github.com/kowinauyeung/japanese-learning-notes/issues/200)) ([8d55dc5](https://github.com/kowinauyeung/japanese-learning-notes/commit/8d55dc53ce05bda82b944e41f6ee7f0c4bcd8086))
+* **deps:** depend on vite-node directly ([#205](https://github.com/kowinauyeung/japanese-learning-notes/issues/205)) ([31c5c9f](https://github.com/kowinauyeung/japanese-learning-notes/commit/31c5c9f6b8bb9a16e80a7fe82313caf2f4aa60e9))
+* **detail:** render headword as page heading ([#179](https://github.com/kowinauyeung/japanese-learning-notes/issues/179)) ([0e7d5ca](https://github.com/kowinauyeung/japanese-learning-notes/commit/0e7d5ca0e7b1700b90668e0d71261e58616c53aa))
+* **import:** lock modal during clipboard paste ([#180](https://github.com/kowinauyeung/japanese-learning-notes/issues/180)) ([f4ae341](https://github.com/kowinauyeung/japanese-learning-notes/commit/f4ae3411b74fe06ac16270e356aac68b65fd4ec0))
+* **import:** pass the JSON import clock explicitly ([#169](https://github.com/kowinauyeung/japanese-learning-notes/issues/169)) ([d0a3fb6](https://github.com/kowinauyeung/japanese-learning-notes/commit/d0a3fb6f52019ac6be1121f4d22a99022379ddbd))
+* pin visual test container architecture ([#163](https://github.com/kowinauyeung/japanese-learning-notes/issues/163)) ([891a4e0](https://github.com/kowinauyeung/japanese-learning-notes/commit/891a4e0a1ea7cadc10672f856488b8f517b40bc5))
+* **practice:** announce mode switches as pressed buttons ([#176](https://github.com/kowinauyeung/japanese-learning-notes/issues/176)) ([3e8b9ea](https://github.com/kowinauyeung/japanese-learning-notes/commit/3e8b9ea403fc07b78b1fd2a5192e9d366af231c1))
+* **privacy:** disclose what AI drafting sends to the Gemini API ([#204](https://github.com/kowinauyeung/japanese-learning-notes/issues/204)) ([9817a23](https://github.com/kowinauyeung/japanese-learning-notes/commit/9817a2311cadb1d86eb0fe8a89409288d87b6bd0))
+* **reconnect:** preserve pending reconnect retries ([#172](https://github.com/kowinauyeung/japanese-learning-notes/issues/172)) ([06e8a6c](https://github.com/kowinauyeung/japanese-learning-notes/commit/06e8a6c4aff438a7baffee6caea89536d32aed79))
+
 ## [1.1.0](https://github.com/kowinauyeung/japanese-learning-notes/compare/v1.0.0...v1.1.0) (2026-08-30)
 
 ### Features
