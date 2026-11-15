@@ -199,8 +199,10 @@ export function EntryFormModal({
    * Caught by the existing edit test, which found the saved text twice: once on
    * the page and once in the form that should have closed.
    *
-   * Opening and closing are the only two things that make a run a different run,
-   * and both are `open` changing.
+   * Opening and closing are what make a run a different run. For a caller that
+   * toggles `open`, both are `open` changing; for one that mounts the dialog
+   * already open and unmounts it to close — `VocabDialog` — closing is the
+   * unmount, which is why the cleanup advances the session as well.
    */
   const session = useRef(0);
   const trackDrafting = (busy: boolean, request: DraftRequest) => {
@@ -263,6 +265,9 @@ export function EntryFormModal({
 
   useEffect(() => {
     session.current += 1;
+    return () => {
+      session.current += 1;
+    };
   }, [open]);
 
   /*

@@ -407,6 +407,45 @@ test.describe('related words', () => {
     // And the list behind it counts the new word.
     await expect(page.getByText('4 語')).toBeVisible();
   });
+
+  /**
+   * The dialog swaps the form in and out rather than toggling its `open`, so a
+   * closed form is an unmounted one. A save it started that lands after a new
+   * form has opened must not close that form — the same guarantee the bottom
+   * bar's add has, reached by a different way of ending a run.
+   */
+  test('does not close a reopened add form in the dialog when the earlier save lands', async ({
+    page,
+  }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS.map((word) => (word.id === WITH_RELATED.id ? WITH_RELATED : word)),
+      entrySave: 'defer',
+    });
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+
+    const form = addDialog(page);
+    await previewDialog(page).getByRole('button', { name: '前兆を追加' }).click();
+    await form.getByLabel('意味・説明').fill('物事が起こる前に現れるしるし。');
+    await form.getByRole('button', { name: '保存する' }).click();
+    await form.getByRole('button', { name: '閉じる' }).click();
+    await expect(previewDialog(page)).toBeVisible();
+
+    await previewDialog(page).getByRole('button', { name: '前兆を追加' }).click();
+    await form.getByLabel('見出し語').fill('前触れ');
+
+    await page.evaluate(async () => {
+      (
+        window as unknown as { __GOITEI_E2E_RELEASE_ENTRY_SAVE__?: () => void }
+      ).__GOITEI_E2E_RELEASE_ENTRY_SAVE__?.();
+      // Settled inside `evaluate` for the reason the bottom-bar test gives.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+
+    await expect(form).toBeVisible();
+    await expect(form.getByLabel('見出し語')).toHaveValue('前触れ');
+  });
 });
 
 test.describe('navigation', () => {
