@@ -1,10 +1,29 @@
+import { Fragment } from 'react';
 import type { Entry } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
 import { JAPANESE } from '@/lib/contentLang';
 import { matchingSearchFields } from '@/lib/filters';
 import type { ListDrag } from '@/lib/listDrag';
+import { searchMatchRanges } from '@/lib/search';
 import { CANDIDATE_LIMIT } from '@/lib/wordSetMembers';
 import { DragHandle } from './DragHandle';
+
+function SearchHighlight({ text, query }: { text: string; query: string }) {
+  const ranges = searchMatchRanges(text, query);
+  return (
+    <>
+      {ranges.map(({ start, end }, index) => (
+        <Fragment key={start}>
+          {text.slice(index === 0 ? 0 : ranges[index - 1]!.end, start)}
+          <mark className="rounded-sm bg-yellow-200 font-semibold text-yellow-950">
+            {text.slice(start, end)}
+          </mark>
+        </Fragment>
+      ))}
+      {text.slice(ranges.at(-1)?.end ?? 0)}
+    </>
+  );
+}
 
 /**
  * 単語を探す — the notebook, minus what the set already holds.
@@ -98,11 +117,11 @@ export function MemberPicker({
             <span className="min-w-0 flex-1 text-sm">
               <span className="block truncate">
                 <span className="font-display font-bold" lang={JAPANESE}>
-                  {entry.headword}
+                  <SearchHighlight text={entry.headword} query={query} />
                 </span>
                 {entry.reading && (
                   <span className="cjk-face text-muted" lang={JAPANESE}>
-                    （{entry.reading}）
+                    （<SearchHighlight text={entry.reading} query={query} />）
                   </span>
                 )}
               </span>
@@ -111,7 +130,7 @@ export function MemberPicker({
                   <span className="mr-1 rounded bg-accent-soft px-1.5 py-0.5 font-medium text-accent">
                     {t(`form.${field}`)}
                   </span>
-                  {entry[field]}
+                  <SearchHighlight text={entry[field]} query={query} />
                 </span>
               ))}
             </span>

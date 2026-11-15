@@ -5,6 +5,7 @@ import {
   isDefault,
   matches,
   MAX_FREQ,
+  matchingSearchFields,
   sortEntries,
   toSearchParams,
 } from '@/lib/filters';
@@ -179,6 +180,26 @@ describe('matches — search', () => {
   it('is case-insensitive and ignores surrounding whitespace', () => {
     expect(matches(entry, withFilters({ q: '  YOUTUBE  ' }))).toBe(true);
   });
+
+  it.each(['headword', 'reading', 'source', 'citationForm'] as const)(
+    'matches both kana scripts in %s and explains the match',
+    (field) => {
+      for (const text of ['ガリレオ', 'ねんがん']) {
+        const kanaEntry = makeEntry({
+          headword: '',
+          reading: '',
+          source: '',
+          citationForm: '',
+          [field]: text,
+        });
+        for (const q of ['が', 'ガ']) {
+          expect(matches(kanaEntry, withFilters({ q }))).toBe(true);
+          expect(matchingSearchFields(kanaEntry, q)).toEqual([field]);
+        }
+        expect(matches(kanaEntry, withFilters({ q: 'か' }))).toBe(false);
+      }
+    },
+  );
 
   it('does not match text that is absent', () => {
     expect(matches(entry, withFilters({ q: '存在しない' }))).toBe(false);

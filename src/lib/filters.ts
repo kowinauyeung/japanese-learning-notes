@@ -1,5 +1,6 @@
 import { JLPT_LEVELS, POS, STYLES, WORD_ORIGINS } from '@/domain/entry';
 import type { Entry } from '@/domain/entry';
+import { normalizeSearchText } from '@/lib/search';
 
 export type SortKey = 'new' | 'old' | 'headword';
 
@@ -39,8 +40,8 @@ const SEARCH_FIELDS = ['headword', 'reading', 'source', 'citationForm'] as const
 
 /** The fields responsible for a text match, also used to explain picker results. */
 export function matchingSearchFields(entry: Entry, query: string) {
-  const q = query.trim().toLowerCase();
-  return q ? SEARCH_FIELDS.filter((field) => entry[field].toLowerCase().includes(q)) : [];
+  const q = normalizeSearchText(query.trim());
+  return q ? SEARCH_FIELDS.filter((field) => normalizeSearchText(entry[field]).includes(q)) : [];
 }
 
 /**
@@ -51,9 +52,7 @@ export function matchingSearchFields(entry: Entry, query: string) {
  * which a word-boundary full-text index would miss.
  */
 function haystack(entry: Entry): string {
-  return SEARCH_FIELDS.map((field) => entry[field])
-    .join('\n')
-    .toLowerCase();
+  return normalizeSearchText(SEARCH_FIELDS.map((field) => entry[field]).join('\n'));
 }
 
 const cache = new WeakMap<Entry, string>();
@@ -73,7 +72,7 @@ function cachedHaystack(entry: Entry): string {
  * one JLPT level and, today, one tag.
  */
 export function matches(entry: Entry, filters: Filters): boolean {
-  const q = filters.q.trim().toLowerCase();
+  const q = normalizeSearchText(filters.q.trim());
   if (q && !cachedHaystack(entry).includes(q)) return false;
   if (filters.tags.length && !filters.tags.some((tag) => entry.tags.includes(tag))) return false;
   if (filters.jlpt.length && !filters.jlpt.includes(entry.jlpt)) return false;
