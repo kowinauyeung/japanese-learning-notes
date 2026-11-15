@@ -27,8 +27,8 @@ const PINNED_DOCS = {
     hash: 'c1d149af2dbd4264fa8b22bde4a61a2bd99303f29211bde0be0131e27f5050c0',
   },
   terms: {
-    updated: '2026-08-14',
-    hash: '1510f90a4d65d916a8a21d141d70fd6691a6163bf6b921d73336d6559e00eaa1',
+    updated: '2026-11-15',
+    hash: '5ed03418e77a88e776d97570557ff2b8027887aea900cf866c254be365fbe893',
   },
   support: {
     updated: '2026-08-13',
