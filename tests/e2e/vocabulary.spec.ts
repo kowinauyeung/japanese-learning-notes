@@ -306,6 +306,148 @@ test.describe('browsing', () => {
  * Nothing else asserts it, so a rename or a dropped destination would otherwise
  * reach a reviewer as a diff nobody had to justify.
  */
+/**
+ * 関連語 rows: one word already in the notebook, one not yet. Seeded over the
+ * usual three so 切り分け exists to be found.
+ */
+const WITH_RELATED = {
+  ...DETAILED_WORD,
+  related: [
+    { headword: '切り分け', note: '問題を分けること自体。' },
+    { headword: '前兆', note: 'ほぼ同義。より文語的。' },
+  ],
+};
+
+test.describe('related words', () => {
+  test.beforeEach(async ({ page }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS.map((word) => (word.id === WITH_RELATED.id ? WITH_RELATED : word)),
+    });
+  });
+
+  test('adds a related word with its headword and source filled in, and stays on the note it came from', async ({
+    page,
+  }) => {
+    await page.goto('/vocabulary/w-choukou');
+    await page.getByRole('button', { name: '前兆を追加' }).click();
+
+    const form = addDialog(page);
+    await expect(form.getByLabel('見出し語')).toHaveValue('前兆');
+    await expect(form.getByLabel('出典')).toHaveValue('「兆候」の関連語から');
+    await form.getByLabel('意味・説明').fill('物事が起こる前に現れるしるし。');
+    await form.getByRole('button', { name: '保存する' }).click();
+
+    // Not navigated to the new word, unlike the bottom bar's add.
+    await expect(form).toBeHidden();
+    await expect(page).toHaveURL(/\/vocabulary\/w-choukou$/);
+    await expect(
+      page.getByRole('status').filter({ hasText: '「前兆」を追加しました' }),
+    ).toBeVisible();
+    // The row now points at the note instead of offering to add it twice.
+    await expect(page.getByRole('button', { name: '前兆を追加' })).toBeHidden();
+    await expect(page.getByRole('button', { name: '前兆を開く' })).toBeVisible();
+  });
+
+  test('opens a related word already in the notebook instead of offering to add it again', async ({
+    page,
+  }) => {
+    await page.goto('/vocabulary/w-choukou');
+    await expect(page.getByRole('button', { name: '切り分けを追加' })).toBeHidden();
+
+    await page.getByRole('button', { name: '切り分けを開く' }).click();
+
+    await expect(page).toHaveURL(/\/vocabulary\/w-kiriwake$/);
+    await expect(page.getByText('大きな問題を小さな部分に分けること。')).toBeVisible();
+  });
+
+  /**
+   * `open()` used to assume the dialog was closed: it recorded the address to
+   * restore and pushed a new entry. Called from inside the dialog, the address
+   * it recorded was the dialog's own, so closing left the bar on the first word
+   * while the list sat underneath.
+   */
+  test('follows a related word inside the dialog, and closing it restores the list’s address', async ({
+    page,
+  }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+    await previewDialog(page).getByRole('button', { name: '切り分けを開く' }).click();
+
+    await expect(
+      previewDialog(page).getByText('大きな問題を小さな部分に分けること。'),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/vocabulary\/w-kiriwake$/);
+
+    await page.keyboard.press('Escape');
+    await expect(previewDialog(page)).toBeHidden();
+    await expect(page).toHaveURL(/\/vocabulary$/);
+    await expect(page.getByText('3 語')).toBeVisible();
+  });
+
+  test('adds a related word from the dialog and returns to the word it was listed on', async ({
+    page,
+  }) => {
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+    await previewDialog(page).getByRole('button', { name: '前兆を追加' }).click();
+
+    // One dialog at a time, as with editing.
+    const form = addDialog(page);
+    await expect(previewDialog(page)).toBeHidden();
+    await expect(form.getByLabel('見出し語')).toHaveValue('前兆');
+    await form.getByLabel('意味・説明').fill('物事が起こる前に現れるしるし。');
+    await form.getByRole('button', { name: '保存する' }).click();
+
+    const preview = previewDialog(page);
+    await expect(preview.getByRole('button', { name: '前兆を開く' })).toBeVisible();
+    await expect(
+      preview.getByRole('status').filter({ hasText: '「前兆」を追加しました' }),
+    ).toBeVisible();
+    // And the list behind it counts the new word.
+    await expect(page.getByText('4 語')).toBeVisible();
+  });
+
+  /**
+   * The dialog swaps the form in and out rather than toggling its `open`, so a
+   * closed form is an unmounted one. A save it started that lands after a new
+   * form has opened must not close that form — the same guarantee the bottom
+   * bar's add has, reached by a different way of ending a run.
+   */
+  test('does not close a reopened add form in the dialog when the earlier save lands', async ({
+    page,
+  }) => {
+    await seed(page, {
+      signedIn: true,
+      entries: WORDS.map((word) => (word.id === WITH_RELATED.id ? WITH_RELATED : word)),
+      entrySave: 'defer',
+    });
+    await page.goto('/vocabulary');
+    await page.getByRole('link', { name: /兆候/ }).click();
+
+    const form = addDialog(page);
+    await previewDialog(page).getByRole('button', { name: '前兆を追加' }).click();
+    await form.getByLabel('意味・説明').fill('物事が起こる前に現れるしるし。');
+    await form.getByRole('button', { name: '保存する' }).click();
+    await form.getByRole('button', { name: '閉じる' }).click();
+    await expect(previewDialog(page)).toBeVisible();
+
+    await previewDialog(page).getByRole('button', { name: '前兆を追加' }).click();
+    await form.getByLabel('見出し語').fill('前触れ');
+
+    await page.evaluate(async () => {
+      (
+        window as unknown as { __GOITEI_E2E_RELEASE_ENTRY_SAVE__?: () => void }
+      ).__GOITEI_E2E_RELEASE_ENTRY_SAVE__?.();
+      // Settled inside `evaluate` for the reason the bottom-bar test gives.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+
+    await expect(form).toBeVisible();
+    await expect(form.getByLabel('見出し語')).toHaveValue('前触れ');
+  });
+});
+
 test.describe('navigation', () => {
   test('lists the six destinations in the order the notebook is used', async ({ page }) => {
     await page.goto('/');

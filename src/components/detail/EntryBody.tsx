@@ -1,10 +1,21 @@
 import { KeyValueTable, Section } from '@/components/detail/Section';
 import type { SectionSurface } from '@/components/detail/Section';
+import { ChevronRightIcon, PlusIcon } from '@/components/icons';
 import type { Entry } from '@/domain/entry';
 import { useI18n } from '@/i18n/context';
 import { useEntryLabel } from '@/i18n/useEntryLabel';
 import { JAPANESE, useTranslationLang } from '@/lib/contentLang';
 import { circled, stars } from '@/lib/entryFormat';
+
+/** What a 関連語 row can do, supplied by whichever screen owns the add form. */
+export interface RelatedActions {
+  /** The note this headword already has in the notebook, if any. */
+  existing: (headword: string) => Entry | undefined;
+  onAdd: (headword: string) => void;
+  onOpen: (id: string) => void;
+  /** The word most recently added from this list, until the list changes. */
+  added: { headword: string; id: string } | null;
+}
 
 /**
  * Everything recorded about a word below its headword.
@@ -19,8 +30,18 @@ import { circled, stars } from '@/lib/entryFormat';
  * Every section is conditional on having something to say, which is why a
  * sparse entry does not render a column of empty headings.
  */
-export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?: SectionSurface }) {
+export function EntryBody({
+  entry,
+  surface = 'card',
+  relatedActions,
+}: {
+  entry: Entry;
+  surface?: SectionSurface;
+  /** Absent: related words render as plain text, with nothing to press. */
+  relatedActions?: RelatedActions;
+}) {
   const { t } = useI18n();
+  const added = relatedActions?.added ?? null;
   const entryLabel = useEntryLabel();
   // Which face draws which field — see the `:lang()` rules in `src/index.css`
   // for why a note needs two of them.
@@ -199,17 +220,75 @@ export function EntryBody({ entry, surface = 'card' }: { entry: Entry; surface?:
       {entry.related.length > 0 && (
         <Section emoji="🔗" title={t('vocabulary.related')} surface={surface}>
           <ul className="divide-y divide-line text-sm">
-            {entry.related.map((related, index) => (
-              <li key={index} className="py-2.5 first:pt-0 last:pb-0">
-                <span className="font-display font-bold" lang={JAPANESE}>
-                  {related.headword}
-                </span>
-                {/* The headword is Japanese by definition; the note beside it
-                    is "how this word differs", in no stated language. */}
-                <span className="prose-cjk text-muted"> — {related.note}</span>
-              </li>
-            ))}
+            {entry.related.map((related, index) => {
+              const existing = relatedActions?.existing(related.headword);
+              const justAdded = existing !== undefined && existing.id === added?.id;
+              return (
+                <li
+                  key={index}
+                  className={`flex items-center gap-3 py-2.5 ${
+                    justAdded ? '-mx-3 rounded-panel bg-accent-soft px-3' : 'first:pt-0 last:pb-0'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="font-display font-bold" lang={JAPANESE}>
+                      {related.headword}
+                    </span>
+                    {/* The headword is Japanese by definition; the note beside it
+                        is "how this word differs", in no stated language. */}
+                    <span className="prose-cjk text-muted"> — {related.note}</span>
+                  </div>
+                  {relatedActions &&
+                    (existing ? (
+                      <button
+                        type="button"
+                        onClick={() => relatedActions.onOpen(existing.id)}
+                        aria-label={t('vocabulary.relatedOpenLabel', {
+                          headword: related.headword,
+                        })}
+                        className="inline-flex min-h-11 shrink-0 items-center gap-0.5 pr-1 pl-3 text-xs font-semibold text-accent"
+                      >
+                        {t('vocabulary.relatedOpen')}
+                        <ChevronRightIcon />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => relatedActions.onAdd(related.headword)}
+                        aria-label={t('vocabulary.relatedAddLabel', { headword: related.headword })}
+                        className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-pill border border-line px-3.5 text-xs font-semibold text-accent [&>svg]:h-4 [&>svg]:w-4"
+                      >
+                        <PlusIcon />
+                        {t('vocabulary.relatedAdd')}
+                      </button>
+                    ))}
+                </li>
+              );
+            })}
           </ul>
+          {/* Inline rather than a floating toast: in the dialog, everything
+              outside the modal is `inert`, so a toast rendered elsewhere could
+              be seen but its 開く could not be pressed. The live region is
+              mounted before it has anything to say, because one inserted
+              already holding its text is not reliably announced. */}
+          {relatedActions && (
+            <div role="status">
+              {added && (
+                <p className="mt-3 flex items-center gap-2 rounded-panel bg-bg-alt py-1 pr-1 pl-3 text-xs">
+                  <span className="flex-1">
+                    {t('vocabulary.relatedAdded', { headword: added.headword })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => relatedActions.onOpen(added.id)}
+                    className="min-h-11 px-3 font-semibold text-accent"
+                  >
+                    {t('vocabulary.relatedOpen')}
+                  </button>
+                </p>
+              )}
+            </div>
+          )}
         </Section>
       )}
 

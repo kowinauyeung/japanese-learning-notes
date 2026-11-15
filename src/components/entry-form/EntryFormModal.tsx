@@ -43,12 +43,19 @@ export function EntryFormModal({
   open,
   entry,
   translationLanguage,
+  prefill,
   onClose,
   onSaved,
 }: {
   open: boolean;
   /** Present when editing; absent when adding. */
   entry?: Entry;
+  /**
+   * Fields a new note starts with, when adding from somewhere that already
+   * knows them — a 関連語 row. Ignored when editing. Read only when the dialog
+   * opens, so the caller need not keep the object stable.
+   */
+  prefill?: Pick<EntryDraft, 'headword' | 'source'> | undefined;
   /** Saved default for the JSON tab; the text field remains editable. */
   translationLanguage?: TranslationLanguage | null | undefined;
   onClose: () => void;
@@ -192,8 +199,10 @@ export function EntryFormModal({
    * Caught by the existing edit test, which found the saved text twice: once on
    * the page and once in the form that should have closed.
    *
-   * Opening and closing are the only two things that make a run a different run,
-   * and both are `open` changing.
+   * Opening and closing are what make a run a different run. For a caller that
+   * toggles `open`, both are `open` changing; for one that mounts the dialog
+   * already open and unmounts it to close — `VocabDialog` — closing is the
+   * unmount, which is why the cleanup advances the session as well.
    */
   const session = useRef(0);
   const trackDrafting = (busy: boolean, request: DraftRequest) => {
@@ -256,11 +265,24 @@ export function EntryFormModal({
 
   useEffect(() => {
     session.current += 1;
+    return () => {
+      session.current += 1;
+    };
   }, [open]);
+
+  /*
+    Held in a ref so the reset below runs when the dialog opens, not whenever a
+    caller passes a fresh object literal — a reset mid-session would wipe what
+    the reader has typed.
+  */
+  const prefillRef = useRef(prefill);
+  useEffect(() => {
+    prefillRef.current = prefill;
+  }, [prefill]);
 
   useEffect(() => {
     if (!open) return;
-    setDraft(entry ? toDraft(entry) : emptyDraft());
+    setDraft(entry ? toDraft(entry) : { ...emptyDraft(), ...prefillRef.current });
     setTab(entry ? 'full' : 'simple');
     setJson(emptyJsonImport(translationLanguage));
     setFromModel(false);
