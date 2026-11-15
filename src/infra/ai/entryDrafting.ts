@@ -29,8 +29,8 @@ import { app } from '@/infra/firebase/client';
  *
  * **`GoogleAIBackend` is the Gemini Developer API, and the alternative is not a
  * free one.** `AgentPlatformBackend` — which `@firebase/ai` documents as
- * "formerly known as the Vertex AI Gemini API", with `VertexAIBackend`
- * deprecated in its favour — requires the Blaze plan from its first request and
+ * "formerly known as the Vertex AI Gemini API", and which replaced the removed
+ * `VertexAIBackend` — requires the Blaze plan from its first request and
  * needs `aiplatform.googleapis.com`, which neither project has enabled. What it
  * adds over this one, regional pinning and wider file-URL support, this feature
  * does not use. Swapping is this line plus a change of billing plan.
