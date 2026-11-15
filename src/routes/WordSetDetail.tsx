@@ -296,6 +296,7 @@ export function Component() {
             <div className="flex max-h-[46vh] min-h-64 min-w-0 nav:max-h-[62vh]">
               <MemberPicker
                 shown={candidates.shown}
+                query={filters.q}
                 total={candidates.total}
                 list={CANDIDATES}
                 drag={drag}

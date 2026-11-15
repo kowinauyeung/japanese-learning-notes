@@ -5,6 +5,7 @@ import {
   isDefault,
   matches,
   MAX_FREQ,
+  matchingSearchFields,
   sortEntries,
   toSearchParams,
 } from '@/lib/filters';
@@ -125,7 +126,8 @@ describe('matches — search', () => {
   const entry = makeEntry({
     headword: '兆候',
     reading: 'ちょうこう',
-    citationForm: '兆候',
+    citationForm: '兆し',
+    source: 'YouTube 会議録',
     definition: '何かが起こる前ぶれ。',
     definitionSub: 'sign of something',
     tags: ['ニュース'],
@@ -156,6 +158,13 @@ describe('matches — search', () => {
   it.each([
     ['headword', '兆候'],
     ['reading', 'ちょうこう'],
+    ['source', '会議録'],
+    ['citation form', '兆し'],
+  ])('searches the %s', (_field, query) => {
+    expect(matches(entry, withFilters({ q: query }))).toBe(true);
+  });
+
+  it.each([
     ['tag', 'ニュース'],
     ['definition', '前ぶれ'],
     ['definitionSub', 'sign of'],
@@ -164,13 +173,33 @@ describe('matches — search', () => {
     ['example', '株価'],
     ['example translation', 'share price'],
     ['related headword', '前兆'],
-  ])('searches the %s', (_field, query) => {
-    expect(matches(entry, withFilters({ q: query }))).toBe(true);
+  ])('does not search the %s', (_field, query) => {
+    expect(matches(entry, withFilters({ q: query }))).toBe(false);
   });
 
   it('is case-insensitive and ignores surrounding whitespace', () => {
-    expect(matches(entry, withFilters({ q: '  SIGN OF  ' }))).toBe(true);
+    expect(matches(entry, withFilters({ q: '  YOUTUBE  ' }))).toBe(true);
   });
+
+  it.each(['headword', 'reading', 'source', 'citationForm'] as const)(
+    'matches both kana scripts in %s and explains the match',
+    (field) => {
+      for (const text of ['ガリレオ', 'ねんがん']) {
+        const kanaEntry = makeEntry({
+          headword: '',
+          reading: '',
+          source: '',
+          citationForm: '',
+          [field]: text,
+        });
+        for (const q of ['が', 'ガ']) {
+          expect(matches(kanaEntry, withFilters({ q }))).toBe(true);
+          expect(matchingSearchFields(kanaEntry, q)).toEqual([field]);
+        }
+        expect(matches(kanaEntry, withFilters({ q: 'か' }))).toBe(false);
+      }
+    },
+  );
 
   it('does not match text that is absent', () => {
     expect(matches(entry, withFilters({ q: '存在しない' }))).toBe(false);

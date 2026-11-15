@@ -140,7 +140,7 @@ test.describe('with the network off', () => {
     await page.goto('/vocabulary');
 
     // Browse has no heading of its own, so its own controls stand in for one.
-    await expect(page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索')).toBeVisible();
+    await expect(page.getByPlaceholder('見出し語・読み方・出典・登録形で検索')).toBeVisible();
     // The seeded notebook, not just the frame around it: a page that renders
     // its filters and counts no words is a chunk that did not arrive.
     await expect(page.getByText('3 語')).toBeVisible();

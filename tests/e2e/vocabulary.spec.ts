@@ -64,7 +64,7 @@ test.describe('browsing', () => {
 
     // Substring matching is what makes searching Japanese work without a
     // tokenizer: 兆 finds 兆候 because it is literally a substring.
-    await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill('兆');
+    await page.getByPlaceholder('見出し語・読み方・出典・登録形で検索').fill('兆');
 
     await expect(page.getByText('1 語')).toBeVisible();
     await expect(page.getByRole('link', { name: /兆候/ })).toBeVisible();
@@ -72,7 +72,7 @@ test.describe('browsing', () => {
 
   test('puts the filter in the URL so the view can be linked', async ({ page }) => {
     await page.goto('/vocabulary');
-    await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill('兆');
+    await page.getByPlaceholder('見出し語・読み方・出典・登録形で検索').fill('兆');
     await expect(page).toHaveURL(/[?&]q=/);
 
     // The real assertion: a fresh load of that URL restores the same view.
@@ -83,7 +83,7 @@ test.describe('browsing', () => {
   test('keeps an unbroken search summary inside the viewport', async ({ page }) => {
     const search = 'W'.repeat(INPUT_LIMITS.search);
     await page.goto('/vocabulary');
-    await page.getByPlaceholder('見出し語・読み方・タグ・意味・例文で検索').fill(search);
+    await page.getByPlaceholder('見出し語・読み方・出典・登録形で検索').fill(search);
 
     await expect(
       page.getByRole('button', { name: new RegExp(`^「W{${INPUT_LIMITS.search}}」`) }),

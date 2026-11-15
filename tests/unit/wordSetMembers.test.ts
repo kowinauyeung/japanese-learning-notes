@@ -88,6 +88,19 @@ describe('candidatesFor', () => {
     ]);
   });
 
+  it.each(['兆候', 'ちょうこう', '会議録', '兆し'])('finds candidates by %s', (q) => {
+    const entry = makeEntry({
+      ...CHOUKOU,
+      source: '会議録',
+      citationForm: '兆し',
+      definition: 'excluded meaning',
+    });
+    expect(ids(candidatesFor(empty, [entry], { ...EMPTY_FILTERS, q }))).toEqual(['w2']);
+    expect(ids(candidatesFor(empty, [entry], { ...EMPTY_FILTERS, q: 'excluded meaning' }))).toEqual(
+      [],
+    );
+  });
+
   /**
    * The same 単語 filters over the same predicate, so a word that a filter
    * combination finds on 単語 is findable by that combination here. A second

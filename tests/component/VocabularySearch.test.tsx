@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { VocabularySearch } from '@/components/browse/VocabularySearch';
 import { renderWithI18n as render } from '../fixtures/renderWithI18n';
 
-const placeholder = '見出し語・読み方・タグ・意味・例文で検索';
+const placeholder = '見出し語・読み方・出典・登録形で検索';
 
 function setup() {
   const searched = vi.fn();
