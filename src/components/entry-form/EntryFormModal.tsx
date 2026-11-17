@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SparkleIcon } from '@/components/icons';
 import { Modal } from '@/components/Modal';
 import type { Entry, EntryDraft } from '@/domain/entry';
@@ -12,6 +12,7 @@ import { draftError, emptyDraft, toDraft } from '@/lib/draft';
 import { useEntries } from '@/lib/entries';
 import { jsonToDraft, type PromptContext } from '@/lib/jsonImport';
 import { loadErrorMessage } from '@/lib/loadError';
+import { recentSources } from '@/lib/sources';
 import { EntryForm } from './EntryForm';
 import { emptyJsonImport, JsonImport } from './JsonImport';
 import type { JsonImportState } from './JsonImport';
@@ -61,7 +62,8 @@ export function EntryFormModal({
   onClose: () => void;
   onSaved?: (id: string) => void;
 }) {
-  const { refresh, repository } = useEntries();
+  const { entries, refresh, repository } = useEntries();
+  const sources = useMemo(() => recentSources(entries), [entries]);
   const { t } = useI18n();
   /*
     Read here as well as in the panels, rather than passed down from one of them.
@@ -564,6 +566,7 @@ export function EntryFormModal({
         <SimpleForm
           draft={draft}
           onChange={setDraft}
+          recentSources={sources}
           language={json.language}
           onLanguageChange={(next) => setJson((prev) => ({ ...prev, language: next }))}
           /* Copied into `json` at the press rather than kept in step with every
@@ -608,7 +611,7 @@ export function EntryFormModal({
               {t('import.aiDisclaimer')}
             </p>
           )}
-          <EntryForm draft={draft} onChange={setDraft} />
+          <EntryForm draft={draft} onChange={setDraft} recentSources={sources} />
         </>
       )}
 

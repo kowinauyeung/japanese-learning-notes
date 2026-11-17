@@ -26,12 +26,14 @@ function Harness({
   onReply = () => {},
   onFailure = () => {},
   onBusyChange = () => {},
+  recentSources = [],
 }: {
   initial?: Partial<EntryDraft>;
   language?: string;
   onReply?: (raw: string) => void | Promise<void>;
   onFailure?: (reason: string) => void;
   onBusyChange?: (busy: boolean) => void;
+  recentSources?: string[];
 }) {
   const [draft, setDraft] = useState<EntryDraft>({ ...emptyDraft(), ...initial });
   const [lang, setLang] = useState(language);
@@ -45,6 +47,7 @@ function Harness({
       onBusyChange={onBusyChange}
       onReply={onReply}
       onFailure={onFailure}
+      recentSources={recentSources}
     />
   );
 }
@@ -109,6 +112,42 @@ describe('SimpleForm — the inaccuracy warning', () => {
   it('warns before the button is pressed, because pressing it saves and leaves', () => {
     render(<Harness initial={{ headword: '兆候' }} />);
     expect(screen.getByText(ja('import.aiDisclaimer'))).toBeInTheDocument();
+  });
+});
+
+describe('SimpleForm — recent sources', () => {
+  const sourceBox = () => screen.getByRole('textbox', { name: /出典/ });
+
+  it('fills 出典 with a recent source when its chip is tapped', () => {
+    render(<Harness recentSources={['進撃の巨人', '朝会']} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '朝会' }));
+
+    expect(sourceBox()).toHaveValue('朝会');
+    expect(screen.getByRole('button', { name: '朝会' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('replaces what was typed rather than appending to it', () => {
+    render(<Harness initial={{ source: '会議' }} recentSources={['朝会']} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '朝会' }));
+
+    expect(sourceBox()).toHaveValue('朝会');
+  });
+
+  it('shows no heading for an empty list, so a new notebook has no dangling label', () => {
+    render(<Harness />);
+
+    expect(screen.queryByText(ja('form.recentSources'))).toBeNull();
+  });
+
+  it('locks the chips while a draft is out, since the reply copies 出典 through', () => {
+    seedDrafting('failed');
+    render(<Harness initial={{ headword: '兆候' }} recentSources={['朝会']} />);
+
+    fireEvent.click(drawButton());
+
+    expect(screen.getByRole('button', { name: '朝会' })).toBeDisabled();
   });
 });
 

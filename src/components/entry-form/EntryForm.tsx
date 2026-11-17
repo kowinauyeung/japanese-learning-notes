@@ -8,13 +8,16 @@ import { parseTags, togglePos } from '@/lib/draft';
 import { accentKana } from '@/lib/mora';
 import { Area, Field, RepeatableList, Select, Text } from './fields';
 import { PitchAccentField } from './PitchAccentField';
+import { RecentSources } from './RecentSources';
 
 export function EntryForm({
   draft,
   onChange,
+  recentSources,
 }: {
   draft: EntryDraft;
   onChange: (next: EntryDraft) => void;
+  recentSources: string[];
 }) {
   const { t } = useI18n();
   const entryLabel = useEntryLabel();
@@ -57,14 +60,21 @@ export function EntryForm({
             onChange={(event) => set('learnedOn', event.target.value)}
           />
         </Field>
-        <Field label={t('form.source')} hint={t('form.optional')}>
-          <Text
+        <div className="space-y-1.5">
+          <Field label={t('form.source')} hint={t('form.optional')}>
+            <Text
+              value={draft.source}
+              onChange={(v) => set('source', v)}
+              maxLength={ENTRY_LIMITS.source}
+              placeholder={t('form.sourcePlaceholder')}
+            />
+          </Field>
+          <RecentSources
+            sources={recentSources}
             value={draft.source}
-            onChange={(v) => set('source', v)}
-            maxLength={ENTRY_LIMITS.source}
-            placeholder={t('form.sourcePlaceholder')}
+            onPick={(v) => set('source', v)}
           />
-        </Field>
+        </div>
         <Field label={t('form.citationForm')} hint={t('form.optional')}>
           <Text
             value={draft.citationForm}
