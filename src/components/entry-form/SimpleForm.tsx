@@ -5,6 +5,7 @@ import type { EntryDraftingFailure } from '@/domain/ports';
 import { useI18n } from '@/i18n/context';
 import { buildPrompt } from '@/lib/jsonImport';
 import { Area, Field, Text } from './fields';
+import { RecentSources } from './RecentSources';
 import { type DraftRequest, useEntryDrafting } from './useEntryDrafting';
 
 /**
@@ -38,9 +39,11 @@ export function SimpleForm({
   onBusyChange,
   onReply,
   onFailure,
+  recentSources,
 }: {
   draft: EntryDraft;
   onChange: (next: EntryDraft) => void;
+  recentSources: string[];
   /**
    * Lives in the modal's JSON state rather than in the draft, because it is not
    * a property of the note: it is what the prompt asks for, and the JSON tab
@@ -153,6 +156,12 @@ export function SimpleForm({
           disabled={drafting}
         />
       </Field>
+      <RecentSources
+        sources={recentSources}
+        value={draft.source}
+        onPick={(v) => set('source', v)}
+        disabled={drafting}
+      />
 
       {/* The whole group goes when the model cannot be reached, rather than a
           button that explains itself away when pressed. What is left is an

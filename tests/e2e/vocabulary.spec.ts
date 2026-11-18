@@ -334,7 +334,7 @@ test.describe('related words', () => {
 
     const form = addDialog(page);
     await expect(form.getByLabel('見出し語')).toHaveValue('前兆');
-    await expect(form.getByLabel('出典')).toHaveValue('「兆候」の関連語から');
+    await expect(form.getByRole('textbox', { name: '出典' })).toHaveValue('「兆候」の関連語から');
     await form.getByLabel('意味・説明').fill('物事が起こる前に現れるしるし。');
     await form.getByRole('button', { name: '保存する' }).click();
 
@@ -596,7 +596,7 @@ test.describe('adding a word', () => {
 
     const dialog = addDialog(page);
     await dialog.getByLabel('見出し語').fill('兆候');
-    await dialog.getByLabel('出典').fill('会議');
+    await dialog.getByRole('textbox', { name: '出典' }).fill('会議');
     await dialog.getByRole('button', { name: 'AIで作成して保存' }).click();
 
     await expect(dialog.getByRole('textbox', { name: '単語' })).toHaveValue('兆候');
@@ -941,7 +941,7 @@ test.describe('adding a word', () => {
     await dialog.getByRole('button', { name: 'クリップボードから貼り付け' }).click();
 
     // Typed after the read started and before it finished.
-    await dialog.getByLabel('出典').fill('会議');
+    await dialog.getByRole('textbox', { name: '出典' }).fill('会議');
     await page.evaluate(() =>
       (window as unknown as { releaseClipboard: (text: string) => void }).releaseClipboard(
         '{"headword":"兆候","definition":"きざし。"}',
@@ -950,7 +950,7 @@ test.describe('adding a word', () => {
 
     // The panel is gone by now — the import moved the modal to 詳細 — so this
     // 出典 is the form's, not the one that was typed into.
-    await expect(dialog.getByLabel('出典')).toHaveValue('会議');
+    await expect(dialog.getByRole('textbox', { name: '出典' })).toHaveValue('会議');
     await expect(dialog.getByLabel('見出し語')).toHaveValue('兆候');
   });
 
