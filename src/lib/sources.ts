@@ -1,4 +1,5 @@
 import type { Entry } from '@/domain/entry';
+import { ENTRY_LIMITS } from '@/domain/limits';
 
 /**
  * Unique sources from the most recently created entries, newest first, for the
@@ -9,6 +10,10 @@ import type { Entry } from '@/domain/entry';
  * deleted stops being offered. Matching is exact after trimming: 「NHK」 and
  * 「ＮＨＫ」 stay distinct because the reader may have typed them that way on
  * purpose.
+ *
+ * A source longer than the form accepts is skipped: the rules allow older notes
+ * a longer one, and offering it would fill the field with a value the save then
+ * refuses.
  */
 export function recentSources(entries: Entry[], limit = 5): string[] {
   if (limit <= 0) return [];
@@ -20,7 +25,7 @@ export function recentSources(entries: Entry[], limit = 5): string[] {
 
   for (const entry of newest) {
     const source = entry.source.trim();
-    if (!source) continue;
+    if (!source || source.length > ENTRY_LIMITS.source) continue;
     sources.add(source);
     if (sources.size === limit) break;
   }

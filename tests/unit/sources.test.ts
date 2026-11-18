@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ENTRY_LIMITS } from '@/domain/limits';
 import { recentSources } from '@/lib/sources';
 import { makeEntry } from '../fixtures/entry';
 
@@ -73,6 +74,28 @@ describe('recentSources', () => {
 
     expect(recentSources(entries)).toEqual(['second', 'first']);
     expect(recentSources([...entries].reverse())).toEqual(['second', 'first']);
+  });
+
+  it('skips a source longer than the form accepts, which the save would refuse once tapped', () => {
+    const tooLong = 'あ'.repeat(ENTRY_LIMITS.source + 1);
+    const atLimit = 'い'.repeat(ENTRY_LIMITS.source);
+    const entries = [
+      makeEntry({ id: 'a', source: tooLong, createdAt: at(3) }),
+      makeEntry({ id: 'b', source: atLimit, createdAt: at(2) }),
+      makeEntry({ id: 'c', source: '朝会', createdAt: at(1) }),
+    ];
+
+    expect(recentSources(entries)).toEqual([atLimit, '朝会']);
+  });
+
+  it('fills the limit from older entries when a newer source is too long', () => {
+    const entries = [
+      makeEntry({ id: 'a', source: 'あ'.repeat(ENTRY_LIMITS.source + 1), createdAt: at(3) }),
+      makeEntry({ id: 'b', source: '進撃の巨人', createdAt: at(2) }),
+      makeEntry({ id: 'c', source: '朝会', createdAt: at(1) }),
+    ];
+
+    expect(recentSources(entries, 2)).toEqual(['進撃の巨人', '朝会']);
   });
 
   it('returns nothing for a non-positive limit', () => {
